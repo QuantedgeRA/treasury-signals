@@ -1,0 +1,75 @@
+{
+    "accounts": [
+        {
+            "username": "saylor",
+            "company": "Strategy (MSTR)",
+            "role": "Executive Chairman",
+            "priority": "high",
+            "notes": "Primary signal source. Posts cryptic hints 24-72hrs before purchases."
+        },
+        {
+            "username": "strategy",
+            "company": "Strategy (MSTR)",
+            "role": "Official Company Account",
+            "priority": "high",
+            "notes": "Posts official purchase confirmations and STRC updates."
+        },
+        {
+            "username": "PhongLe_",
+            "company": "Strategy (MSTR)",
+            "role": "CEO",
+            "priority": "medium",
+            "notes": "Occasionally signals capital raise activity."
+        },
+        {
+            "username": "MarathonDH",
+            "company": "MARA Holdings",
+            "role": "Official Company Account",
+            "priority": "medium",
+            "notes": "Second largest public BTC holder."
+        },
+        {
+            "username": "faborode",
+            "company": "MARA Holdings",
+            "role": "CEO - Fred Thiel",
+            "priority": "medium",
+            "notes": "Posts about BTC accumulation strategy."
+        },
+        {
+            "username": "Metaplanet_JP",
+            "company": "Metaplanet",
+            "role": "Official Company Account",
+            "priority": "medium",
+            "notes": "Asia's largest BTC treasury company."
+        },
+        {
+            "username": "SimonGerovich",
+            "company": "Metaplanet",
+            "role": "CEO",
+            "priority": "medium",
+            "notes": "Active on X about BTC purchases."
+        },
+        {
+            "username": "VivekGRamaswamy",
+            "company": "Strive (ASST)",
+            "role": "Co-Founder",
+            "priority": "medium",
+            "notes": "Strive purchased $50M STRC. Signals institutional adoption."
+        },
+        {
+            "username": "RiotPlatforms",
+            "company": "Riot Platforms",
+            "role": "Official Company Account",
+            "priority": "low",
+            "notes": "BTC mining + treasury holder."
+        },
+        {
+            "username": "CleanSpark_Inc",
+            "company": "CleanSpark",
+            "role": "Official Company Account",
+            "priority": "low",
+            "notes": "BTC mining + treasury holder."
+        }
+    ],
+    "_instructions": "Add more accounts as you discover them. Check BitcoinTreasuries.net for the full list of treasury companies, then find their executives on X. Start with 10-20, grow to 200+ over time."
+}
