@@ -1,0 +1,8 @@
+[start]
+cmd = "python main.py"
+
+[phases.setup]
+nixPkgs = ["python312"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
