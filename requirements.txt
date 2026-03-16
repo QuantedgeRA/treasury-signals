@@ -1,13 +1,5 @@
-# Treasury Purchase Signal Intelligence
-# Install with: pip install -r requirements.txt
-
-# Week 1: Core dependencies
-requests==2.31.0        # Makes API calls to TwitterAPI.io
-python-dotenv==1.0.0    # Loads API keys from .env file
-
-# Week 2: Database (uncomment when ready)
-# supabase==2.3.0       # Connects to Supabase database
-# schedule==1.2.1       # Runs script on a timer
-
-# Week 4: Telegram bot (uncomment when ready)
-# python-telegram-bot==20.7  # Sends alerts to Telegram
+requests==2.31.0
+python-dotenv==1.0.0
+supabase==2.28.2
+schedule==1.2.1
+python-telegram-bot==22.7
