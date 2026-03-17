@@ -1,74 +1,29 @@
 {
     "accounts": [
-        {
-            "username": "saylor",
-            "company": "Strategy (MSTR)",
-            "role": "Executive Chairman",
-            "priority": "high",
-            "notes": "Primary signal source."
-        },
-        {
-            "username": "Strategy",
-            "company": "Strategy (MSTR)",
-            "role": "Official Company Account",
-            "priority": "high",
-            "notes": "Posts official purchase confirmations."
-        },
-        {
-            "username": "MARAHoldings",
-            "company": "MARA Holdings",
-            "role": "Official Company Account",
-            "priority": "medium",
-            "notes": "Changed from @MarathonDH to @MARAHoldings."
-        },
-        {
-            "username": "fgthiel",
-            "company": "MARA Holdings",
-            "role": "CEO - Fred Thiel",
-            "priority": "medium",
-            "notes": "CEO of MARA. Handle is fgthiel not faborode."
-        },
-        {
-            "username": "Metaplanet",
-            "company": "Metaplanet",
-            "role": "Official Company Account (English)",
-            "priority": "medium",
-            "notes": "English account with 801+ posts."
-        },
-        {
-            "username": "gerovich",
-            "company": "Metaplanet",
-            "role": "CEO - Simon Gerovich",
-            "priority": "medium",
-            "notes": "Very active. Posts BTC purchase announcements directly."
-        },
-        {
-            "username": "VivekGRamaswamy",
-            "company": "Strive (ASST)",
-            "role": "Co-Founder",
-            "priority": "medium",
-            "notes": "Strive purchased $50M STRC."
-        },
-        {
-            "username": "RiotPlatforms",
-            "company": "Riot Platforms",
-            "role": "Official Company Account",
-            "priority": "low",
-            "notes": "BTC mining + treasury holder."
-        },
-        {
-            "username": "CleanSpark_Inc",
-            "company": "CleanSpark",
-            "role": "Official Company Account",
-            "priority": "low",
-            "notes": "BTC mining + treasury holder."
-        },
-        {
-            "username": "TwentyOneCap",
-            "company": "Twenty One Capital (XXI)",
-            "role": "Official Company Account",
-            "priority": "medium",
-            "notes": "3rd largest BTC treasury company."
-        }
-    ]
+        {"username": "saylor", "company": "Strategy (MSTR)", "priority": "high", "rank": 1},
+        {"username": "Strategy", "company": "Strategy (MSTR)", "priority": "high", "rank": 1},
+        {"username": "MARAHoldings", "company": "MARA Holdings", "priority": "high", "rank": 2},
+        {"username": "fgthiel", "company": "MARA Holdings - CEO", "priority": "high", "rank": 2},
+        {"username": "TwentyOneCap", "company": "Twenty One Capital (XXI)", "priority": "high", "rank": 3},
+        {"username": "Metaplanet", "company": "Metaplanet Inc.", "priority": "high", "rank": 4},
+        {"username": "gerovich", "company": "Metaplanet - CEO", "priority": "high", "rank": 4},
+        {"username": "RiotPlatforms", "company": "Riot Platforms (RIOT)", "priority": "medium", "rank": 7},
+        {"username": "coinbase", "company": "Coinbase Global (COIN)", "priority": "medium", "rank": 8},
+        {"username": "Hut8Corp", "company": "Hut 8 Mining (HUT)", "priority": "medium", "rank": 9},
+        {"username": "CleanSpark_Inc", "company": "CleanSpark (CLSK)", "priority": "medium", "rank": 10},
+        {"username": "VivekGRamaswamy", "company": "Strive (ASST)", "priority": "medium", "rank": 11},
+        {"username": "Tesla", "company": "Tesla (TSLA)", "priority": "low", "rank": 12},
+        {"username": "GameStop", "company": "GameStop (GME)", "priority": "low", "rank": 21},
+        {"username": "GalaxyDigitalHQ", "company": "Galaxy Digital (GLXY)", "priority": "medium", "rank": 16},
+        {"username": "CoreScientific", "company": "Core Scientific (CORZ)", "priority": "medium", "rank": 30},
+        {"username": "Bitfarms", "company": "Bitfarms (BITF)", "priority": "low", "rank": 37},
+        {"username": "CanaanInc", "company": "Canaan Inc. (CAN)", "priority": "low", "rank": 38},
+        {"username": "CipherMining", "company": "Cipher Mining (CIFR)", "priority": "low", "rank": 40},
+        {"username": "KULRTech", "company": "KULR Technology (KULR)", "priority": "medium", "rank": 46},
+        {"username": "ExodusMovement", "company": "Exodus Movement (EXOD)", "priority": "low", "rank": 60},
+        {"username": "TeraWulf", "company": "TeraWulf (WULF)", "priority": "low", "rank": 0},
+        {"username": "HIVEDigiTech", "company": "HIVE Digital (HIVE)", "priority": "low", "rank": 33},
+        {"username": "BlockInc", "company": "Block Inc. (XYZ)", "priority": "low", "rank": 14}
+    ],
+    "_instructions": "HOW TO ADD MORE COMPANIES: For each company on BitcoinTreasuries.net that is missing: 1) Go to x.com and search the company name. 2) Check their official website for a Twitter/X link. 3) Verify the account is real. 4) Add a new entry. 5) Run: git add . && git commit -m 'Add accounts' && git push"
 }
