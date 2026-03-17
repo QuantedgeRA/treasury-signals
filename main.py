@@ -167,7 +167,7 @@ def main():
         print(f"\n  Scan #{scan_number} done. {alerts_sent} Telegram alerts sent.")
 
         # Wait
-        wait_minutes = 10
+        wait_minutes = 15
         print(f"  Next scan in {wait_minutes} minutes. Press Ctrl+C to stop.\n")
 
         try:
