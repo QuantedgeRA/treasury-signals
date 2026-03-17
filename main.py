@@ -1,32 +1,18 @@
 import json
 import time
 import os
-import requests as req
 from dotenv import load_dotenv
 from twitter_client import get_user_tweets, extract_tweet_info
 from database import save_tweet, get_new_tweets, mark_processed
 from classifier import classify_tweet, get_signal_label
-from telegram_bot import send_alert, send_scan_summary
+from telegram_bot import send_alert, send_scan_summary, send_strc_alert, send_edgar_alert
 from strc_tracker import get_strc_volume_data, analyze_strc_signal, format_strc_alert
-from edgar_monitor import scan_edgar_filings, format_edgar_alert
+from edgar_monitor import scan_edgar_filings, format_edgar_alert, TREASURY_COMPANIES
 
 load_dotenv()
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 
 # Track already-alerted filings so we don't send duplicates
 alerted_filings = set()
-
-
-def send_telegram(message):
-    try:
-        req.post(
-            f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',
-            json={'chat_id': CHANNEL_ID, 'text': message}
-        )
-        return True
-    except:
-        return False
 
 
 def load_accounts():
@@ -92,10 +78,9 @@ def process_and_alert():
             signals.append(signal)
             if result['score'] >= 60:
                 print(f'  >> SENDING ALERT: {signal["label"]} from @{signal["author"]}')
-                success = send_alert(signal)
+                success = send_alert(signal, delay_free=True)
                 if success:
                     alerts_sent += 1
-                    print('  >> Alert sent to Telegram!')
     print(f'  Classified {len(unprocessed)} tweets. Found {len(signals)} signals. Sent {alerts_sent} alerts.')
     return signals, alerts_sent
 
@@ -107,10 +92,8 @@ def check_strc_volume():
         print(f'  STRC: ${strc_data["dollar_volume_m"]}M volume, {strc_data["volume_ratio"]}x average -- {strc_analysis["level"]}')
         if strc_analysis['is_signal']:
             strc_message = format_strc_alert(strc_data, strc_analysis)
-            if send_telegram(strc_message):
-                print('  >> STRC alert sent to Telegram!')
-            else:
-                print('  >> Failed to send STRC alert.')
+            is_very_high = strc_data['volume_ratio'] >= 2.0
+            send_strc_alert(strc_message, is_high=is_very_high)
         return strc_data, strc_analysis
     else:
         print('  STRC: Could not fetch data.')
@@ -121,27 +104,23 @@ def check_edgar_filings():
     global alerted_filings
     noteworthy = scan_edgar_filings(days_back=3)
     new_filings = 0
-    
+
     if noteworthy:
         for filing in noteworthy:
-            # Create unique ID to avoid duplicate alerts
             filing_id = f"{filing['ticker']}_{filing['date']}_{filing.get('url', '')[:50]}"
-            
+
             if filing_id not in alerted_filings:
                 alerted_filings.add(filing_id)
                 new_filings += 1
-                
+
                 label = "BTC-RELATED" if filing['is_btc_related'] else "HIGH-PRIORITY"
                 print(f'  >> {label}: {filing["company"]} filed 8-K on {filing["date"]}')
-                
+
                 alert_message = format_edgar_alert(filing)
-                if send_telegram(alert_message):
-                    print(f'  >> EDGAR alert sent to Telegram!')
-                else:
-                    print(f'  >> Failed to send EDGAR alert.')
+                send_edgar_alert(alert_message)
             else:
                 print(f'  Already alerted: {filing["company"]} 8-K from {filing["date"]}')
-    
+
     print(f'  {len(noteworthy)} noteworthy filing(s) found, {new_filings} new alert(s) sent.')
     return noteworthy
 
@@ -168,14 +147,15 @@ def main():
     print()
     print('=' * 60)
     print('  TREASURY PURCHASE SIGNAL INTELLIGENCE')
-    print('  Full Pipeline: Tweets + Classifier + STRC + EDGAR + Telegram')
+    print('  Tweets + Classifier + STRC + EDGAR + Dual Telegram')
     print('=' * 60)
     print()
     accounts = load_accounts()
     print(f'Monitoring {len(accounts)} X accounts.')
     print(f'Monitoring {len(TREASURY_COMPANIES)} companies on SEC EDGAR.')
     print(f'Tracking STRC issuance volume.')
-    print(f'Alerts sent to Telegram for HIGH+ signals.')
+    print(f'FREE channel: Saylor-only, delayed alerts.')
+    print(f'PAID channel: All accounts, instant, full access.')
     scan_number = 0
     while True:
         scan_number += 1
@@ -184,31 +164,25 @@ def main():
         print(f'  SCAN #{scan_number} at {current_time}')
         print(f'{"="*60}\n')
 
-        # Step 1: Fetch tweets
         print('[1/4] Fetching tweets...\n')
         new_count, skip_count = scan_all_accounts(accounts)
         print(f'\n  {new_count} new, {skip_count} duplicates.\n')
 
-        # Step 2: Classify + Alert
         print('[2/4] Classifying + sending alerts...\n')
         signals, alerts_sent = process_and_alert()
         display_signals(signals)
         if not signals:
             print('\n  No purchase signals this scan.')
 
-        # Step 3: Check STRC volume
         print('\n[3/4] Checking STRC issuance volume...\n')
         check_strc_volume()
 
-        # Step 4: Check SEC EDGAR filings
         print('\n[4/4] Checking SEC EDGAR for 8-K filings...\n')
         check_edgar_filings()
 
-        # Send scan summary to Telegram
         send_scan_summary(scan_number, len(accounts), new_count, len(signals))
         print(f'\n  Scan #{scan_number} done. {alerts_sent} tweet alerts sent.')
 
-        # Wait
         wait_minutes = 15
         print(f'  Next scan in {wait_minutes} minutes. Press Ctrl+C to stop.\n')
         try:
@@ -217,9 +191,6 @@ def main():
             print('\n\nStopped by user. Goodbye!')
             break
 
-
-# Need this for the EDGAR company list reference
-from edgar_monitor import TREASURY_COMPANIES
 
 if __name__ == '__main__':
     main()
