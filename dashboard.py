@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 from supabase import create_client
 import yfinance as yf
 import pandas as pd
+from treasury_leaderboard import get_leaderboard_with_live_price, TREASURY_COMPANIES
+from regulatory_tracker import get_all_regulatory_items, get_summary_stats as get_reg_stats, get_by_category
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -127,7 +129,7 @@ with st.sidebar:
     st.markdown("*Multi-source Bitcoin purchase detection*")
     st.markdown("---")
     
-    page = st.radio("Navigate", ["🏠 Home", "📊 Live Dashboard", "📈 Accuracy"], label_visibility="collapsed")
+    page = st.radio("Navigate", ["🏠 Home", "📊 Live Dashboard", "🏆 BTC Leaderboard", "🏛️ Regulatory Tracker", "📈 Accuracy"], label_visibility="collapsed")
     
     st.markdown("---")
     st.markdown("### System Status")
@@ -351,6 +353,205 @@ elif page == "📊 Live Dashboard":
         df_data = [{"Date": t.get("created_at", "")[:19], "Author": f"@{t.get('author_username', '')}", "Company": t.get("company", ""), "Tweet": t.get("tweet_text", "")[:100] + "...", "Signal": "🚨" if t.get("is_signal") else "", "Score": t.get("confidence_score", 0)} for t in tweets[:50]]
         st.dataframe(pd.DataFrame(df_data), width="stretch", height=400, column_config={"Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%d")})
 
+# ============================================
+# PAGE: BTC LEADERBOARD
+# ============================================
+elif page == "🏆 BTC Leaderboard":
+    st.markdown('<p class="main-header">🏆 BTC Treasury Leaderboard</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-sub">Every publicly traded company holding Bitcoin on their balance sheet</p>', unsafe_allow_html=True)
+    
+    companies, summary = get_leaderboard_with_live_price(btc_price)
+    
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("Total Companies", summary["total_companies"])
+    with c2:
+        st.metric("Total BTC Held", f"{summary['total_btc']:,}")
+    with c3:
+        st.metric("Total Value", f"${summary['total_value_b']:.1f}B")
+    with c4:
+        st.metric("BTC Price", f"${btc_price:,.0f}")
+    
+    st.markdown("---")
+    
+    # Top 10 Bar Chart
+    st.markdown("### Top 10 Corporate Bitcoin Holders")
+    top10 = [c for c in companies if c["btc_holdings"] > 0][:10]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=[c["company"].replace(" (MicroStrategy)", "").replace(" Digital (MARA)", "").replace(" Platforms", "").replace(" Global", "").replace(" (Square)", "").replace(" Mining", "") for c in top10],
+        y=[c["btc_holdings"] for c in top10],
+        marker_color=["#E67E22" if c["rank"] == 1 else "#F39C12" if c["rank"] <= 3 else "#3498DB" for c in top10],
+        text=[f'{c["btc_holdings"]:,}' for c in top10],
+        textposition="outside",
+        textfont=dict(color="white", size=11),
+    ))
+    fig.update_layout(
+        template="plotly_dark",
+        height=450,
+        yaxis_title="BTC Holdings",
+        margin=dict(l=0, r=0, t=10, b=0),
+        showlegend=False,
+    )
+    st.plotly_chart(fig, width="stretch")
+    
+    st.markdown("---")
+    
+    # Value chart (in billions)
+    st.markdown("### Treasury Value ($B)")
+    top10_value = [c for c in companies if c["btc_value_b"] > 0][:10]
+    
+    fig2 = go.Figure()
+    fig2.add_trace(go.Bar(
+        x=[c["company"].replace(" (MicroStrategy)", "").replace(" Digital (MARA)", "").replace(" Platforms", "").replace(" Global", "").replace(" (Square)", "").replace(" Mining", "") for c in top10_value],
+        y=[c["btc_value_b"] for c in top10_value],
+        marker_color=["#2ECC71" if c.get("unrealized_pnl_pct", 0) > 0 else "#E74C3C" if c.get("unrealized_pnl_pct", 0) < 0 else "#3498DB" for c in top10_value],
+        text=[f'${c["btc_value_b"]:.2f}B' for c in top10_value],
+        textposition="outside",
+        textfont=dict(color="white", size=11),
+    ))
+    fig2.update_layout(
+        template="plotly_dark",
+        height=400,
+        yaxis_title="Value (Billions USD)",
+        margin=dict(l=0, r=0, t=10, b=0),
+        showlegend=False,
+    )
+    st.plotly_chart(fig2, width="stretch")
+    st.caption("🟢 Unrealized profit | 🔴 Unrealized loss | 🔵 Cost basis unknown")
+    
+    st.markdown("---")
+    
+    # Full table
+    st.markdown("### Full Leaderboard")
+    df_data = []
+    for c in companies:
+        if c["btc_holdings"] > 0:
+            pnl_str = f"{c['unrealized_pnl_pct']:+.1f}%" if c.get("unrealized_pnl_pct") else "N/A"
+            df_data.append({
+                "Rank": c["rank"],
+                "Company": c["company"],
+                "Ticker": c["ticker"],
+                "BTC Holdings": c["btc_holdings"],
+                "Value ($B)": c["btc_value_b"],
+                "Avg Price": f"${c['avg_purchase_price']:,.0f}" if c["avg_purchase_price"] > 0 else "N/A",
+                "P&L": pnl_str,
+                "Country": c["country"],
+                "Sector": c["sector"],
+                "Last Purchase": c["last_purchase_date"] if c["last_purchase_date"] else "N/A",
+            })
+    
+    df = pd.DataFrame(df_data)
+    st.dataframe(df, width="stretch", height=500, column_config={
+        "BTC Holdings": st.column_config.NumberColumn("BTC Holdings", format="%d"),
+    })
+    
+    st.markdown("---")
+    
+    # Dominance pie chart
+    st.markdown("### Market Share of Corporate BTC Holdings")
+    top5 = [c for c in companies if c["btc_holdings"] > 0][:5]
+    others_btc = summary["total_btc"] - sum(c["btc_holdings"] for c in top5)
+    
+    labels = [c["company"].replace(" (MicroStrategy)", "") for c in top5] + ["Others"]
+    values = [c["btc_holdings"] for c in top5] + [others_btc]
+    colors = ["#E67E22", "#F39C12", "#3498DB", "#2ECC71", "#9B59B6", "#7F8C8D"]
+    
+    fig3 = go.Figure(go.Pie(
+        labels=labels, values=values,
+        marker=dict(colors=colors),
+        textinfo="label+percent",
+        hole=0.4,
+    ))
+    fig3.update_layout(template="plotly_dark", height=400, margin=dict(l=0, r=0, t=10, b=0))
+    st.plotly_chart(fig3, width="stretch")
+
+
+# ============================================
+# PAGE: REGULATORY TRACKER
+# ============================================
+elif page == "🏛️ Regulatory Tracker":
+    st.markdown('<p class="main-header">🏛️ Government & Regulatory Tracker</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-sub">Legislative and regulatory developments affecting Bitcoin treasury adoption worldwide</p>', unsafe_allow_html=True)
+    
+    reg_stats = get_reg_stats()
+    
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("Total Items Tracked", reg_stats["total_items"])
+    with c2:
+        st.metric("Active / Passed", reg_stats["active_passed"])
+    with c3:
+        st.metric("Pending", reg_stats["pending"])
+    with c4:
+        st.metric("Bullish for BTC", reg_stats["bullish"])
+    
+    st.markdown("---")
+    
+    # Overview bar
+    st.markdown("### Regulatory Landscape Overview")
+    fig = go.Figure()
+    categories = ["US Federal", "US State", "Global"]
+    cat_counts = [reg_stats["us_federal"], reg_stats["us_state"], reg_stats["global"]]
+    fig.add_trace(go.Bar(
+        x=categories, y=cat_counts,
+        marker_color=["#E67E22", "#F39C12", "#3498DB"],
+        text=cat_counts,
+        textposition="outside",
+        textfont=dict(color="white", size=14),
+    ))
+    fig.update_layout(template="plotly_dark", height=300, margin=dict(l=0, r=0, t=10, b=0), yaxis_title="Items Tracked")
+    st.plotly_chart(fig, width="stretch")
+    
+    st.markdown("---")
+    
+    # US Federal
+    st.markdown("### 🇺🇸 US Federal Legislation")
+    for item in get_by_category("US Federal"):
+        status_emoji = "✅" if item["status_color"] == "green" else "🟡" if item["status_color"] == "yellow" else "❌"
+        impact_color = "#E74C3C" if "EXTREMELY" in item["btc_impact"] or "VERY" in item["btc_impact"] else "#F39C12" if "BULLISH" in item["btc_impact"] else "#7F8C8D"
+        
+        st.markdown(f"""<div class="feature-box">
+            <p class="feature-title">{status_emoji} {item['title']}</p>
+            <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;"><strong>Status:</strong> {item['status']} | <strong>Type:</strong> {item['type']} | <strong>Updated:</strong> {item['date_updated']}</p>
+            <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;">{item['summary']}</p>
+            <p style="color: {impact_color}; font-size: 0.85rem; margin: 5px 0;"><strong>BTC Impact:</strong> {item['btc_impact']} — {item['impact']}</p>
+            <p style="color: #7F8C8D; font-size: 0.8rem;">Sponsors: {item['sponsors']}</p>
+        </div>""", unsafe_allow_html=True)
+        st.markdown("")
+    
+    st.markdown("---")
+    
+    # US State
+    st.markdown("### 🏛️ US State-Level Bitcoin Reserve Bills")
+    for item in get_by_category("US State"):
+        status_emoji = "✅" if item["status_color"] == "green" else "🟡" if item["status_color"] == "yellow" else "❌"
+        impact_color = "#E74C3C" if "VERY" in item["btc_impact"] else "#F39C12" if "BULLISH" in item["btc_impact"] else "#7F8C8D"
+        
+        st.markdown(f"""<div class="feature-box">
+            <p class="feature-title">{status_emoji} {item['title']}</p>
+            <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;"><strong>Status:</strong> {item['status']} | <strong>Updated:</strong> {item['date_updated']}</p>
+            <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;">{item['summary']}</p>
+            <p style="color: {impact_color}; font-size: 0.85rem;"><strong>BTC Impact:</strong> {item['btc_impact']}</p>
+        </div>""", unsafe_allow_html=True)
+        st.markdown("")
+    
+    st.markdown("---")
+    
+    # Global
+    st.markdown("### 🌍 Global Regulatory Developments")
+    for item in get_by_category("Global"):
+        status_emoji = "✅" if item["status_color"] == "green" else "🟡" if item["status_color"] == "yellow" else "❌"
+        impact_color = "#E74C3C" if "VERY" in item["btc_impact"] else "#F39C12" if "BULLISH" in item["btc_impact"] else "#7F8C8D"
+        
+        st.markdown(f"""<div class="feature-box">
+            <p class="feature-title">{status_emoji} {item['title']}</p>
+            <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;"><strong>Status:</strong> {item['status']} | <strong>Type:</strong> {item['type']} | <strong>Country/Region:</strong> {item.get('sponsors', 'N/A')}</p>
+            <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;">{item['summary']}</p>
+            <p style="color: {impact_color}; font-size: 0.85rem;"><strong>BTC Impact:</strong> {item['btc_impact']} — {item['impact']}</p>
+        </div>""", unsafe_allow_html=True)
+        st.markdown("")
 
 # ============================================
 # PAGE: ACCURACY
