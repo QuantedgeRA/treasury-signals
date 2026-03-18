@@ -308,7 +308,7 @@ def send_briefing(to_email, html_content):
     """Send the briefing email via Resend."""
     try:
         params = {
-            "from": "Treasury Signals <briefing@treasurysignal.com>",
+            "from": "Treasury Signals <onboarding@resend.dev>",
             "to": [to_email],
             "subject": f"🔶 Treasury Signal Intelligence — Daily Briefing ({datetime.now().strftime('%b %d, %Y')})",
             "html": html_content,
