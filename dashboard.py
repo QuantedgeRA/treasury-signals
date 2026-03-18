@@ -14,6 +14,7 @@ import yfinance as yf
 import pandas as pd
 from treasury_leaderboard import get_leaderboard_with_live_price, TREASURY_COMPANIES
 from regulatory_tracker import get_all_regulatory_items, get_summary_stats as get_reg_stats, get_by_category
+from purchase_tracker import get_recent_purchases, get_purchase_stats
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -129,7 +130,7 @@ with st.sidebar:
     st.markdown("*Multi-source Bitcoin purchase detection*")
     st.markdown("---")
     
-    page = st.radio("Navigate", ["🏠 Home", "📊 Live Dashboard", "🏆 BTC Leaderboard", "🏛️ Regulatory Tracker", "📈 Accuracy"], label_visibility="collapsed")
+    page = st.radio("Navigate", ["🏠 Home", "📊 Live Dashboard", "🏆 BTC Leaderboard", "💰 Recent Purchases", "🏛️ Regulatory Tracker", "📈 Accuracy"], label_visibility="collapsed")
     
     st.markdown("---")
     st.markdown("### System Status")
@@ -466,6 +467,112 @@ elif page == "🏆 BTC Leaderboard":
     ))
     fig3.update_layout(template="plotly_dark", height=400, margin=dict(l=0, r=0, t=10, b=0))
     st.plotly_chart(fig3, width="stretch")
+
+# ============================================
+# PAGE: RECENT PURCHASES
+# ============================================
+elif page == "💰 Recent Purchases":
+    st.markdown('<p class="main-header">💰 Recent BTC Purchases</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-sub">Confirmed Bitcoin purchases by treasury companies</p>', unsafe_allow_html=True)
+
+    stats = get_purchase_stats()
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.metric("Total Purchases", stats["total_purchases"])
+    with c2:
+        st.metric("Total BTC Bought", f"{stats['total_btc']:,}")
+    with c3:
+        st.metric("Total USD Spent", f"${stats['total_usd']/1_000_000_000:.1f}B")
+    with c4:
+        st.metric("Avg Price/BTC", f"${stats['avg_price']:,.0f}")
+
+    st.markdown("---")
+
+    # Monthly purchase chart
+    st.markdown("### Monthly BTC Purchases")
+    months = list(reversed(list(stats["by_month"].keys())))
+    month_btc = [stats["by_month"][m]["btc"] for m in months]
+    month_usd = [stats["by_month"][m]["usd"] / 1_000_000_000 for m in months]
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=months, y=month_btc,
+        marker_color="#E67E22",
+        text=[f"{b:,}" for b in month_btc],
+        textposition="outside",
+        textfont=dict(color="white", size=11),
+        name="BTC Purchased",
+    ))
+    fig.update_layout(
+        template="plotly_dark",
+        height=400,
+        yaxis_title="BTC Purchased",
+        margin=dict(l=0, r=0, t=10, b=0),
+        showlegend=False,
+    )
+    st.plotly_chart(fig, width="stretch")
+
+    st.markdown("---")
+
+    # Purchases by company
+    st.markdown("### Purchases by Company")
+    company_names = [c["company"].replace(" (MicroStrategy)", "") for c in stats["by_company"]]
+    company_btc = [c["total_btc"] for c in stats["by_company"]]
+
+    fig2 = go.Figure()
+    fig2.add_trace(go.Bar(
+        x=company_names, y=company_btc,
+        marker_color=["#E67E22" if i == 0 else "#F39C12" if i <= 2 else "#3498DB" for i in range(len(company_names))],
+        text=[f"{b:,}" for b in company_btc],
+        textposition="outside",
+        textfont=dict(color="white", size=11),
+    ))
+    fig2.update_layout(
+        template="plotly_dark",
+        height=400,
+        yaxis_title="Total BTC Purchased",
+        margin=dict(l=0, r=0, t=10, b=0),
+        showlegend=False,
+    )
+    st.plotly_chart(fig2, width="stretch")
+
+    st.markdown("---")
+
+    # Purchase feed
+    st.markdown("### All Confirmed Purchases")
+    purchases = get_recent_purchases(20)
+
+    for p in purchases:
+        usd_m = p["usd_amount"] / 1_000_000
+        if usd_m >= 1000:
+            size_color = "#E74C3C"
+            size_label = "MEGA"
+        elif usd_m >= 500:
+            size_color = "#F39C12"
+            size_label = "LARGE"
+        elif usd_m >= 100:
+            size_color = "#F1C40F"
+            size_label = "MEDIUM"
+        else:
+            size_color = "#3498DB"
+            size_label = "SMALL"
+
+        company_short = p["company"].replace(" (MicroStrategy)", "")
+        notes_html = f'<br><span style="color: #7F8C8D; font-size: 0.8em;">📝 {p["notes"]}</span>' if p["notes"] else ""
+
+        st.markdown(f"""<div class="signal-card" style="border-left-color: {size_color};">
+            <span style="background: {size_color}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 700;">{size_label}</span>
+            <strong style="color: #ECF0F1; margin-left: 8px;">{company_short}</strong>
+            <span style="color: #7F8C8D;">({p['ticker']})</span>
+            <br>
+            <span style="color: #E67E22; font-size: 1.1em; font-weight: 700;">₿ {p['btc_amount']:,} BTC</span>
+            <span style="color: #BDC3C7;"> — ${usd_m:,.0f}M at ${p['price_per_btc']:,.0f}/BTC</span>
+            <br>
+            <span style="color: #7F8C8D; font-size: 0.85em;">📅 {p['filing_date']} | 📄 {p['source']}</span>
+            {notes_html}
+        </div>""", unsafe_allow_html=True)
+        st.markdown("")
 
 
 # ============================================
