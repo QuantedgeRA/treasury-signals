@@ -28,6 +28,7 @@ from accuracy_tracker import log_prediction
 from email_briefing import generate_and_send_briefing
 from treasury_leaderboard import get_leaderboard_with_live_price, format_leaderboard_telegram
 from purchase_tracker import detect_new_purchases, log_detected_purchases, format_purchase_telegram
+from regulatory_scanner import run_full_scan as scan_regulatory
 from regulatory_tracker import format_regulatory_briefing
 import yfinance as yf
 
@@ -375,32 +376,32 @@ def main():
         print(f'  SCAN #{scan_number} at {current_time}')
         print(f'{"="*60}\n')
 
-        print('[1/9] Fetching tweets...\n')
+        print('[1/10] Fetching tweets...\n')
         new_count, skip_count = scan_all_accounts(accounts)
         print(f'\n  {new_count} new, {skip_count} duplicates.\n')
 
-        print('[2/9] Classifying + sending alerts...\n')
+        print('[2/10] Classifying + sending alerts...\n')
         signals, alerts_sent = process_and_alert()
         display_signals(signals)
         if not signals:
             print('\n  No purchase signals this scan.')
 
-        print('\n[3/9] Checking STRC issuance volume...\n')
+        print('\n[3/10] Checking STRC issuance volume...\n')
         check_strc_volume()
 
-        print('\n[4/9] Checking SEC EDGAR for 8-K filings...\n')
+        print('\n[4/10] Checking SEC EDGAR for 8-K filings...\n')
         check_edgar_filings()
 
-        print('\n[5/9] Running Multi-Signal Correlation Engine...\n')
+        print('\n[5/10] Running Multi-Signal Correlation Engine...\n')
         correlation = check_correlation()
 
-        print('\n[6/9] Checking daily email briefing...\n')
+        print('\n[6/10] Checking daily email briefing...\n')
         send_daily_email()
 
-        print('\n[7/9] Checking daily leaderboard...\n')
+        print('\n[7/10] Checking daily leaderboard...\n')
         send_daily_leaderboard()
 
-        print('\n[8/9] Detecting new BTC purchases...\n')
+        print('\n[8/10] Detecting new BTC purchases...\n')
         try:
             detected = detect_new_purchases()
             if detected:
@@ -416,7 +417,13 @@ def main():
         except Exception as e:
             print(f'  Purchase detection error: {e}')
 
-        print('\n[9/9] Scan complete.\n')
+        print('\n[9/10] Scanning regulatory news & statements...\n')
+        try:
+            scan_regulatory()
+        except Exception as e:
+            print(f'  Regulatory scan error: {e}')
+
+        print('\n[10/10] Scan complete.\n')
 
         send_scan_summary(scan_number, len(accounts), new_count, len(signals))
         print(f'  Scan #{scan_number} done.')

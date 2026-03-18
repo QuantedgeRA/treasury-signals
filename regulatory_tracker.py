@@ -683,32 +683,37 @@ def get_bullish_items():
 
 
 def get_summary_stats():
-    """Get summary statistics."""
-    all_items = REGULATORY_ITEMS
-    all_statements = NOTABLE_STATEMENTS
+    """Get summary statistics from combined data."""
+    all_items = get_all_items_combined()
+    all_statements = get_all_statements_combined()
 
-    categories = list(set(r["category"] for r in all_items))
+    categories = list(set(r.get("category", "Global") for r in all_items))
     countries_count = len(categories)
 
-    bullish_statements = len([s for s in all_statements if "BULLISH" in s["impact"]])
-    bearish_statements = len([s for s in all_statements if "BEARISH" in s["impact"]])
+    bullish_statements = len([s for s in all_statements if "BULLISH" in s.get("impact", "")])
+    bearish_statements = len([s for s in all_statements if "BEARISH" in s.get("impact", "")])
+    auto_reg = len([r for r in all_items if r.get("auto_detected")])
+    auto_stmt = len([s for s in all_statements if s.get("auto_detected")])
 
     return {
         "total_items": len(all_items),
-        "us_federal": len([r for r in all_items if r["category"] == "US Federal"]),
-        "us_state": len([r for r in all_items if r["category"] == "US State"]),
-        "europe": len([r for r in all_items if r["category"] == "Europe"]),
-        "asia_pacific": len([r for r in all_items if r["category"] == "Asia-Pacific"]),
-        "latin_america": len([r for r in all_items if r["category"] == "Latin America"]),
-        "middle_east_africa": len([r for r in all_items if r["category"] == "Middle East & Africa"]),
+        "us_federal": len([r for r in all_items if r.get("category") == "US Federal"]),
+        "us_state": len([r for r in all_items if r.get("category") == "US State"]),
+        "europe": len([r for r in all_items if r.get("category") == "Europe"]),
+        "asia_pacific": len([r for r in all_items if r.get("category") == "Asia-Pacific"]),
+        "latin_america": len([r for r in all_items if r.get("category") == "Latin America"]),
+        "middle_east_africa": len([r for r in all_items if r.get("category") == "Middle East & Africa"]),
+        "global": len([r for r in all_items if r.get("category") == "Global"]),
         "regions_tracked": countries_count,
-        "active_passed": len([r for r in all_items if r["status_color"] == "green"]),
-        "pending": len([r for r in all_items if r["status_color"] == "yellow"]),
-        "failed": len([r for r in all_items if r["status_color"] == "red"]),
+        "active_passed": len([r for r in all_items if r.get("status_color") == "green"]),
+        "pending": len([r for r in all_items if r.get("status_color") == "yellow"]),
+        "failed": len([r for r in all_items if r.get("status_color") == "red"]),
         "bullish": len([r for r in all_items if "BULLISH" in r.get("btc_impact", "")]),
         "total_statements": len(all_statements),
         "bullish_statements": bullish_statements,
         "bearish_statements": bearish_statements,
+        "auto_detected_reg": auto_reg,
+        "auto_detected_stmt": auto_stmt,
     }
 
 
@@ -734,6 +739,89 @@ def format_regulatory_briefing():
 
     return "\n".join(lines)
 
+def get_all_items_combined():
+    """
+    Get all regulatory items from BOTH hardcoded data AND database.
+    Database items (including auto-detected) take priority.
+    Returns deduplicated, sorted list.
+    """
+    all_items = []
+    seen_titles = set()
+
+    # Source 1: Database (includes hardcoded seeds + auto-detected)
+    try:
+        from regulatory_scanner import get_all_regulatory_from_db
+        db_items = get_all_regulatory_from_db()
+        for item in db_items:
+            title_key = item.get("title", "")[:50].lower()
+            if title_key not in seen_titles:
+                seen_titles.add(title_key)
+                all_items.append({
+                    "id": item.get("item_id", ""),
+                    "title": item.get("title", ""),
+                    "category": item.get("category", "Global"),
+                    "type": item.get("type", "News"),
+                    "status": item.get("status", "Reported"),
+                    "status_color": item.get("status_color", "yellow"),
+                    "date_introduced": item.get("date_updated", ""),
+                    "date_updated": item.get("date_updated", ""),
+                    "sponsors": "",
+                    "summary": item.get("summary", ""),
+                    "impact": item.get("impact", ""),
+                    "btc_impact": item.get("btc_impact", "NEUTRAL"),
+                    "auto_detected": item.get("auto_detected", False),
+                })
+    except Exception as e:
+        print(f"  DB fetch error: {e}")
+
+    # Source 2: Hardcoded fallback (fill in anything not in DB)
+    for item in REGULATORY_ITEMS:
+        title_key = item.get("title", "")[:50].lower()
+        if title_key not in seen_titles:
+            seen_titles.add(title_key)
+            all_items.append(item)
+
+    all_items.sort(key=lambda x: x.get("date_updated", ""), reverse=True)
+    return all_items
+
+
+def get_all_statements_combined():
+    """
+    Get all statements from BOTH hardcoded data AND database.
+    Returns deduplicated, sorted list.
+    """
+    all_statements = []
+    seen_keys = set()
+
+    # Source 1: Database
+    try:
+        from regulatory_scanner import get_all_statements_from_db
+        db_statements = get_all_statements_from_db()
+        for s in db_statements:
+            key = f"{s.get('person', '')}_{s.get('date', '')}"
+            if key not in seen_keys:
+                seen_keys.add(key)
+                all_statements.append({
+                    "person": s.get("person", ""),
+                    "title": s.get("title", ""),
+                    "date": s.get("date", ""),
+                    "statement": s.get("statement", ""),
+                    "impact": s.get("impact", "NEUTRAL"),
+                    "category": s.get("category", ""),
+                    "auto_detected": s.get("auto_detected", False),
+                })
+    except Exception as e:
+        print(f"  DB statements fetch error: {e}")
+
+    # Source 2: Hardcoded fallback
+    for s in NOTABLE_STATEMENTS:
+        key = f"{s.get('person', '')}_{s.get('date', '')}"
+        if key not in seen_keys:
+            seen_keys.add(key)
+            all_statements.append(s)
+
+    all_statements.sort(key=lambda x: x.get("date", ""), reverse=True)
+    return all_statements
 
 # ============================================
 # QUICK TEST

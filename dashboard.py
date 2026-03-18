@@ -13,7 +13,7 @@ from supabase import create_client
 import yfinance as yf
 import pandas as pd
 from treasury_leaderboard import get_leaderboard_with_live_price, TREASURY_COMPANIES
-from regulatory_tracker import get_all_regulatory_items, get_summary_stats as get_reg_stats, get_by_category
+from regulatory_tracker import get_all_regulatory_items, get_summary_stats as get_reg_stats, get_by_category, get_all_items_combined, get_all_statements_combined
 from purchase_tracker import get_recent_purchases, get_purchase_stats
 
 load_dotenv()
@@ -774,7 +774,7 @@ elif page == "🏛️ Regulatory Tracker":
     st.markdown('<p class="main-header">🏛️ Global Regulatory Tracker</p>', unsafe_allow_html=True)
     st.markdown('<p class="hero-sub">Legislative and regulatory developments affecting Bitcoin worldwide</p>', unsafe_allow_html=True)
 
-    from regulatory_tracker import get_all_statements, get_statements_by_category
+    from regulatory_tracker import get_all_statements_combined, get_all_items_combined
 
     reg_stats = get_reg_stats()
 
@@ -838,7 +838,7 @@ elif page == "🏛️ Regulatory Tracker":
     # Notable Statements
     st.markdown("### 📣 Notable Statements from World Leaders & CEOs")
 
-    statements = get_all_statements()
+    statements = get_all_statements_combined()
     for s in statements:
         if "EXTREMELY" in s["impact"]:
             s_color = "#E74C3C"
@@ -864,6 +864,8 @@ elif page == "🏛️ Regulatory Tracker":
     st.markdown("---")
 
     # Regulatory items by region
+    all_combined = get_all_items_combined()
+
     region_display = [
         ("🇺🇸 US Federal", "US Federal"),
         ("🏛️ US State-Level", "US State"),
@@ -871,10 +873,11 @@ elif page == "🏛️ Regulatory Tracker":
         ("🌏 Asia-Pacific", "Asia-Pacific"),
         ("🌎 Latin America", "Latin America"),
         ("🌍 Middle East & Africa", "Middle East & Africa"),
+        ("🌐 Global / Other", "Global"),
     ]
 
     for display_name, category_key in region_display:
-        items = get_by_category(category_key)
+        items = [r for r in all_combined if r.get("category") == category_key]
         if items:
             st.markdown(f"### {display_name}")
             for item in items:
