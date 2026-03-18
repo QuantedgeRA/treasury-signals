@@ -28,18 +28,208 @@ st.set_page_config(page_title="Treasury Signal Intelligence", page_icon="🔶", 
 # ============================================
 st.markdown("""
 <style>
-    .main-header { font-size: 2.8rem; font-weight: 800; color: #E67E22; text-align: center; margin-top: 20px; }
-    .hero-sub { font-size: 1.3rem; color: #BDC3C7; text-align: center; margin-bottom: 30px; }
-    .feature-box { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 20px; border-radius: 12px; border: 1px solid #2C3E50; margin: 5px 0; }
-    .feature-title { color: #E67E22; font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
-    .stat-huge { font-size: 2.5rem; font-weight: 800; color: #E67E22; text-align: center; margin: 0; }
-    .stat-label { font-size: 0.9rem; color: #95A5A6; text-align: center; margin: 0; }
-    .proof-bar { background: #1a1a2e; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #E67E22; margin: 20px 0; }
-    .signal-card { border-left: 3px solid; padding: 10px; margin: 8px 0; background: rgba(26,26,46,0.5); border-radius: 5px; }
-    .pricing-free { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 25px; border-radius: 12px; border: 1px solid #2C3E50; }
-    .pricing-pro { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 25px; border-radius: 12px; border: 2px solid #E67E22; }
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    /* Global overrides */
+    .stApp { background-color: #0a0e17; }
+    .main .block-container { padding-top: 2rem; max-width: 1200px; }
+    html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
+    h1, h2, h3 { font-family: 'DM Sans', sans-serif !important; }
+
+    /* Sidebar styling */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0d1117 0%, #0a0e17 100%);
+        border-right: 1px solid #1a1f2e;
+    }
+    section[data-testid="stSidebar"] .stRadio label {
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 500;
+        padding: 8px 12px;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+    section[data-testid="stSidebar"] .stRadio label:hover {
+        background: rgba(230, 126, 34, 0.1);
+    }
+
+    /* Metric cards */
+    [data-testid="stMetric"] {
+        background: linear-gradient(135deg, #111827 0%, #0d1117 100%);
+        border: 1px solid #1e2a3a;
+        border-radius: 12px;
+        padding: 16px 20px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    [data-testid="stMetric"] label {
+        color: #6b7280 !important;
+        font-size: 0.8rem !important;
+        font-weight: 500 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    [data-testid="stMetric"] [data-testid="stMetricValue"] {
+        color: #f0f0f0 !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-weight: 600 !important;
+    }
+
+    /* Headers */
+    .main-header {
+        font-size: 2.8rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #E67E22 0%, #F39C12 50%, #E67E22 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        margin-top: 20px;
+        letter-spacing: -0.02em;
+    }
+    .hero-sub {
+        font-size: 1.15rem;
+        color: #6b7280;
+        text-align: center;
+        margin-bottom: 30px;
+        font-weight: 400;
+        letter-spacing: 0.01em;
+    }
+
+    /* Feature boxes */
+    .feature-box {
+        background: linear-gradient(135deg, #111827 0%, #0d1420 100%);
+        padding: 22px;
+        border-radius: 12px;
+        border: 1px solid #1e2a3a;
+        margin: 5px 0;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        transition: all 0.3s ease;
+    }
+    .feature-box:hover {
+        border-color: #E67E22;
+        box-shadow: 0 4px 24px rgba(230, 126, 34, 0.15);
+        transform: translateY(-2px);
+    }
+    .feature-title {
+        color: #E67E22;
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+        letter-spacing: -0.01em;
+    }
+
+    /* Stats */
+    .stat-huge {
+        font-size: 2.8rem;
+        font-weight: 700;
+        font-family: 'JetBrains Mono', monospace;
+        background: linear-gradient(135deg, #E67E22 0%, #F39C12 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        margin: 0;
+    }
+    .stat-label {
+        font-size: 0.85rem;
+        color: #4b5563;
+        text-align: center;
+        margin: 4px 0 0 0;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 500;
+    }
+
+    /* Proof bar */
+    .proof-bar {
+        background: linear-gradient(135deg, #1a0f00 0%, #1a1000 100%);
+        padding: 18px 24px;
+        border-radius: 12px;
+        text-align: center;
+        border: 1px solid rgba(230, 126, 34, 0.3);
+        margin: 20px 0;
+        box-shadow: 0 0 30px rgba(230, 126, 34, 0.08);
+    }
+
+    /* Signal cards */
+    .signal-card {
+        border-left: 3px solid;
+        padding: 14px 16px;
+        margin: 8px 0;
+        background: linear-gradient(135deg, #111827 0%, #0d1420 100%);
+        border-radius: 0 10px 10px 0;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+        transition: all 0.2s ease;
+    }
+    .signal-card:hover {
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        transform: translateX(4px);
+    }
+
+    /* Pricing cards */
+    .pricing-free {
+        background: linear-gradient(135deg, #111827 0%, #0d1420 100%);
+        padding: 28px;
+        border-radius: 16px;
+        border: 1px solid #1e2a3a;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .pricing-pro {
+        background: linear-gradient(135deg, #1a0f00 0%, #111827 100%);
+        padding: 28px;
+        border-radius: 16px;
+        border: 2px solid #E67E22;
+        box-shadow: 0 0 40px rgba(230, 126, 34, 0.12);
+        position: relative;
+    }
+
+    /* Dataframe styling */
+    .stDataFrame { border-radius: 12px; overflow: hidden; }
+
+    /* Tabs and dividers */
+    hr { border-color: #1e2a3a !important; }
+
+    /* Links */
+    a { color: #E67E22 !important; text-decoration: none !important; font-weight: 600; }
+    a:hover { color: #F39C12 !important; }
+
+    /* Plotly chart backgrounds */
+    .js-plotly-plot { border-radius: 12px; overflow: hidden; }
+
+    /* Button styling */
+    .stButton button {
+        background: linear-gradient(135deg, #E67E22 0%, #d35400 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        font-family: 'DM Sans', sans-serif;
+        padding: 8px 24px;
+        transition: all 0.2s ease;
+    }
+    .stButton button:hover {
+        box-shadow: 0 4px 16px rgba(230, 126, 34, 0.4);
+        transform: translateY(-1px);
+    }
+
+    /* Hide Streamlit branding */
+    #MainMenu { visibility: hidden; }
+    footer { visibility: hidden; }
+    header { visibility: hidden; }
+
+    /* Badge styling for PRO label */
+    .pro-badge {
+        background: linear-gradient(135deg, #E67E22, #d35400);
+        color: white;
+        padding: 2px 10px;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        display: inline-block;
+        margin-left: 8px;
+    }
 </style>
 """, unsafe_allow_html=True)
+
 
 # ============================================
 # DATA LOADING
