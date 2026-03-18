@@ -38,6 +38,11 @@ alerted_filings = set()
 last_correlation_alert_score = 0
 last_email_date = None
 last_leaderboard_date = None
+# Track what we've already sent to avoid duplicate notifications
+sent_tweet_ids = set()
+sent_strc_status = None
+sent_edgar_ids = set()
+sent_correlation_score = 0
 
 # Email recipients (add more as customers sign up)
 EMAIL_RECIPIENTS = [
@@ -76,6 +81,7 @@ def scan_all_accounts(accounts):
 
 
 def process_and_alert():
+    global sent_tweet_ids
     unprocessed = get_new_tweets()
     if not unprocessed:
         print('  No new tweets to classify.')
@@ -135,23 +141,33 @@ def process_and_alert():
                     signal_details=f"@{tweet['author_username']}: {tweet['tweet_text'][:200]}",
                 )
 
-            print(f'  >> SENDING ALERT: {signal["label"]} from @{signal["author"]}')
-            success = send_alert(signal, delay_free=True)
-            if success:
-                alerts_sent += 1
+            # Only send Telegram alert if we haven't already sent this tweet
+            tweet_id = tweet.get('tweet_id', tweet['tweet_text'][:50])
+            if tweet_id not in sent_tweet_ids:
+                sent_tweet_ids.add(tweet_id)
+                print(f'  >> SENDING ALERT: {signal["label"]} from @{signal["author"]}')
+                success = send_alert(signal, delay_free=True)
+                if success:
+                    alerts_sent += 1
+            else:
+                print(f'  >> Already sent alert for this tweet, skipping.')
+
     print(f'  Classified {len(unprocessed)} tweets. Found {len(signals)} signals. Sent {alerts_sent} alerts.')
     return signals, alerts_sent
 
 
 def check_strc_volume():
+    global sent_strc_status
     strc_data = get_strc_volume_data()
     if strc_data:
         strc_analysis = analyze_strc_signal(strc_data)
         print(f'  STRC: ${strc_data["dollar_volume_m"]}M volume, {strc_data["volume_ratio"]}x average -- {strc_analysis["level"]}')
-        if strc_analysis['is_signal']:
+
+        # Only send alert if status changed
+        current_status = strc_analysis["level"]
+        if strc_analysis['is_signal'] and current_status != sent_strc_status:
             engine.add_strc_spike(strc_data['volume_ratio'], strc_data['dollar_volume_m'])
 
-            # Auto-log STRC prediction
             log_prediction(
                 company="Strategy (MSTR)",
                 ticker="MSTR",
@@ -163,6 +179,10 @@ def check_strc_volume():
             strc_message = format_strc_alert(strc_data, strc_analysis)
             is_very_high = strc_data['volume_ratio'] >= 2.0
             send_strc_alert(strc_message, is_high=is_very_high)
+            sent_strc_status = current_status
+        elif current_status == sent_strc_status:
+            print(f'  STRC status unchanged ({current_status}), no notification sent.')
+
         return strc_data, strc_analysis
     else:
         print('  STRC: Could not fetch data.')
@@ -170,18 +190,18 @@ def check_strc_volume():
 
 
 def check_edgar_filings():
-    global alerted_filings
+    global alerted_filings, sent_edgar_ids
     noteworthy = scan_edgar_filings(days_back=3)
     new_filings = 0
     if noteworthy:
         for filing in noteworthy:
             filing_id = f"{filing['ticker']}_{filing['date']}_{filing.get('url', '')[:50]}"
-            if filing_id not in alerted_filings:
+            if filing_id not in alerted_filings and filing_id not in sent_edgar_ids:
                 alerted_filings.add(filing_id)
+                sent_edgar_ids.add(filing_id)
                 new_filings += 1
                 engine.add_edgar_filing(filing['company'], filing['ticker'], filing['is_btc_related'], filing['date'])
 
-                # Auto-log EDGAR prediction
                 log_prediction(
                     company=filing['company'],
                     ticker=filing['ticker'],
@@ -201,8 +221,8 @@ def check_edgar_filings():
 
 
 def check_correlation():
-    """Run correlation engine and send alert if significant."""
-    global last_correlation_alert_score
+    """Run correlation engine and send alert only if score changed significantly."""
+    global last_correlation_alert_score, sent_correlation_score
 
     result = engine.calculate_correlation()
     score = result['correlated_score']
@@ -225,11 +245,12 @@ def check_correlation():
             signal_details=f"{active}/4 streams active. Multiplier: {result['multiplier']}x. {'; '.join(result['reasons'][:3])}",
         )
 
-    # Send correlation alert if HIGH+ and increased significantly
-    if score >= 50 and (score - last_correlation_alert_score) >= 15:
+    # Only send if score increased significantly AND is different from last sent
+    if score >= 50 and (score - last_correlation_alert_score) >= 15 and score != sent_correlation_score:
         alert_message = engine.format_correlation_alert(result)
         send_to_paid(alert_message)
         print(f'  >> Correlation alert sent to PAID channel!')
+        sent_correlation_score = score
 
         if score >= 90:
             free_message = f"""
@@ -247,9 +268,12 @@ Subscribe for instant multi-source correlation alerts.
             print(f'  >> Critical alert sent to FREE channel!')
 
         last_correlation_alert_score = score
+    elif score == sent_correlation_score:
+        print(f'  Correlation unchanged ({score}/100), no notification sent.')
 
     if score < 30:
         last_correlation_alert_score = 0
+        sent_correlation_score = 0
 
     return result
 
@@ -381,7 +405,7 @@ def main():
         print(f'  Tweets: {new_count} new | Signals: {len(signals)} | Alerts: {alerts_sent}')
         print(f'  Correlation: {correlation["correlated_score"]}/100 ({correlation["active_streams"]}/4 streams)')
 
-        wait_minutes = 15
+        wait_minutes = 60
         print(f'\n  Next scan in {wait_minutes} minutes. Press Ctrl+C to stop.\n')
         try:
             time.sleep(wait_minutes * 60)

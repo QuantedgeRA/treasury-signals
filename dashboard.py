@@ -574,91 +574,132 @@ elif page == "💰 Recent Purchases":
         </div>""", unsafe_allow_html=True)
         st.markdown("")
 
-
+# ============================================
+# PAGE: REGULATORY TRACKER
+# ============================================
 # ============================================
 # PAGE: REGULATORY TRACKER
 # ============================================
 elif page == "🏛️ Regulatory Tracker":
-    st.markdown('<p class="main-header">🏛️ Government & Regulatory Tracker</p>', unsafe_allow_html=True)
-    st.markdown('<p class="hero-sub">Legislative and regulatory developments affecting Bitcoin treasury adoption worldwide</p>', unsafe_allow_html=True)
-    
+    st.markdown('<p class="main-header">🏛️ Global Regulatory Tracker</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-sub">Legislative and regulatory developments affecting Bitcoin worldwide</p>', unsafe_allow_html=True)
+
+    from regulatory_tracker import get_all_statements, get_statements_by_category
+
     reg_stats = get_reg_stats()
-    
-    c1, c2, c3, c4 = st.columns(4)
+
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        st.metric("Total Items Tracked", reg_stats["total_items"])
+        st.metric("Total Items", reg_stats["total_items"])
     with c2:
-        st.metric("Active / Passed", reg_stats["active_passed"])
+        st.metric("Regions Tracked", reg_stats["regions_tracked"])
     with c3:
-        st.metric("Pending", reg_stats["pending"])
+        st.metric("Active / Passed", reg_stats["active_passed"])
     with c4:
-        st.metric("Bullish for BTC", reg_stats["bullish"])
-    
+        st.metric("Pending", reg_stats["pending"])
+    with c5:
+        st.metric("Notable Statements", reg_stats["total_statements"])
+
     st.markdown("---")
-    
-    # Overview bar
-    st.markdown("### Regulatory Landscape Overview")
+
+    # Regional overview chart
+    st.markdown("### Regulatory Items by Region")
+    regions = ["US Federal", "US State", "Europe", "Asia-Pacific", "Latin America", "Middle East & Africa"]
+    region_counts = [reg_stats.get("us_federal", 0), reg_stats.get("us_state", 0), reg_stats.get("europe", 0), reg_stats.get("asia_pacific", 0), reg_stats.get("latin_america", 0), reg_stats.get("middle_east_africa", 0)]
+    region_colors = ["#E67E22", "#F39C12", "#3498DB", "#2ECC71", "#9B59B6", "#E74C3C"]
+
     fig = go.Figure()
-    categories = ["US Federal", "US State", "Global"]
-    cat_counts = [reg_stats["us_federal"], reg_stats["us_state"], reg_stats["global"]]
     fig.add_trace(go.Bar(
-        x=categories, y=cat_counts,
-        marker_color=["#E67E22", "#F39C12", "#3498DB"],
-        text=cat_counts,
+        x=regions, y=region_counts,
+        marker_color=region_colors,
+        text=region_counts,
         textposition="outside",
         textfont=dict(color="white", size=14),
     ))
-    fig.update_layout(template="plotly_dark", height=300, margin=dict(l=0, r=0, t=10, b=0), yaxis_title="Items Tracked")
+    fig.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=10, b=0), yaxis_title="Items Tracked")
     st.plotly_chart(fig, width="stretch")
-    
+
+    # Sentiment pie chart
+    col_left, col_right = st.columns(2)
+    with col_left:
+        st.markdown("### Regulatory Sentiment")
+        fig2 = go.Figure(go.Pie(
+            labels=["Bullish", "Pending/Neutral", "Bearish"],
+            values=[reg_stats["bullish"], reg_stats["pending"], reg_stats.get("failed", 0)],
+            marker=dict(colors=["#2ECC71", "#F1C40F", "#E74C3C"]),
+            hole=0.4,
+        ))
+        fig2.update_layout(template="plotly_dark", height=300, margin=dict(l=0, r=0, t=10, b=0))
+        st.plotly_chart(fig2, width="stretch")
+
+    with col_right:
+        st.markdown("### Statement Sentiment")
+        fig3 = go.Figure(go.Pie(
+            labels=["Bullish", "Bearish"],
+            values=[reg_stats["bullish_statements"], reg_stats["bearish_statements"]],
+            marker=dict(colors=["#2ECC71", "#E74C3C"]),
+            hole=0.4,
+        ))
+        fig3.update_layout(template="plotly_dark", height=300, margin=dict(l=0, r=0, t=10, b=0))
+        st.plotly_chart(fig3, width="stretch")
+
     st.markdown("---")
-    
-    # US Federal
-    st.markdown("### 🇺🇸 US Federal Legislation")
-    for item in get_by_category("US Federal"):
-        status_emoji = "✅" if item["status_color"] == "green" else "🟡" if item["status_color"] == "yellow" else "❌"
-        impact_color = "#E74C3C" if "EXTREMELY" in item["btc_impact"] or "VERY" in item["btc_impact"] else "#F39C12" if "BULLISH" in item["btc_impact"] else "#7F8C8D"
-        
+
+    # Notable Statements
+    st.markdown("### 📣 Notable Statements from World Leaders & CEOs")
+
+    statements = get_all_statements()
+    for s in statements:
+        if "EXTREMELY" in s["impact"]:
+            s_color = "#E74C3C"
+        elif "VERY" in s["impact"]:
+            s_color = "#F39C12"
+        elif "BULLISH" in s["impact"]:
+            s_color = "#2ECC71"
+        elif "BEARISH" in s["impact"]:
+            s_color = "#E74C3C"
+        else:
+            s_color = "#7F8C8D"
+
+        cat_emoji = "🏛️" if s["category"] == "Government" else "💼"
+
         st.markdown(f"""<div class="feature-box">
-            <p class="feature-title">{status_emoji} {item['title']}</p>
-            <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;"><strong>Status:</strong> {item['status']} | <strong>Type:</strong> {item['type']} | <strong>Updated:</strong> {item['date_updated']}</p>
-            <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;">{item['summary']}</p>
-            <p style="color: {impact_color}; font-size: 0.85rem; margin: 5px 0;"><strong>BTC Impact:</strong> {item['btc_impact']} — {item['impact']}</p>
-            <p style="color: #7F8C8D; font-size: 0.8rem;">Sponsors: {item['sponsors']}</p>
+            <p style="color: #7F8C8D; font-size: 0.8rem; margin: 0;">{cat_emoji} {s['category']} | {s['date']}</p>
+            <p class="feature-title">{s['person']} — {s['title']}</p>
+            <p style="color: #BDC3C7; font-size: 0.9rem; font-style: italic; margin: 5px 0;">"{s['statement']}"</p>
+            <p style="color: {s_color}; font-size: 0.85rem; margin: 5px 0;"><strong>Impact:</strong> {s['impact']}</p>
         </div>""", unsafe_allow_html=True)
         st.markdown("")
-    
+
     st.markdown("---")
-    
-    # US State
-    st.markdown("### 🏛️ US State-Level Bitcoin Reserve Bills")
-    for item in get_by_category("US State"):
-        status_emoji = "✅" if item["status_color"] == "green" else "🟡" if item["status_color"] == "yellow" else "❌"
-        impact_color = "#E74C3C" if "VERY" in item["btc_impact"] else "#F39C12" if "BULLISH" in item["btc_impact"] else "#7F8C8D"
-        
-        st.markdown(f"""<div class="feature-box">
-            <p class="feature-title">{status_emoji} {item['title']}</p>
-            <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;"><strong>Status:</strong> {item['status']} | <strong>Updated:</strong> {item['date_updated']}</p>
-            <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;">{item['summary']}</p>
-            <p style="color: {impact_color}; font-size: 0.85rem;"><strong>BTC Impact:</strong> {item['btc_impact']}</p>
-        </div>""", unsafe_allow_html=True)
-        st.markdown("")
-    
-    st.markdown("---")
-    
-    # Global
-    st.markdown("### 🌍 Global Regulatory Developments")
-    for item in get_by_category("Global"):
-        status_emoji = "✅" if item["status_color"] == "green" else "🟡" if item["status_color"] == "yellow" else "❌"
-        impact_color = "#E74C3C" if "VERY" in item["btc_impact"] else "#F39C12" if "BULLISH" in item["btc_impact"] else "#7F8C8D"
-        
-        st.markdown(f"""<div class="feature-box">
-            <p class="feature-title">{status_emoji} {item['title']}</p>
-            <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;"><strong>Status:</strong> {item['status']} | <strong>Type:</strong> {item['type']} | <strong>Country/Region:</strong> {item.get('sponsors', 'N/A')}</p>
-            <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;">{item['summary']}</p>
-            <p style="color: {impact_color}; font-size: 0.85rem;"><strong>BTC Impact:</strong> {item['btc_impact']} — {item['impact']}</p>
-        </div>""", unsafe_allow_html=True)
-        st.markdown("")
+
+    # Regulatory items by region
+    region_display = [
+        ("🇺🇸 US Federal", "US Federal"),
+        ("🏛️ US State-Level", "US State"),
+        ("🇪🇺 Europe & UK", "Europe"),
+        ("🌏 Asia-Pacific", "Asia-Pacific"),
+        ("🌎 Latin America", "Latin America"),
+        ("🌍 Middle East & Africa", "Middle East & Africa"),
+    ]
+
+    for display_name, category_key in region_display:
+        items = get_by_category(category_key)
+        if items:
+            st.markdown(f"### {display_name}")
+            for item in items:
+                status_emoji = "✅" if item["status_color"] == "green" else "🟡" if item["status_color"] == "yellow" else "❌"
+                impact_color = "#E74C3C" if "EXTREMELY" in item["btc_impact"] or "VERY" in item["btc_impact"] else "#F39C12" if "BULLISH" in item["btc_impact"] else "#7F8C8D"
+
+                st.markdown(f"""<div class="feature-box">
+                    <p class="feature-title">{status_emoji} {item['title']}</p>
+                    <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;"><strong>Status:</strong> {item['status']} | <strong>Type:</strong> {item['type']} | <strong>Updated:</strong> {item['date_updated']}</p>
+                    <p style="color: #BDC3C7; font-size: 0.9rem; margin: 5px 0;">{item['summary']}</p>
+                    <p style="color: {impact_color}; font-size: 0.85rem; margin: 5px 0;"><strong>BTC Impact:</strong> {item['btc_impact']} — {item['impact']}</p>
+                </div>""", unsafe_allow_html=True)
+                st.markdown("")
+            st.markdown("---")
+
 
 # ============================================
 # PAGE: ACCURACY
