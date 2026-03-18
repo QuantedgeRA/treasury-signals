@@ -110,6 +110,10 @@ def load_strc_data():
     try:
         strc = yf.Ticker("STRC")
         hist = strc.history(period="3mo")
+        if hist.empty:
+            # Fallback: try with different parameters
+            strc = yf.download("STRC", period="3mo", progress=False)
+            return strc
         return hist
     except:
         return pd.DataFrame()
