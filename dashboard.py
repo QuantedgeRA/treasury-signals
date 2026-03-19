@@ -629,8 +629,8 @@ elif page == "🏆 BTC Leaderboard":
                 "Avg Price": f"${c['avg_purchase_price']:,.0f}" if c["avg_purchase_price"] > 0 else "N/A",
                 "P&L": pnl_str,
                 "Country": c["country"],
-                "Sector": c["sector"],
-                "Last Purchase": c["last_purchase_date"] if c["last_purchase_date"] else "N/A",
+                "Sector": c.get("sector", "N/A"),
+                "Last Purchase": c.get("last_purchase_date", "N/A") or "N/A",
             })
     
     df = pd.DataFrame(df_data)
