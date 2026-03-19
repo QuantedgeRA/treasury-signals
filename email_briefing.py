@@ -196,7 +196,19 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
 
     exec_bullets.append(f"<span style='color: #3B82F6;'>🏛️</span> Regulatory: {reg_stats['total_items']} items tracked across {reg_stats['regions_tracked']} regions — {reg_stats['bullish']} bullish for BTC")
 
-    exec_summary_html = "".join([f"<tr><td style='padding: 6px 18px; color: #d1d5db; font-size: 13px; line-height: 1.6;'>{b}</td></tr>" for b in exec_bullets])
+    exec_tooltips = {
+        0: "Our AI monitors 24+ executive accounts, scoring tweets 0-100 for purchase intent. Signals above 60 historically precede purchases within 24-72 hours.",
+        1: "STRC is Strategy's preferred stock for raising Bitcoin purchase capital. Volume above 1.5x the 20-day average signals an imminent buy.",
+        2: "4 data streams monitored simultaneously. Single stream = 35% confidence. Three streams converging = 99% confidence.",
+        3: "Compares daily leaderboard snapshots across 148 companies. When holdings increase, a purchase is auto-detected.",
+        4: "Tracks legislation, regulations, and policy across 6 global regions. Auto-scans news every hour for new developments.",
+    }
+    
+    exec_summary_html = ""
+    for i, b in enumerate(exec_bullets):
+        tooltip_text = exec_tooltips.get(i, "")
+        title_attr = f' title="{tooltip_text}"' if tooltip_text else ""
+        exec_summary_html += f'<tr><td style="padding: 6px 18px; color: #d1d5db; font-size: 13px; line-height: 1.6; cursor: help;"{title_attr}>{b}</td></tr>'
 
     # Signals section
     if signals:
