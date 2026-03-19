@@ -550,12 +550,48 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
             </td></tr>
 
             <!-- CTA -->
-            <tr><td style="padding: 24px 36px; text-align: center; background: #111827; border-top: 1px solid #1e2a3a;">
-                <span style="color: #6b7280; font-size: 12px;">Full interactive dashboard with charts, correlation engine, and real-time data:</span>
+            <tr><td style="padding: 28px 36px; text-align: center; background: #111827; border-top: 1px solid #1e2a3a;">
+                <span style="color: #e0e0e0; font-size: 14px; font-weight: 600;">Explore the Full Intelligence Platform</span>
+                <br><span style="color: #6b7280; font-size: 12px; margin-top: 4px; display: inline-block;">Interactive charts, live data, and deep-dive analysis across all 6 sections:</span>
                 <br><br>
-                <a href="https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/" style="background: linear-gradient(135deg, #E67E22, #d35400); color: white; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px; letter-spacing: 0.02em; display: inline-block;">Open Live Dashboard →</a>
+                <a href="https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/" style="background: linear-gradient(135deg, #E67E22, #d35400); color: white; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px; letter-spacing: 0.02em; display: inline-block;">Open Intelligence Platform →</a>
                 <br><br>
-                <span style="color: #374151; font-size: 11px;">Live Dashboard · BTC Leaderboard · Recent Purchases · Regulatory Tracker · Accuracy</span>
+                <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 8px;">
+                    <tr>
+                        <td width="33%" style="padding: 8px 4px; text-align: center;">
+                            <span style="color: #E67E22; font-size: 16px;">📊</span>
+                            <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Live Dashboard</span>
+                            <br><span style="color: #4b5563; font-size: 9px;">Real-time signals & STRC</span>
+                        </td>
+                        <td width="33%" style="padding: 8px 4px; text-align: center;">
+                            <span style="color: #E67E22; font-size: 16px;">🏆</span>
+                            <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">BTC Leaderboard</span>
+                            <br><span style="color: #4b5563; font-size: 9px;">148 companies ranked</span>
+                        </td>
+                        <td width="33%" style="padding: 8px 4px; text-align: center;">
+                            <span style="color: #E67E22; font-size: 16px;">💰</span>
+                            <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Recent Purchases</span>
+                            <br><span style="color: #4b5563; font-size: 9px;">Auto-detected buys</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td width="33%" style="padding: 8px 4px; text-align: center;">
+                            <span style="color: #E67E22; font-size: 16px;">🏛️</span>
+                            <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Regulatory Tracker</span>
+                            <br><span style="color: #4b5563; font-size: 9px;">54+ items, 6 regions</span>
+                        </td>
+                        <td width="33%" style="padding: 8px 4px; text-align: center;">
+                            <span style="color: #E67E22; font-size: 16px;">📈</span>
+                            <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Accuracy Tracking</span>
+                            <br><span style="color: #4b5563; font-size: 9px;">Verified predictions</span>
+                        </td>
+                        <td width="33%" style="padding: 8px 4px; text-align: center;">
+                            <span style="color: #E67E22; font-size: 16px;">🔗</span>
+                            <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Correlation Engine</span>
+                            <br><span style="color: #4b5563; font-size: 9px;">Multi-signal analysis</span>
+                        </td>
+                    </tr>
+                </table>
             </td></tr>
 
             <!-- Footer -->

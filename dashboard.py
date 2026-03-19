@@ -641,6 +641,51 @@ if page == "🏠 Home":
     with c2:
         st.markdown("[Start Free Trial →](https://YOUR_STRIPE_LINK)")
     
+    # Navigation cards
+    st.markdown("---")
+    st.markdown("### Explore the Full Platform")
+    st.markdown("Use the sidebar to navigate between all sections:")
+    
+    nav1, nav2, nav3 = st.columns(3)
+    with nav1:
+        st.markdown("""<div class="feature-box" style="text-align: center; padding: 20px;">
+            <p style="font-size: 1.8rem; margin: 0;">📊</p>
+            <p class="feature-title">Live Dashboard</p>
+            <p style="color: #9ca3af; font-size: 0.85rem;">Real-time signals, STRC volume charts, market prices, and score distribution</p>
+        </div>""", unsafe_allow_html=True)
+    with nav2:
+        st.markdown("""<div class="feature-box" style="text-align: center; padding: 20px;">
+            <p style="font-size: 1.8rem; margin: 0;">🏆</p>
+            <p class="feature-title">BTC Leaderboard</p>
+            <p style="color: #9ca3af; font-size: 0.85rem;">148 companies ranked by BTC holdings with P&L, charts, and market share</p>
+        </div>""", unsafe_allow_html=True)
+    with nav3:
+        st.markdown("""<div class="feature-box" style="text-align: center; padding: 20px;">
+            <p style="font-size: 1.8rem; margin: 0;">💰</p>
+            <p class="feature-title">Recent Purchases</p>
+            <p style="color: #9ca3af; font-size: 0.85rem;">Auto-detected BTC purchases with monthly charts and company breakdowns</p>
+        </div>""", unsafe_allow_html=True)
+    
+    nav4, nav5, nav6 = st.columns(3)
+    with nav4:
+        st.markdown("""<div class="feature-box" style="text-align: center; padding: 20px;">
+            <p style="font-size: 1.8rem; margin: 0;">🏛️</p>
+            <p class="feature-title">Regulatory Tracker</p>
+            <p style="color: #9ca3af; font-size: 0.85rem;">54+ items across 6 global regions with auto-detected news and notable statements</p>
+        </div>""", unsafe_allow_html=True)
+    with nav5:
+        st.markdown("""<div class="feature-box" style="text-align: center; padding: 20px;">
+            <p style="font-size: 1.8rem; margin: 0;">📈</p>
+            <p class="feature-title">Accuracy Tracking</p>
+            <p style="color: #9ca3af; font-size: 0.85rem;">Transparent prediction record with hit rates, lead times, and verified results</p>
+        </div>""", unsafe_allow_html=True)
+    with nav6:
+        st.markdown("""<div class="feature-box" style="text-align: center; padding: 20px;">
+            <p style="font-size: 1.8rem; margin: 0;">🔗</p>
+            <p class="feature-title">Correlation Engine</p>
+            <p style="color: #9ca3af; font-size: 0.85rem;">4 data streams analyzed simultaneously with exponential confidence multipliers</p>
+        </div>""", unsafe_allow_html=True)
+
     st.markdown("---")
     st.markdown("""<p style="text-align: center; color: #7F8C8D; font-size: 0.85rem;">
         Treasury Signal Intelligence™ — Independent research tool. Not financial advice.<br>
