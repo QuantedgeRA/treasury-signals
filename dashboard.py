@@ -699,7 +699,30 @@ if page == "🏠 Home":
 elif page == "📊 Live Dashboard":
     st.markdown('<p class="main-header">📊 Live Dashboard</p>', unsafe_allow_html=True)
     st.markdown("")
-    
+
+    # Risk Dashboard with tooltips
+    from market_intelligence import get_risk_dashboard, generate_action_signal, get_week_ahead
+    risk = get_risk_dashboard()
+    action = generate_action_signal(
+        correlation_score=0, active_streams=0, strc_ratio=strc_ratio,
+        signals_24h=signals, btc_change=0, fear_greed_value=risk["fear_greed_value"]
+    )
+
+    # Action Signal Banner
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #111827 0%, #0d1420 100%); border: 2px solid {action['action_color']}; border-radius: 14px; padding: 20px 28px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">Today's Action Signal</span>
+            <br><span style="color: {action['action_color']}; font-size: 1.8rem; font-weight: 800;">{action['action']}</span>
+            <br><span style="color: #9ca3af; font-size: 0.85rem;">{action['summary'][:150]}</span>
+        </div>
+        <div style="text-align: right;">
+            <span style="color: {action['action_color']}; font-size: 2.5rem; font-weight: 800; font-family: 'JetBrains Mono', monospace;">{action['score']}</span>
+            <br><span style="color: #4b5563; font-size: 0.75rem;">/100</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         st.metric("Bitcoin", f"${btc_price:,.0f}")
@@ -711,62 +734,71 @@ elif page == "📊 Live Dashboard":
         st.metric("STRC Vol Ratio", f"{strc_ratio}x")
     with c5:
         st.metric("Active Signals", f"{high_signals}")
-    
+
+    # Risk Dashboard with tooltip icons
+    st.markdown("### Risk Dashboard")
+    r1, r2, r3, r4 = st.columns(4)
+    with r1:
+        st.markdown(f"""<div class="exec-item" style="text-align: center; padding: 16px;">
+            <span style="color: {'#EF4444' if risk['fear_greed_value'] <= 25 else '#F59E0B' if risk['fear_greed_value'] <= 40 else '#10B981' if risk['fear_greed_value'] <= 60 else '#F59E0B'}; font-size: 2rem; font-weight: 800; font-family: 'JetBrains Mono', monospace;">{risk['fear_greed_value']}</span>
+            <br><span style="color: #6b7280; font-size: 0.8rem;">Fear & Greed</span>
+            <span class="info-badge">ℹ
+                <div class="tooltip-popup">
+                    <div class="tooltip-title">Fear & Greed Index</div>
+                    Measures market sentiment from 0 (Extreme Fear) to 100 (Extreme Greed). Extreme Fear (0-25) historically signals buying opportunities — the market is oversold and prices are depressed. Extreme Greed (75-100) signals caution — the market may be overbought. Currently at {risk['fear_greed_value']} ({risk['fear_greed_label']}). Source: alternative.me
+                </div>
+            </span>
+            <br><span style="color: #9ca3af; font-size: 0.75rem;">{risk['fear_greed_label']}</span>
+        </div>""", unsafe_allow_html=True)
+    with r2:
+        st.markdown(f"""<div class="exec-item" style="text-align: center; padding: 16px;">
+            <span style="color: {'#EF4444' if risk['volatility_30d'] >= 60 else '#F59E0B' if risk['volatility_30d'] >= 40 else '#10B981'}; font-size: 2rem; font-weight: 800; font-family: 'JetBrains Mono', monospace;">{risk['volatility_30d']}%</span>
+            <br><span style="color: #6b7280; font-size: 0.8rem;">30D Volatility</span>
+            <span class="info-badge">ℹ
+                <div class="tooltip-popup">
+                    <div class="tooltip-title">30-Day Annualized Volatility</div>
+                    Measures how much Bitcoin's price fluctuates daily, annualized over 30 days. Below 40% = low volatility (stable, good for large purchases). 40-60% = moderate (normal market conditions). Above 60% = high volatility (rapid price swings, consider scaling into positions rather than lump-sum buying).
+                </div>
+            </span>
+        </div>""", unsafe_allow_html=True)
+    with r3:
+        st.markdown(f"""<div class="exec-item" style="text-align: center; padding: 16px;">
+            <span style="color: #EF4444; font-size: 2rem; font-weight: 800; font-family: 'JetBrains Mono', monospace;">{risk['drawdown_from_ath']}%</span>
+            <br><span style="color: #6b7280; font-size: 0.8rem;">From ATH</span>
+            <span class="info-badge">ℹ
+                <div class="tooltip-popup">
+                    <div class="tooltip-title">Drawdown from All-Time High</div>
+                    Shows how far Bitcoin has fallen from its highest recorded price (${risk['ath_price']:,.0f}). A -20% drawdown means BTC is 20% below its peak. Larger drawdowns (30%+) can signal strong buying opportunities for long-term holders. Smaller drawdowns indicate strength near all-time highs.
+                </div>
+            </span>
+        </div>""", unsafe_allow_html=True)
+    with r4:
+        st.markdown(f"""<div class="exec-item" style="text-align: center; padding: 16px; border: 1px solid {risk['risk_color']};">
+            <span style="color: {risk['risk_color']}; font-size: 1.4rem; font-weight: 800;">{risk['risk_level']}</span>
+            <br><span style="color: #6b7280; font-size: 0.8rem;">Risk Level</span>
+            <span class="info-badge">ℹ
+                <div class="tooltip-popup">
+                    <div class="tooltip-title">Overall Risk Assessment</div>
+                    Combines Fear & Greed, Volatility, and Drawdown into one assessment. MODERATE (green) = favorable conditions for accumulation. ELEVATED (yellow) = proceed with caution, consider smaller position sizes. HIGH (red) = significant risk environment, consider pausing new purchases until conditions improve.
+                </div>
+            </span>
+        </div>""", unsafe_allow_html=True)
+
+    # Week Ahead
+    week_events = get_week_ahead()
+    if week_events:
+        st.markdown("### 📅 Week Ahead")
+        for e in week_events[:4]:
+            impact_color = "#EF4444" if e["impact"] == "VERY HIGH" else "#F59E0B" if e["impact"] == "HIGH" else "#3B82F6"
+            st.markdown(f"""<div class="signal-card" style="border-left-color: {impact_color};">
+                <span style="background: {impact_color}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;">{e['timing']}</span>
+                <span style="color: #6b7280; font-size: 0.8rem; margin-left: 6px;">{e['category']}</span>
+                <br><strong style="color: #e0e0e0; font-size: 0.95rem;">{e['event']}</strong>
+                <br><span style="color: #9ca3af; font-size: 0.85rem;">{e['description'][:200]}</span>
+            </div>""", unsafe_allow_html=True)
+
     st.markdown("---")
     
-    left, right = st.columns([2, 1])
-    
-    with left:
-        st.markdown("### 📈 STRC Daily Volume (3 Months)")
-        if not strc_hist.empty:
-            avg_vol = strc_hist["Volume"].rolling(20).mean()
-            colors = ["#E74C3C" if v > a * 1.5 else "#F39C12" if v > a * 1.2 else "#2ECC71"
-                      for v, a in zip(strc_hist["Volume"], avg_vol.fillna(strc_hist["Volume"].mean()))]
-            
-            fig = go.Figure()
-            fig.add_trace(go.Bar(x=strc_hist.index, y=strc_hist["Volume"], marker_color=colors, name="Volume"))
-            fig.add_trace(go.Scatter(x=strc_hist.index, y=avg_vol, mode="lines", line=dict(color="#3498DB", width=2, dash="dash"), name="20-Day Avg"))
-            fig.update_layout(template="plotly_dark", height=400, margin=dict(l=0, r=0, t=10, b=0), yaxis_title="Shares", legend=dict(orientation="h", y=1.1))
-            st.plotly_chart(fig, width="stretch")
-            st.caption("🔴 1.5x+ avg (capital raise) | 🟠 Elevated | 🟢 Normal")
-        else:
-            st.info("STRC data unavailable")
-        
-        st.markdown("### 💵 STRC Price")
-        if not strc_hist.empty:
-            fig2 = go.Figure()
-            fig2.add_trace(go.Scatter(x=strc_hist.index, y=strc_hist["Close"], mode="lines", line=dict(color="#E67E22", width=2), fill="tozeroy", fillcolor="rgba(230,126,34,0.1)"))
-            fig2.add_hline(y=100, line_dash="dash", line_color="#95A5A6", annotation_text="$100 Par")
-            fig2.update_layout(template="plotly_dark", height=300, margin=dict(l=0, r=0, t=10, b=0), yaxis_title="Price ($)")
-            st.plotly_chart(fig2, width="stretch")
-    
-    with right:
-        st.markdown("### 🚨 Recent Signals")
-        if signals:
-            for sig in signals[:10]:
-                score = sig.get("confidence_score", 0)
-                author = sig.get("author_username", "")
-                text = sig.get("tweet_text", "")[:120]
-                company = sig.get("company", "")
-                date = sig.get("created_at", "")[:16]
-                color = "#E74C3C" if score >= 60 else "#F39C12" if score >= 40 else "#F1C40F"
-                emoji = "🔴" if score >= 60 else "🟠" if score >= 40 else "🟡"
-                st.markdown(f"""<div class="signal-card" style="border-left-color: {color};">
-                    <strong>{emoji} {score}/100</strong> — @{author} ({company})<br>
-                    <span style="color: #BDC3C7; font-size: 0.85em;">{text}...</span><br>
-                    <span style="color: #7F8C8D; font-size: 0.75em;">{date}</span>
-                </div>""", unsafe_allow_html=True)
-        else:
-            st.info("No signals detected yet.")
-        
-        st.markdown("### 📊 Score Distribution")
-        if signals:
-            scores = [s.get("confidence_score", 0) for s in signals]
-            fig3 = go.Figure(go.Histogram(x=scores, nbinsx=10, marker_color="#E67E22", opacity=0.8))
-            fig3.update_layout(template="plotly_dark", height=250, margin=dict(l=0, r=0, t=10, b=0), xaxis_title="Score", yaxis_title="Count")
-            st.plotly_chart(fig3, width="stretch")
-    
-    st.markdown("---")
     st.markdown("### 📋 Recent Tweets")
     if tweets:
         df_data = [{"Date": t.get("created_at", "")[:19], "Author": f"@{t.get('author_username', '')}", "Company": t.get("company", ""), "Tweet": t.get("tweet_text", "")[:100] + "...", "Signal": "🚨" if t.get("is_signal") else "", "Score": t.get("confidence_score", 0)} for t in tweets[:50]]

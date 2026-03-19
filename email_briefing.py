@@ -25,7 +25,9 @@ from treasury_leaderboard import get_leaderboard_with_live_price
 from regulatory_tracker import get_all_regulatory_items, get_summary_stats as get_reg_stats, get_all_statements
 from purchase_tracker import get_recent_purchases, get_purchase_stats
 from correlation_engine import CorrelationEngine
+from market_intelligence import generate_action_signal, get_overnight_changes, get_risk_dashboard, get_peer_activity, get_week_ahead
 import yfinance as yf
+
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -126,8 +128,7 @@ def get_accuracy_data():
         return {"total_purchases": 0, "predicted": 0, "hit_rate": 0, "total_predictions": 0}
 
 
-def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, reg_stats, reg_items, accuracy, statements, purchases, purchase_stats, correlation):
-    """Build the premium executive briefing — full 6-page intelligence summary."""
+def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, reg_stats, reg_items, accuracy, statements, purchases, purchase_stats, correlation, action=None, risk=None, changes=None, peers=None, week_ahead=None):
 
     today = datetime.now().strftime("%A, %B %d, %Y")
     time_now = datetime.now().strftime("%I:%M %p ET")
@@ -349,7 +350,49 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
             <span style="color: #6b7280; font-size: 11px;"> — {s['title']}</span>
             <br><span style="color: #9ca3af; font-size: 12px; font-style: italic;">"{s['statement'][:120]}..."</span>
         </td></tr>"""
+    
+    # Build overnight changes HTML
+    changes_html = ""
+    for c in (changes or [{"icon": "✅", "text": "No significant changes overnight"}]):
+        changes_html += f"""<tr><td style="padding: 10px 18px; border-bottom: 1px solid #1e2a3a;">
+            <span style="font-size: 14px; margin-right: 8px;">{c.get('icon', '📊')}</span>
+            <span style="color: #d1d5db; font-size: 13px;">{c.get('text', '')}</span>
+        </td></tr>"""
 
+    # Build peer activity HTML
+    peers_html = ""
+    for p in (peers or [{"icon": "✅", "company": "All Companies", "text": "No significant changes detected"}]):
+        peers_html += f"""<tr><td style="padding: 10px 18px; border-bottom: 1px solid #1e2a3a;">
+            <span style="font-size: 14px; margin-right: 8px;">{p.get('icon', '📊')}</span>
+            <strong style="color: #e0e0e0; font-size: 13px;">{p.get('company', '')}</strong>
+            <span style="color: #9ca3af; font-size: 12px;"> {p.get('text', '')}</span>
+        </td></tr>"""
+
+    # Build week ahead HTML
+    week_html = ""
+    for e in (week_ahead or []):
+        impact_color = "#EF4444" if e.get("impact") == "VERY HIGH" else "#F59E0B" if e.get("impact") == "HIGH" else "#3B82F6"
+        week_html += f"""<tr><td style="padding: 12px 18px; border-bottom: 1px solid #1e2a3a;">
+            <span style="background: {impact_color}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 9px; font-weight: 700;">{e.get('timing', '')}</span>
+            <span style="color: #4b5563; font-size: 10px; margin-left: 4px;">{e.get('category', '')}</span>
+            <br><strong style="color: #e0e0e0; font-size: 13px;">{e.get('event', '')}</strong>
+            <br><span style="color: #6b7280; font-size: 11px;">{e.get('description', '')[:150]}</span>
+        </td></tr>"""
+
+    # Risk values
+    action_color = action.get("action_color", "#9CA3AF") if action else "#9CA3AF"
+    action_text = action.get("action", "⚪ HOLD") if action else "⚪ HOLD"
+    action_score = action.get("score", 0) if action else 0
+    action_summary = action.get("summary", "No strong signals.") if action else "No strong signals."
+    fg_value = risk.get("fear_greed_value", 50) if risk else 50
+    fg_label = risk.get("fear_greed_label", "Neutral") if risk else "Neutral"
+    vol_30d = risk.get("volatility_30d", 0) if risk else 0
+    dd_ath = risk.get("drawdown_from_ath", 0) if risk else 0
+    risk_level = risk.get("risk_level", "MODERATE") if risk else "MODERATE"
+    risk_color = risk.get("risk_color", "#F59E0B") if risk else "#F59E0B"
+    fg_color = "#EF4444" if fg_value <= 25 else "#F59E0B" if fg_value <= 40 else "#10B981" if fg_value <= 60 else "#F59E0B"
+    vol_color = "#EF4444" if vol_30d >= 60 else "#F59E0B" if vol_30d >= 40 else "#10B981"
+    
     total_signals = len(all_signals)
     high_signals = len([s for s in all_signals if s.get("confidence_score", 0) >= 60])
 
@@ -385,6 +428,82 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
             </td></tr>
 
             <tr><td style="padding: 0 36px;"><div style="border-top: 1px solid #1e2a3a;"></div></td></tr>
+            
+            <!-- ⓪ ACTION SIGNAL -->
+            <tr><td style="padding: 24px 36px 16px 36px;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background: #111827; border-radius: 12px; border: 2px solid {action_color}; overflow: hidden;">
+                    <tr><td style="padding: 20px 24px;">
+                        <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                            <td>
+                                <span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">Today's Action Signal</span>
+                                <br><span style="color: {action_color}; font-size: 26px; font-weight: 800; letter-spacing: -0.02em;">{action_text}</span>
+                            </td>
+                            <td style="text-align: right; vertical-align: top;">
+                                <span style="color: {action_color}; font-size: 34px; font-weight: 800; font-family: 'Courier New', monospace;">{action_score}</span>
+                                <br><span style="color: #4b5563; font-size: 10px;">/100</span>
+                            </td>
+                        </tr></table>
+                        <p style="color: #d1d5db; font-size: 13px; line-height: 1.6; margin: 12px 0 0 0;">{action_summary}</p>
+                    </td></tr>
+                </table>
+            </td></tr>
+
+            <!-- RISK DASHBOARD -->
+            <tr><td style="padding: 0 36px 16px 36px;">
+                <span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">Risk Dashboard</span>
+                <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 10px;">
+                    <tr>
+                        <td width="24%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="The Fear &amp; Greed Index measures market sentiment on a scale of 0-100. Extreme Fear (0-25) historically signals buying opportunities as the market is oversold. Extreme Greed (75-100) signals caution as the market may be overbought. Data from alternative.me.">
+                            <span style="color: {fg_color}; font-size: 24px; font-weight: 800; font-family: 'Courier New', monospace;">{fg_value}</span>
+                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Fear & Greed</span>
+                            <span style="color: #E67E22; font-size: 9px; cursor: help;"> ℹ</span>
+                            <br><span style="color: #6b7280; font-size: 9px;">{fg_label}</span>
+                        </td>
+                        <td width="2%"></td>
+                        <td width="24%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="30-Day Annualized Volatility measures how much Bitcoin's price fluctuates. Below 40% is low volatility (stable). 40-60% is moderate. Above 60% is high volatility indicating rapid price swings and elevated risk. Calculated from daily returns over the past 30 days.">
+                            <span style="color: {vol_color}; font-size: 24px; font-weight: 800; font-family: 'Courier New', monospace;">{vol_30d}%</span>
+                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">30D Volatility</span>
+                            <span style="color: #E67E22; font-size: 9px; cursor: help;"> ℹ</span>
+                        </td>
+                        <td width="2%"></td>
+                        <td width="24%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Drawdown from All-Time High shows how far Bitcoin has fallen from its highest recorded price. A -20% drawdown means BTC is 20% below its peak. Larger drawdowns can signal buying opportunities for long-term holders, while smaller drawdowns indicate price strength near highs.">
+                            <span style="color: #EF4444; font-size: 24px; font-weight: 800; font-family: 'Courier New', monospace;">{dd_ath}%</span>
+                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">From ATH</span>
+                            <span style="color: #E67E22; font-size: 9px; cursor: help;"> ℹ</span>
+                        </td>
+                        <td width="2%"></td>
+                        <td width="24%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px; border: 1px solid {risk_color}; cursor: help;" title="Overall Risk Level combines Fear &amp; Greed, Volatility, and Drawdown into a single assessment. MODERATE (green) = favorable conditions. ELEVATED (yellow) = proceed with caution, manage position sizes. HIGH (red) = significant risk, consider pausing new purchases until conditions stabilize.">
+                            <span style="color: {risk_color}; font-size: 14px; font-weight: 800;">{risk_level}</span>
+                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Risk Level</span>
+                            <span style="color: #E67E22; font-size: 9px; cursor: help;"> ℹ</span>
+                        </td>
+                    </tr>
+                </table>
+            </td></tr>
+
+            <!-- WHAT CHANGED OVERNIGHT -->
+            <tr><td style="padding: 0 36px 16px 36px;">
+                <span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">What Changed Overnight</span>
+                <table width="100%" cellpadding="0" cellspacing="0" style="background: #111827; border-radius: 12px; margin-top: 10px; overflow: hidden;">
+                    {changes_html}
+                </table>
+            </td></tr>
+
+            <!-- PEER ACTIVITY -->
+            <tr><td style="padding: 0 36px 16px 36px;">
+                <span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">Peer Activity (Since Yesterday)</span>
+                <table width="100%" cellpadding="0" cellspacing="0" style="background: #111827; border-radius: 12px; margin-top: 10px; overflow: hidden;">
+                    {peers_html}
+                </table>
+            </td></tr>
+
+            <!-- WEEK AHEAD -->
+            <tr><td style="padding: 0 36px 16px 36px;">
+                <span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">Week Ahead</span>
+                <table width="100%" cellpadding="0" cellspacing="0" style="background: #111827; border-radius: 12px; margin-top: 10px; overflow: hidden;">
+                    {week_html}
+                </table>
+            </td></tr>
 
             <!-- ① EXECUTIVE SUMMARY -->
             <tr><td style="padding: 24px 36px 16px 36px;">
@@ -521,33 +640,39 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                 <span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑨ Intelligence Performance</span>
                 <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 10px;">
                     <tr>
-                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px;">
+                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Total Signals: The total number of purchase signals our system has detected since launch. A signal is any tweet from a monitored executive that scores 40/100 or above on our classification engine. Higher numbers indicate more active signaling from treasury company executives.">
                             <span style="color: #E67E22; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{total_signals}</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Signals</span>
+                            <span style="color: #E67E22; font-size: 9px; cursor: help;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
-                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px;">
+                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="High Confidence: Signals scoring 60/100 or above. These are the most reliable purchase indicators — tweets containing direct references to Bitcoin accumulation, capital raises, or known pre-purchase patterns like Saylor's 'orange dot' posts. High-confidence signals have historically preceded confirmed purchases within 24-72 hours.">
                             <span style="color: #E67E22; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{high_signals}</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">High Conf</span>
+                            <span style="color: #E67E22; font-size: 9px; cursor: help;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
-                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px;">
+                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Predictions: Every time our system detects a high-confidence signal (tweet score 60+, STRC volume spike, or multi-signal correlation 50+), it is automatically logged as a prediction with a timestamp. These predictions are later matched against confirmed purchases to calculate our accuracy rate.">
                             <span style="color: #E67E22; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{accuracy['total_predictions']}</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Predictions</span>
+                            <span style="color: #E67E22; font-size: 9px; cursor: help;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
-                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px;">
+                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Hit Rate: The percentage of confirmed Bitcoin purchases that our system predicted in advance. A prediction 'hits' if it was logged within 72 hours before the purchase was confirmed via 8-K filing. For example, if we predicted 8 out of 10 purchases, the hit rate is 80%. This metric builds over time as more purchases are confirmed.">
                             <span style="color: #E67E22; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{accuracy['hit_rate']}%</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Hit Rate</span>
+                            <span style="color: #E67E22; font-size: 9px; cursor: help;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
-                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px;">
+                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Confirmed Purchases: The total number of verified Bitcoin purchases by treasury companies in our database. These are sourced from SEC 8-K filings, press releases, and auto-detected via our leaderboard snapshot comparison system (when a company's BTC holdings increase between daily snapshots). Each confirmed purchase is matched against our predictions to calculate accuracy.">
                             <span style="color: #E67E22; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{accuracy['total_purchases']}</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Confirmed</span>
+                            <span style="color: #E67E22; font-size: 9px; cursor: help;"> ℹ</span>
                         </td>
                     </tr>
                 </table>
             </td></tr>
+            
 
             <!-- CTA -->
             <tr><td style="padding: 28px 36px; text-align: center; background: #111827; border-top: 1px solid #1e2a3a;">
@@ -632,7 +757,7 @@ def send_briefing(to_email, html_content):
 
 def generate_and_send_briefing(to_email):
     """Generate the full briefing and send it."""
-    print("  Generating executive briefing v3.0 (full 6-page summary)...")
+    print("  Generating executive briefing v4.0 (full CEO intelligence)...")
 
     market = get_market_data()
     signals = get_recent_signals(hours=24)
@@ -646,7 +771,6 @@ def generate_and_send_briefing(to_email):
     purchases = get_recent_purchases(5)
     purchase_stats = get_purchase_stats()
 
-    # Build correlation snapshot
     engine = CorrelationEngine()
     for sig in signals:
         score = sig.get("confidence_score", 0)
@@ -654,19 +778,35 @@ def generate_and_send_briefing(to_email):
             engine.add_tweet_signal(sig.get("author_username", ""), score, sig.get("tweet_text", ""))
     correlation = engine.calculate_correlation()
 
+    # New CEO intelligence
+    risk = get_risk_dashboard()
+    action = generate_action_signal(
+        correlation_score=correlation["correlated_score"],
+        active_streams=correlation["active_streams"],
+        strc_ratio=market.get("strc_ratio", 0),
+        signals_24h=signals,
+        btc_change=market.get("btc_change", 0),
+        fear_greed_value=risk["fear_greed_value"],
+    )
+    changes = get_overnight_changes(
+        btc_price, market.get("mstr_price", 0), market.get("strc_ratio", 0),
+        len(signals), lb_summary["total_btc"], reg_stats["total_items"],
+    )
+    peers = get_peer_activity()
+    week_ahead = get_week_ahead()
+
     html = build_briefing_html(
         market, signals, all_signals, leaderboard, lb_summary,
         reg_stats, reg_items, accuracy, statements, purchases,
-        purchase_stats, correlation
+        purchase_stats, correlation, action, risk, changes, peers, week_ahead
     )
 
-    print(f"  Market: BTC ${market.get('btc_price', 0):,.0f} | MSTR ${market.get('mstr_price', 0):,.2f}")
-    print(f"  Signals (24h): {len(signals)} | Total: {len(all_signals)}")
+    print(f"  Market: BTC ${btc_price:,.0f} | MSTR ${market.get('mstr_price', 0):,.2f}")
+    print(f"  Action: {action['action']} (score: {action['score']})")
+    print(f"  Risk: {risk['risk_level']} | Fear & Greed: {risk['fear_greed_value']}")
+    print(f"  Changes: {len(changes)} | Peers: {len(peers)} | Events: {len(week_ahead)}")
     print(f"  Leaderboard: {lb_summary['total_companies']} companies | {lb_summary['total_btc']:,} BTC")
-    print(f"  Regulatory: {reg_stats['total_items']} items | {reg_stats['active_passed']} active")
-    print(f"  Statements: {reg_stats['total_statements']} notable")
-    print(f"  Recent Purchases: {len(purchases)} shown | {purchase_stats['total_purchases']} total tracked")
-    print(f"  Correlation: {correlation['correlated_score']}/100 ({correlation['active_streams']}/4 streams)")
+    print(f"  Regulatory: {reg_stats['total_items']} items | Statements: {reg_stats['total_statements']}")
     print(f"  Accuracy: {accuracy['total_predictions']} predictions | {accuracy['hit_rate']}% hit rate")
 
     success = send_briefing(to_email, html)
@@ -677,7 +817,7 @@ def generate_and_send_briefing(to_email):
 # QUICK TEST
 # ============================================
 if __name__ == "__main__":
-    print("Executive Email Briefing v3.0 — Full 6-Page Intelligence Summary\n")
+    print("Executive Email Briefing v4.0 — Full CEO Intelligence\n")
     print("=" * 60)
 
     market = get_market_data()
@@ -699,22 +839,39 @@ if __name__ == "__main__":
             engine.add_tweet_signal(sig.get("author_username", ""), score, sig.get("tweet_text", ""))
     correlation = engine.calculate_correlation()
 
+    risk = get_risk_dashboard()
+    action = generate_action_signal(
+        correlation_score=correlation["correlated_score"],
+        active_streams=correlation["active_streams"],
+        strc_ratio=market.get("strc_ratio", 0),
+        signals_24h=signals,
+        btc_change=market.get("btc_change", 0),
+        fear_greed_value=risk["fear_greed_value"],
+    )
+    changes = get_overnight_changes(
+        btc_price, market.get("mstr_price", 0), market.get("strc_ratio", 0),
+        len(signals), lb_summary["total_btc"], reg_stats["total_items"],
+    )
+    peers = get_peer_activity()
+    week_ahead = get_week_ahead()
+
     html = build_briefing_html(
         market, signals, all_signals, leaderboard, lb_summary,
         reg_stats, reg_items, accuracy, statements, purchases,
-        purchase_stats, correlation
+        purchase_stats, correlation, action, risk, changes, peers, week_ahead
     )
 
     with open("briefing_preview.html", "w", encoding="utf-8") as f:
         f.write(html)
 
-    print(f"  Market: BTC ${market.get('btc_price', 0):,.0f} | MSTR ${market.get('mstr_price', 0):,.2f}")
+    print(f"  Action: {action['action']} (score: {action['score']})")
+    print(f"  Risk: {risk['risk_level']} | Fear & Greed: {risk['fear_greed_value']} ({risk['fear_greed_label']})")
+    print(f"  Volatility: {risk['volatility_30d']}% | Drawdown: {risk['drawdown_from_ath']}%")
+    print(f"  Changes: {len(changes)} | Peers: {len(peers)} | Events: {len(week_ahead)}")
+    print(f"  Market: BTC ${btc_price:,.0f} | MSTR ${market.get('mstr_price', 0):,.2f}")
     print(f"  Leaderboard: {lb_summary['total_companies']} companies | {lb_summary['total_btc']:,} BTC")
-    print(f"  Regulatory: {reg_stats['total_items']} items | {reg_stats['total_statements']} statements")
-    print(f"  Purchases: {purchase_stats['total_purchases']} tracked | {purchase_stats['total_btc']:,} BTC")
-    print(f"  Correlation: {correlation['correlated_score']}/100 ({correlation['active_streams']}/4 streams)")
-    print(f"  Accuracy: {accuracy['total_predictions']} predictions | {accuracy['hit_rate']}% hit rate")
     print(f"\n  Preview saved to: briefing_preview.html")
-    print(f"  Open this file in your browser to see the full briefing!\n")
-    print("Briefing v3.0 is ready!")
+    print(f"  Open this file in your browser!\n")
+    print("Briefing v4.0 is ready!")
+
 
