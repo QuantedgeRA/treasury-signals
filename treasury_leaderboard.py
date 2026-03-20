@@ -45,6 +45,104 @@ FALLBACK_COMPANIES = [
     {"company": "Core Scientific", "ticker": "CORZ", "btc_holdings": 0, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "USA", "sector": "Bitcoin Mining / AI"},
 ]
 
+# ============================================
+# SOVEREIGN / GOVERNMENT BTC HOLDERS
+# These are NOT on CoinGecko — we track them separately
+# Sources: Public records, blockchain analysis, press releases
+# ============================================
+
+SOVEREIGN_HOLDERS = [
+    {
+        "company": "🇺🇸 United States Government",
+        "ticker": "US-GOV",
+        "btc_holdings": 198109,
+        "avg_purchase_price": 0,
+        "total_cost_usd": 0,
+        "country": "US",
+        "sector": "Government (Seized Assets)",
+        "is_government": True,
+        "notes": "Seized from Silk Road, Bitfinex hack, and other criminal cases. Strategic Bitcoin Reserve established via Executive Order March 2025.",
+    },
+    {
+        "company": "🇨🇳 China Government",
+        "ticker": "CN-GOV",
+        "btc_holdings": 194000,
+        "avg_purchase_price": 0,
+        "total_cost_usd": 0,
+        "country": "CN",
+        "sector": "Government (Seized Assets)",
+        "is_government": True,
+        "notes": "Seized from PlusToken Ponzi scheme and other criminal cases. Status of holdings unclear — may have been partially liquidated.",
+    },
+    {
+        "company": "🇬🇧 United Kingdom Government",
+        "ticker": "UK-GOV",
+        "btc_holdings": 61000,
+        "avg_purchase_price": 0,
+        "total_cost_usd": 0,
+        "country": "GB",
+        "sector": "Government (Seized Assets)",
+        "is_government": True,
+        "notes": "Seized from criminal cases. Government exploring options for disposal or retention.",
+    },
+    {
+        "company": "🇧🇹 Bhutan (Druk Holding)",
+        "ticker": "BT-GOV",
+        "btc_holdings": 13029,
+        "avg_purchase_price": 0,
+        "total_cost_usd": 0,
+        "country": "BT",
+        "sector": "Government (Sovereign Mining)",
+        "is_government": True,
+        "notes": "Mined using hydroelectric power via state-owned Druk Holding & Investments. One of the largest sovereign BTC holdings relative to GDP.",
+    },
+    {
+        "company": "🇸🇻 El Salvador Government",
+        "ticker": "SV-GOV",
+        "btc_holdings": 6089,
+        "avg_purchase_price": 44300,
+        "total_cost_usd": 269700000,
+        "country": "SV",
+        "sector": "Government (Legal Tender)",
+        "is_government": True,
+        "notes": "First nation to adopt Bitcoin as legal tender. President Bukele continues daily BTC purchases. Unrealized profit exceeds $300M.",
+    },
+    {
+        "company": "🇺🇦 Ukraine Government",
+        "ticker": "UA-GOV",
+        "btc_holdings": 46351,
+        "avg_purchase_price": 0,
+        "total_cost_usd": 0,
+        "country": "UA",
+        "sector": "Government (Donations)",
+        "is_government": True,
+        "notes": "Received as cryptocurrency donations during the Russia-Ukraine conflict. Partially liquidated to fund defense.",
+    },
+    {
+        "company": "🇩🇪 Germany Government",
+        "ticker": "DE-GOV",
+        "btc_holdings": 0,
+        "avg_purchase_price": 0,
+        "total_cost_usd": 0,
+        "country": "DE",
+        "sector": "Government (Sold)",
+        "is_government": True,
+        "notes": "Sold ~50,000 BTC seized from Movie2k piracy site in July 2024. All holdings liquidated.",
+    },
+    {
+        "company": "🇫🇮 Finland Government",
+        "ticker": "FI-GOV",
+        "btc_holdings": 90,
+        "avg_purchase_price": 0,
+        "total_cost_usd": 0,
+        "country": "FI",
+        "sector": "Government (Seized Assets)",
+        "is_government": True,
+        "notes": "Small amount remaining after selling ~1,981 BTC seized from drug trafficking in 2018.",
+    },
+]
+
+
 # Cache for live data
 _live_data_cache = {"data": None, "fetched_at": None}
 
@@ -199,13 +297,25 @@ def get_leaderboard(sort_by="btc_holdings"):
     return companies
 
 
-def get_leaderboard_with_live_price(btc_price):
-    """Get leaderboard with live BTC price for value calculations."""
+def get_leaderboard_with_live_price(btc_price, include_governments=True):
+    """Get leaderboard with live BTC price. Merges corporate + sovereign holders."""
     companies = get_treasury_companies()
+
+    # Add sovereign holders if requested
+    if include_governments:
+        for gov in SOVEREIGN_HOLDERS:
+            if gov["btc_holdings"] > 0:
+                # Check if already in list (avoid duplicates)
+                existing = [c for c in companies if c.get("ticker") == gov["ticker"]]
+                if not existing:
+                    companies.append(gov.copy())
+
     companies = sorted(companies, key=lambda x: x.get("btc_holdings", 0), reverse=True)
 
     total_btc = 0
     total_value = 0
+    total_corporate = 0
+    total_sovereign = 0
 
     for i, company in enumerate(companies):
         company["rank"] = i + 1
@@ -222,6 +332,11 @@ def get_leaderboard_with_live_price(btc_price):
         total_btc += company["btc_holdings"]
         total_value += company["btc_value_usd"]
 
+        if company.get("is_government"):
+            total_sovereign += company["btc_holdings"]
+        else:
+            total_corporate += company["btc_holdings"]
+
     summary = {
         "total_companies": len(companies),
         "total_btc": total_btc,
@@ -230,30 +345,65 @@ def get_leaderboard_with_live_price(btc_price):
         "btc_price_used": btc_price,
         "updated_at": datetime.now().isoformat(),
         "data_source": "live" if _live_data_cache["data"] else "fallback",
+        "total_corporate_btc": total_corporate,
+        "total_sovereign_btc": total_sovereign,
+        "corporate_count": len([c for c in companies if not c.get("is_government")]),
+        "sovereign_count": len([c for c in companies if c.get("is_government")]),
     }
 
     return companies, summary
 
-
 def format_leaderboard_text(companies, summary):
-    """Format the leaderboard as a text report."""
     source = "LIVE" if summary.get("data_source") == "live" else "CACHED"
     lines = []
     lines.append("=" * 70)
     lines.append(f"  BTC TREASURY LEADERBOARD [{source}]")
     lines.append(f"  BTC Price: ${summary['btc_price_used']:,.0f} | Updated: {summary['updated_at'][:19]}")
+    lines.append(f"  Corporate: {summary.get('corporate_count', 0)} companies | Sovereign: {summary.get('sovereign_count', 0)} governments")
     lines.append("=" * 70)
     lines.append("")
-    lines.append(f"  {'#':<4} {'Company':<30} {'BTC':>10} {'Value ($B)':>12} {'Country':>10}")
+    lines.append(f"  {'#':<4} {'Entity':<30} {'BTC':>10} {'Value ($B)':>12} {'Type':>10}")
     lines.append(f"  {'-'*4} {'-'*30} {'-'*10} {'-'*12} {'-'*10}")
 
     for c in companies:
         if c["btc_holdings"] > 0:
-            lines.append(f"  {c['rank']:<4} {c['company'][:30]:<30} {c['btc_holdings']:>10,} ${c['btc_value_b']:>10.2f} {c.get('country', 'N/A'):>10}")
+            entity_type = "GOV" if c.get("is_government") else "CORP"
+            lines.append(f"  {c['rank']:<4} {c['company'][:30]:<30} {c['btc_holdings']:>10,} ${c['btc_value_b']:>10.2f} {entity_type:>10}")
 
     lines.append("")
-    lines.append(f"  TOTAL: {summary['total_btc']:,} BTC = ${summary['total_value_b']:.2f}B across {summary['total_companies']} companies")
+    lines.append(f"  TOTAL: {summary['total_btc']:,} BTC = ${summary['total_value_b']:.2f}B across {summary['total_companies']} entities")
     lines.append("=" * 70)
+
+    return "\n".join(lines)
+
+def format_leaderboard_telegram(companies, summary, top_n=10):
+    source = "LIVE" if summary.get("data_source") == "live" else "CACHED"
+    lines = []
+    lines.append(f"🏆 BTC TREASURY LEADERBOARD [{source}]\n")
+    lines.append(f"BTC: ${summary['btc_price_used']:,.0f}")
+    lines.append(f"Total: {summary['total_btc']:,} BTC (${summary['total_value_b']:.1f}B)")
+    lines.append(f"Corporate: {summary['total_corporate_btc']:,} BTC ({summary['corporate_count']} companies)")
+    lines.append(f"Sovereign: {summary['total_sovereign_btc']:,} BTC ({summary['sovereign_count']} governments)\n")
+
+    medals = ["🥇", "🥈", "🥉"]
+
+    for c in companies[:top_n]:
+        if c["btc_holdings"] > 0:
+            rank = c["rank"]
+            medal = medals[rank - 1] if rank <= 3 else f"#{rank}"
+            name = c["company"][:25]
+            gov_tag = " [GOV]" if c.get("is_government") else ""
+            lines.append(f"{medal} {name}{gov_tag}")
+            lines.append(f"   {c['btc_holdings']:,} BTC (${c['btc_value_b']:.2f}B)")
+            if c.get("unrealized_pnl_pct") and c["unrealized_pnl_pct"] != 0:
+                pnl_emoji = "📈" if c["unrealized_pnl_pct"] > 0 else "📉"
+                lines.append(f"   {pnl_emoji} P&L: {c['unrealized_pnl_pct']:+.1f}%")
+            lines.append("")
+
+    lines.append("Full leaderboard: bitcointreasuries.net")
+    lines.append("---")
+    lines.append("Treasury Signal Intelligence")
+    lines.append("BTC Treasury Leaderboard™")
 
     return "\n".join(lines)
 

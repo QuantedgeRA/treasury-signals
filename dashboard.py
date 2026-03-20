@@ -826,7 +826,7 @@ elif page == "🏆 BTC Leaderboard":
     st.markdown("---")
     
     # Top 10 Bar Chart
-    st.markdown("### Top 10 Corporate Bitcoin Holders")
+    st.markdown("### Top 10 Bitcoin Holders (Corporate + Sovereign)")
     top10 = [c for c in companies if c["btc_holdings"] > 0][:10]
     
     fig = go.Figure()
@@ -876,21 +876,22 @@ elif page == "🏆 BTC Leaderboard":
     
     # Full table
     st.markdown("### Full Leaderboard")
+    st.markdown(f"*{summary.get('corporate_count', 0)} companies + {summary.get('sovereign_count', 0)} governments · Source: [CoinGecko](https://www.coingecko.com/en/public-companies-bitcoin) + [BitcoinTreasuries.net](https://bitcointreasuries.net)*")
     df_data = []
     for c in companies:
         if c["btc_holdings"] > 0:
             pnl_str = f"{c['unrealized_pnl_pct']:+.1f}%" if c.get("unrealized_pnl_pct") else "N/A"
+            entity_type = "🏛️ Gov" if c.get("is_government") else "🏢 Corp"
             df_data.append({
                 "Rank": c["rank"],
-                "Company": c["company"],
-                "Ticker": c["ticker"],
+                "Entity": c["company"],
+                "Type": entity_type,
+                "Ticker": c.get("ticker", ""),
                 "BTC Holdings": c["btc_holdings"],
                 "Value ($B)": c["btc_value_b"],
-                "Avg Price": f"${c['avg_purchase_price']:,.0f}" if c["avg_purchase_price"] > 0 else "N/A",
                 "P&L": pnl_str,
-                "Country": c["country"],
+                "Country": c.get("country", "N/A"),
                 "Sector": c.get("sector", "N/A"),
-                "Last Purchase": c.get("last_purchase_date", "N/A") or "N/A",
             })
     
     df = pd.DataFrame(df_data)
@@ -901,13 +902,34 @@ elif page == "🏆 BTC Leaderboard":
     st.markdown("---")
     
     # Dominance pie chart
-    st.markdown("### Market Share of Corporate BTC Holdings")
-    top5 = [c for c in companies if c["btc_holdings"] > 0][:5]
-    others_btc = summary["total_btc"] - sum(c["btc_holdings"] for c in top5)
+    st.markdown("### Market Share — Corporate vs Sovereign")
     
-    labels = [c["company"].replace(" (MicroStrategy)", "") for c in top5] + ["Others"]
-    values = [c["btc_holdings"] for c in top5] + [others_btc]
-    colors = ["#E67E22", "#F39C12", "#3498DB", "#2ECC71", "#9B59B6", "#7F8C8D"]
+    corporate_btc = summary.get("total_corporate_btc", 0)
+    sovereign_btc = summary.get("total_sovereign_btc", 0)
+    
+    col_pie1, col_pie2 = st.columns(2)
+    
+    with col_pie1:
+        st.markdown("**By Type**")
+        fig_type = go.Figure(go.Pie(
+            labels=["Corporate", "Sovereign/Gov"],
+            values=[corporate_btc, sovereign_btc],
+            marker=dict(colors=["#E67E22", "#3B82F6"]),
+            textinfo="label+percent",
+            hole=0.4,
+        ))
+        fig_type.update_layout(template="plotly_dark", height=350, margin=dict(l=0, r=0, t=10, b=0))
+        st.plotly_chart(fig_type, width="stretch")
+    
+    with col_pie2:
+        st.markdown("**Top Holders**")
+        top5 = [c for c in companies if c["btc_holdings"] > 0][:5]
+        others_btc = summary["total_btc"] - sum(c["btc_holdings"] for c in top5)
+
+        labels = [c["company"].replace(" (MicroStrategy)", "")[:20] for c in top5] + ["Others"]
+        values = [c["btc_holdings"] for c in top5] + [others_btc]
+        colors = ["#E67E22", "#F39C12", "#3498DB", "#2ECC71", "#9B59B6", "#7F8C8D"]
+
     
     fig3 = go.Figure(go.Pie(
         labels=labels, values=values,
@@ -927,15 +949,17 @@ elif page == "💰 Recent Purchases":
 
     stats = get_purchase_stats()
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        st.metric("Total Purchases", stats["total_purchases"])
+        st.metric("Companies", summary.get("corporate_count", summary["total_companies"]))
     with c2:
-        st.metric("Total BTC Bought", f"{stats['total_btc']:,}")
+        st.metric("Governments", summary.get("sovereign_count", 0))
     with c3:
-        st.metric("Total USD Spent", f"${stats['total_usd']/1_000_000_000:.1f}B")
+        st.metric("Total BTC Held", f"{summary['total_btc']:,}")
     with c4:
-        st.metric("Avg Price/BTC", f"${stats['avg_price']:,.0f}")
+        st.metric("Total Value", f"${summary['total_value_b']:.1f}B")
+    with c5:
+        st.metric("BTC Price", f"${btc_price:,.0f}")
 
     st.markdown("---")
 
