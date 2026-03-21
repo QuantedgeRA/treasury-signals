@@ -563,8 +563,14 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
             <tr><td style="padding: 0 36px 16px 36px;">
                 <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
-                        <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑤ Recent Confirmed BTC Purchases</span></td>
-                        <td style="text-align: right;"><span style="color: #6b7280; font-size: 11px;">{purchase_stats['total_purchases']} total · {purchase_stats['total_btc']:,} BTC · ${purchase_stats['total_usd']/1_000_000_000:.1f}B</span></td>
+                        <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑤ Recent BTC Purchases</span></td>
+                        <td style="text-align: right;">
+                            <a href="https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/" style="color: #E67E22; font-size: 10px; font-weight: 600; text-decoration: none;">History →</a>
+                            <span style="color: #4b5563;"> · </span>
+                            <a href="https://saylortracker.com" style="color: #E67E22; font-size: 10px; font-weight: 600; text-decoration: none;">Saylor Tracker →</a>
+                            <span style="color: #4b5563;"> · </span>
+                            <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&type=8-K&dateb=&owner=include&count=40" style="color: #E67E22; font-size: 10px; font-weight: 600; text-decoration: none;">SEC EDGAR →</a>
+                        </td>
                     </tr>
                 </table>
                 <table width="100%" cellpadding="0" cellspacing="0" style="background: #111827; border-radius: 12px; margin-top: 10px; overflow: hidden;">
@@ -609,7 +615,11 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                 <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
                         <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑦ Global Regulatory Landscape</span></td>
-                        <td style="text-align: right;"><span style="color: #6b7280; font-size: 11px;">{reg_stats['total_items']} items · {reg_stats['regions_tracked']} regions · {reg_stats['bullish']} bullish</span></td>
+                        <td style="text-align: right;">
+                            <a href="https://www.congress.gov/search?q=bitcoin+crypto&s=1" style="color: #E67E22; font-size: 11px; font-weight: 600; text-decoration: none;">Congress.gov →</a>
+                            <span style="color: #4b5563; font-size: 11px;"> · </span>
+                            <a href="https://www.coindesk.com/policy/" style="color: #E67E22; font-size: 11px; font-weight: 600; text-decoration: none;">CoinDesk Policy →</a>
+                        </td>
                     </tr>
                 </table>
                 <table width="100%" cellpadding="0" cellspacing="0" style="background: #111827; border-radius: 12px; margin-top: 10px; overflow: hidden;">
@@ -622,7 +632,13 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                 <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
                         <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑧ Notable Statements — Leaders & CEOs</span></td>
-                        <td style="text-align: right;"><span style="color: #6b7280; font-size: 11px;">{reg_stats['total_statements']} statements · {reg_stats['bullish_statements']} bullish · {reg_stats['bearish_statements']} bearish</span></td>
+                        <td style="text-align: right;">
+                            <a href="https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/" style="color: #E67E22; font-size: 10px; font-weight: 600; text-decoration: none;">History →</a>
+                            <span style="color: #4b5563;"> · </span>
+                            <a href="https://www.theblock.co/" style="color: #E67E22; font-size: 10px; font-weight: 600; text-decoration: none;">The Block →</a>
+                            <span style="color: #4b5563;"> · </span>
+                            <a href="https://www.bloomberg.com/crypto" style="color: #E67E22; font-size: 10px; font-weight: 600; text-decoration: none;">Bloomberg →</a>
+                        </td>
                     </tr>
                 </table>
                 <table width="100%" cellpadding="0" cellspacing="0" style="background: #111827; border-radius: 12px; margin-top: 10px; overflow: hidden;">

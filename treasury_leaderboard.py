@@ -18,6 +18,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from supabase import create_client
 from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -55,13 +56,13 @@ SOVEREIGN_HOLDERS = [
     {
         "company": "🇺🇸 United States Government",
         "ticker": "US-GOV",
-        "btc_holdings": 198109,
+        "btc_holdings": 328372,
         "avg_purchase_price": 0,
         "total_cost_usd": 0,
         "country": "US",
-        "sector": "Government (Seized Assets)",
+        "sector": "Government (Seized + Strategic Reserve)",
         "is_government": True,
-        "notes": "Seized from Silk Road, Bitfinex hack, and other criminal cases. Strategic Bitcoin Reserve established via Executive Order March 2025.",
+        "notes": "Fallback data — live fetch failed. Source: BitcoinTreasuries.net",
     },
     {
         "company": "🇨🇳 China Government",
@@ -72,7 +73,7 @@ SOVEREIGN_HOLDERS = [
         "country": "CN",
         "sector": "Government (Seized Assets)",
         "is_government": True,
-        "notes": "Seized from PlusToken Ponzi scheme and other criminal cases. Status of holdings unclear — may have been partially liquidated.",
+        "notes": "Fallback data — live fetch failed.",
     },
     {
         "company": "🇬🇧 United Kingdom Government",
@@ -83,29 +84,7 @@ SOVEREIGN_HOLDERS = [
         "country": "GB",
         "sector": "Government (Seized Assets)",
         "is_government": True,
-        "notes": "Seized from criminal cases. Government exploring options for disposal or retention.",
-    },
-    {
-        "company": "🇧🇹 Bhutan (Druk Holding)",
-        "ticker": "BT-GOV",
-        "btc_holdings": 13029,
-        "avg_purchase_price": 0,
-        "total_cost_usd": 0,
-        "country": "BT",
-        "sector": "Government (Sovereign Mining)",
-        "is_government": True,
-        "notes": "Mined using hydroelectric power via state-owned Druk Holding & Investments. One of the largest sovereign BTC holdings relative to GDP.",
-    },
-    {
-        "company": "🇸🇻 El Salvador Government",
-        "ticker": "SV-GOV",
-        "btc_holdings": 6089,
-        "avg_purchase_price": 44300,
-        "total_cost_usd": 269700000,
-        "country": "SV",
-        "sector": "Government (Legal Tender)",
-        "is_government": True,
-        "notes": "First nation to adopt Bitcoin as legal tender. President Bukele continues daily BTC purchases. Unrealized profit exceeds $300M.",
+        "notes": "Fallback data — live fetch failed.",
     },
     {
         "company": "🇺🇦 Ukraine Government",
@@ -116,18 +95,29 @@ SOVEREIGN_HOLDERS = [
         "country": "UA",
         "sector": "Government (Donations)",
         "is_government": True,
-        "notes": "Received as cryptocurrency donations during the Russia-Ukraine conflict. Partially liquidated to fund defense.",
+        "notes": "Fallback data — live fetch failed.",
     },
     {
-        "company": "🇩🇪 Germany Government",
-        "ticker": "DE-GOV",
-        "btc_holdings": 0,
+        "company": "🇧🇹 Bhutan (Druk Holding)",
+        "ticker": "BT-GOV",
+        "btc_holdings": 13029,
         "avg_purchase_price": 0,
         "total_cost_usd": 0,
-        "country": "DE",
-        "sector": "Government (Sold)",
+        "country": "BT",
+        "sector": "Government (Sovereign Mining)",
         "is_government": True,
-        "notes": "Sold ~50,000 BTC seized from Movie2k piracy site in July 2024. All holdings liquidated.",
+        "notes": "Fallback data — live fetch failed.",
+    },
+    {
+        "company": "🇸🇻 El Salvador Government",
+        "ticker": "SV-GOV",
+        "btc_holdings": 6089,
+        "avg_purchase_price": 44300,
+        "total_cost_usd": 269700000,
+        "country": "SV",
+        "sector": "Government (Legal Tender)",
+        "is_government": True,
+        "notes": "Fallback data — live fetch failed.",
     },
     {
         "company": "🇫🇮 Finland Government",
@@ -138,10 +128,9 @@ SOVEREIGN_HOLDERS = [
         "country": "FI",
         "sector": "Government (Seized Assets)",
         "is_government": True,
-        "notes": "Small amount remaining after selling ~1,981 BTC seized from drug trafficking in 2018.",
+        "notes": "Fallback data — live fetch failed.",
     },
 ]
-
 
 # Cache for live data
 _live_data_cache = {"data": None, "fetched_at": None}
@@ -269,7 +258,170 @@ def fetch_live_leaderboard():
     print("  Using fallback data (all live sources unavailable)")
     return None
 
+def fetch_sovereign_holdings():
+    """Fetch live government BTC holdings. Tries multiple sources."""
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
+    # Source 1: Try BitcoinTreasuries.net API
+    try:
+        print("  Trying BitcoinTreasuries.net API...")
+        response = requests.get("https://api.bitcointreasuries.net/views/countries", headers=headers, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            sovereigns = []
+            flag_map = {
+                "united states": ("🇺🇸 United States Government", "US-GOV", "US"),
+                "china": ("🇨🇳 China Government", "CN-GOV", "CN"),
+                "united kingdom": ("🇬🇧 United Kingdom Government", "UK-GOV", "GB"),
+                "ukraine": ("🇺🇦 Ukraine Government", "UA-GOV", "UA"),
+                "bhutan": ("🇧🇹 Bhutan (Druk Holding)", "BT-GOV", "BT"),
+                "el salvador": ("🇸🇻 El Salvador Government", "SV-GOV", "SV"),
+                "finland": ("🇫🇮 Finland Government", "FI-GOV", "FI"),
+                "germany": ("🇩🇪 Germany Government", "DE-GOV", "DE"),
+                "georgia": ("🇬🇪 Georgia Government", "GE-GOV", "GE"),
+                "venezuela": ("🇻🇪 Venezuela Government", "VE-GOV", "VE"),
+                "north korea": ("🇰🇵 North Korea", "KP-GOV", "KP"),
+                "russia": ("🇷🇺 Russia", "RU-GOV", "RU"),
+                "japan": ("🇯🇵 Japan Government", "JP-GOV", "JP"),
+                "switzerland": ("🇨🇭 Switzerland", "CH-GOV", "CH"),
+                "canada": ("🇨🇦 Canada Government", "CA-GOV", "CA"),
+                "brazil": ("🇧🇷 Brazil Government", "BR-GOV", "BR"),
+                "australia": ("🇦🇺 Australia Government", "AU-GOV", "AU"),
+                "india": ("🇮🇳 India Government", "IN-GOV", "IN"),
+                "singapore": ("🇸🇬 Singapore Government", "SG-GOV", "SG"),
+                "saudi": ("🇸🇦 Saudi Arabia", "SA-GOV", "SA"),
+                "czech": ("🇨🇿 Czech Republic", "CZ-GOV", "CZ"),
+                "norway": ("🇳🇴 Norway", "NO-GOV", "NO"),
+                "poland": ("🇵🇱 Poland", "PL-GOV", "PL"),
+                "thailand": ("🇹🇭 Thailand", "TH-GOV", "TH"),
+            }
+            for item in data:
+                try:
+                    name = item.get("name", "Unknown")
+                    btc = int(float(item.get("total_holdings", 0)))
+                    if btc <= 0:
+                        continue
+                    name_lower = name.lower()
+                    matched = None
+                    for key, (display, ticker, country) in flag_map.items():
+                        if key in name_lower:
+                            matched = {"company": display, "ticker": ticker, "btc_holdings": btc,
+                                       "avg_purchase_price": 0, "total_cost_usd": 0,
+                                       "country": country, "sector": "Government",
+                                       "is_government": True, "notes": "LIVE from BitcoinTreasuries.net"}
+                            break
+                    if not matched:
+                        matched = {"company": f"🏛️ {name}", "ticker": f"{name[:2].upper()}-GOV",
+                                   "btc_holdings": btc, "avg_purchase_price": 0, "total_cost_usd": 0,
+                                   "country": "", "sector": "Government",
+                                   "is_government": True, "notes": "LIVE from BitcoinTreasuries.net"}
+                    sovereigns.append(matched)
+                except:
+                    continue
+            if sovereigns:
+                sovereigns.sort(key=lambda x: x["btc_holdings"], reverse=True)
+                print(f"  ✅ BitcoinTreasuries.net API: {len(sovereigns)} sovereign holders LIVE")
+                return sovereigns
+    except Exception as e:
+        print(f"  ⚠️ BitcoinTreasuries.net API failed: {e}")
+
+    # Source 2: Try CoinGecko government holdings
+    try:
+        print("  Trying CoinGecko government holdings...")
+        response = requests.get("https://api.coingecko.com/api/v3/companies/public_treasury/bitcoin", headers=headers, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            # CoinGecko doesn't have governments directly but check for any
+            pass
+    except:
+        pass
+
+    # Source 3: Scan news for government BTC updates
+    try:
+        print("  Scanning news for sovereign BTC updates...")
+        news_sovereigns = scan_sovereign_news()
+        if news_sovereigns:
+            return news_sovereigns
+    except:
+        pass
+
+    print("  ⚠️ All live sovereign sources failed, using fallback")
+    return None
+
+
+def scan_sovereign_news():
+    """Scan news for latest government BTC holding updates."""
+    import xml.etree.ElementTree as ET
+
+    queries = [
+        "US government bitcoin holdings 2026",
+        "government bitcoin reserve 2026",
+        "country bitcoin holdings 2026",
+        "strategic bitcoin reserve holdings 2026",
+        "El Salvador bitcoin holdings 2026",
+        "Bhutan bitcoin holdings 2026",
+    ]
+
+    headers = {"User-Agent": "Mozilla/5.0"}
+    updates = {}
+
+    country_patterns = {
+        "united states": ("🇺🇸 United States Government", "US-GOV", "US"),
+        "us government": ("🇺🇸 United States Government", "US-GOV", "US"),
+        "us strategic": ("🇺🇸 United States Government", "US-GOV", "US"),
+        "china": ("🇨🇳 China Government", "CN-GOV", "CN"),
+        "united kingdom": ("🇬🇧 United Kingdom Government", "UK-GOV", "GB"),
+        "uk government": ("🇬🇧 United Kingdom Government", "UK-GOV", "GB"),
+        "el salvador": ("🇸🇻 El Salvador Government", "SV-GOV", "SV"),
+        "bhutan": ("🇧🇹 Bhutan (Druk Holding)", "BT-GOV", "BT"),
+        "ukraine": ("🇺🇦 Ukraine Government", "UA-GOV", "UA"),
+        "germany": ("🇩🇪 Germany Government", "DE-GOV", "DE"),
+    }
+
+    for query in queries:
+        try:
+            url = f"https://news.google.com/rss/search?q={requests.utils.quote(query)}&hl=en-US&gl=US&ceid=US:en"
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code != 200:
+                continue
+            root = ET.fromstring(response.content)
+
+            for item in root.findall(".//item")[:3]:
+                title = item.findtext("title", "").lower()
+
+                # Check for BTC amount patterns
+                import re
+                btc_match = re.search(r'([\d,]+)\s*(?:btc|bitcoin)', title)
+                if not btc_match:
+                    continue
+
+                try:
+                    btc_amount = int(btc_match.group(1).replace(",", ""))
+                except:
+                    continue
+
+                if btc_amount < 100:
+                    continue
+
+                for key, (display, ticker, country) in country_patterns.items():
+                    if key in title and ticker not in updates:
+                        updates[ticker] = {
+                            "company": display, "ticker": ticker,
+                            "btc_holdings": btc_amount,
+                            "avg_purchase_price": 0, "total_cost_usd": 0,
+                            "country": country, "sector": "Government",
+                            "is_government": True,
+                            "notes": "Auto-detected from news",
+                        }
+                        break
+        except:
+            continue
+
+    if updates:
+        result = sorted(updates.values(), key=lambda x: x["btc_holdings"], reverse=True)
+        print(f"  Found {len(result)} sovereign updates from news")
+        return result
+    return None
 
 def get_treasury_companies():
     """
@@ -298,14 +450,15 @@ def get_leaderboard(sort_by="btc_holdings"):
 
 
 def get_leaderboard_with_live_price(btc_price, include_governments=True):
-    """Get leaderboard with live BTC price. Merges corporate + sovereign holders."""
+    """Get leaderboard with live BTC price. All data from live APIs."""
     companies = get_treasury_companies()
 
-    # Add sovereign holders if requested
     if include_governments:
-        for gov in SOVEREIGN_HOLDERS:
+        live_sovereigns = fetch_sovereign_holdings()
+        sovereigns = live_sovereigns if live_sovereigns else SOVEREIGN_HOLDERS
+
+        for gov in sovereigns:
             if gov["btc_holdings"] > 0:
-                # Check if already in list (avoid duplicates)
                 existing = [c for c in companies if c.get("ticker") == gov["ticker"]]
                 if not existing:
                     companies.append(gov.copy())

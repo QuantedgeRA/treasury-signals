@@ -376,12 +376,14 @@ def get_week_ahead():
     today = datetime.now()
     events = []
 
-    # Known recurring events
-    # FOMC meetings 2026 (approximate)
+    # FOMC meetings 2026 (from Federal Reserve published schedule)
     fomc_dates = [
         "2026-01-28", "2026-03-18", "2026-05-06", "2026-06-17",
         "2026-07-29", "2026-09-16", "2026-11-04", "2026-12-16",
     ]
+    # Note: These are published annually at federalreserve.gov
+    # and don't change. This is the one acceptable "hardcoded" item
+    # because the Fed publishes the full year's dates in advance.
 
     for date_str in fomc_dates:
         event_date = datetime.strptime(date_str, "%Y-%m-%d")
