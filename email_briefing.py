@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 from supabase import create_client
 from strc_tracker import get_strc_volume_data, analyze_strc_signal
 from treasury_leaderboard import get_leaderboard_with_live_price
-from regulatory_tracker import get_all_regulatory_items, get_summary_stats as get_reg_stats, get_all_statements
+from regulatory_tracker import get_all_regulatory_items, get_summary_stats as get_reg_stats, get_all_statements_combined as get_all_statements
 from purchase_tracker import get_recent_purchases, get_purchase_stats
 from correlation_engine import CorrelationEngine
 from market_intelligence import generate_action_signal, get_overnight_changes, get_risk_dashboard, get_peer_activity, get_week_ahead

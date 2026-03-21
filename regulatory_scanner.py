@@ -50,30 +50,58 @@ REGULATORY_QUERIES = [
 ]
 
 STATEMENT_QUERIES = [
-    "bitcoin CEO statement 2026",
-    "bitcoin treasury announcement 2026",
+    # CEOs and executives
     "Michael Saylor bitcoin 2026",
-    "Larry Fink bitcoin 2026",
-    "bitcoin corporate treasury 2026",
-    "bitcoin government official statement 2026",
-    "bitcoin adoption CEO executive 2026",
-    "bitcoin purchase announcement 2026",
-    "bitcoin reserve strategy CEO 2026",
-    "bitcoin bullish bearish CEO 2026",
-    "bitcoin ETF institutional 2026",
-    "Cathie Wood bitcoin 2026",
-    "Jack Dorsey bitcoin 2026",
-    "Brian Armstrong bitcoin 2026",
-    "bitcoin central bank statement 2026",
+    "Larry Fink bitcoin crypto 2026",
+    "Cathie Wood bitcoin prediction 2026",
     "Jamie Dimon bitcoin crypto 2026",
-    "Jerome Powell bitcoin crypto 2026",
-    "SEC bitcoin crypto statement 2026",
-    "bitcoin bank executive statement 2026",
-    "bitcoin hedge fund investment 2026",
-    "bitcoin sovereign wealth fund 2026",
-    "Trump bitcoin crypto 2026",
-    "David Sacks crypto 2026",
+    "Brian Armstrong bitcoin 2026",
+    "Jack Dorsey bitcoin 2026",
+    "Elon Musk bitcoin crypto 2026",
+    "Ryan Cohen bitcoin GameStop 2026",
+    "David Solomon Goldman Sachs crypto 2026",
+    "Jane Fraser Citigroup crypto 2026",
+    "Sam Altman bitcoin crypto 2026",
+    "Tim Cook Apple bitcoin 2026",
+    "Mark Zuckerberg crypto 2026",
+    "Changpeng Zhao CZ bitcoin 2026",
+    # Government officials
+    "Trump bitcoin crypto statement 2026",
+    "Jerome Powell bitcoin crypto Fed 2026",
+    "SEC crypto bitcoin statement 2026",
     "Paul Atkins SEC crypto 2026",
+    "David Sacks crypto czar 2026",
+    "Scott Bessent Treasury bitcoin 2026",
+    "Cynthia Lummis bitcoin 2026",
+    "Elizabeth Warren crypto 2026",
+    # Central bankers
+    "Christine Lagarde bitcoin ECB 2026",
+    "Andrew Bailey Bank England bitcoin 2026",
+    "central bank bitcoin statement 2026",
+    "central bank digital currency bitcoin 2026",
+    # Asset managers and fund managers
+    "BlackRock bitcoin ETF statement 2026",
+    "Fidelity bitcoin statement 2026",
+    "Grayscale bitcoin statement 2026",
+    "VanEck bitcoin prediction 2026",
+    # Global leaders
+    "Nayib Bukele bitcoin 2026",
+    "Javier Milei bitcoin crypto 2026",
+    "bitcoin president prime minister 2026",
+    "government official bitcoin statement 2026",
+    # Broad financial
+    "Wall Street bitcoin statement 2026",
+    "bank CEO bitcoin crypto statement 2026",
+    "hedge fund bitcoin statement 2026",
+    "institutional investor bitcoin statement 2026",
+    "sovereign wealth fund bitcoin 2026",
+    "pension fund bitcoin statement 2026",
+    # Broad crypto
+    "bitcoin price prediction CEO 2026",
+    "bitcoin adoption statement executive 2026",
+    "bitcoin corporate treasury statement 2026",
+    "bitcoin regulation statement official 2026",
+    "bitcoin bullish bearish statement 2026",
 ]
 
 # Keywords for classification
@@ -156,6 +184,50 @@ NOTABLE_PEOPLE = {
     "chamath palihapitiya": {"title": "CEO, Social Capital", "category": "CEO"},
     "tim cook": {"title": "CEO, Apple", "category": "CEO"},
     "satya nadella": {"title": "CEO, Microsoft", "category": "CEO"},
+    # Additional finance leaders
+    "ray dalio": {"title": "Founder, Bridgewater Associates", "category": "CEO"},
+    "bill ackman": {"title": "CEO, Pershing Square", "category": "CEO"},
+    "ken griffin": {"title": "CEO, Citadel", "category": "CEO"},
+    "steve cohen": {"title": "CEO, Point72", "category": "CEO"},
+    "michael bloomberg": {"title": "Founder, Bloomberg LP", "category": "CEO"},
+    "warren buffett": {"title": "CEO, Berkshire Hathaway", "category": "CEO"},
+    "charlie munger": {"title": "Late Vice Chairman, Berkshire Hathaway", "category": "CEO"},
+    "mark cuban": {"title": "Investor & Entrepreneur", "category": "CEO"},
+    "chamath palihapitiya": {"title": "CEO, Social Capital", "category": "CEO"},
+    "peter thiel": {"title": "Co-founder, PayPal / Palantir", "category": "CEO"},
+    "marc andreessen": {"title": "Co-founder, a16z", "category": "CEO"},
+    "ben horowitz": {"title": "Co-founder, a16z", "category": "CEO"},
+    "mike novogratz": {"title": "CEO, Galaxy Digital", "category": "CEO"},
+    "barry silbert": {"title": "CEO, Digital Currency Group", "category": "CEO"},
+    "cameron winklevoss": {"title": "Co-founder, Gemini", "category": "CEO"},
+    "tyler winklevoss": {"title": "Co-founder, Gemini", "category": "CEO"},
+    "brad garlinghouse": {"title": "CEO, Ripple", "category": "CEO"},
+    "vlad tenev": {"title": "CEO, Robinhood", "category": "CEO"},
+    "dan schulman": {"title": "Former CEO, PayPal", "category": "CEO"},
+    # Additional government
+    "elizabeth warren": {"title": "US Senator (D-MA)", "category": "Government"},
+    "ted cruz": {"title": "US Senator (R-TX)", "category": "Government"},
+    "ron desantis": {"title": "Governor, Florida", "category": "Government"},
+    "robert f kennedy": {"title": "US Government Official", "category": "Government"},
+    "rfk": {"title": "US Government Official", "category": "Government"},
+    "vivek ramaswamy": {"title": "DOGE Co-Lead / Entrepreneur", "category": "Government"},
+    "gary gensler": {"title": "Former SEC Chair", "category": "Government"},
+    "hester peirce": {"title": "SEC Commissioner", "category": "Government"},
+    "rostin behnam": {"title": "CFTC Chair", "category": "Government"},
+    "janet yellen": {"title": "Former US Treasury Secretary", "category": "Government"},
+    "mario draghi": {"title": "Former ECB President / Italian PM", "category": "Government"},
+    "rishi sunak": {"title": "Former UK Prime Minister", "category": "Government"},
+    "narendra modi": {"title": "Prime Minister of India", "category": "Government"},
+    "vladimir putin": {"title": "President of Russia", "category": "Government"},
+    # Media and analysts
+    "michael say": {"title": "Executive Chairman, Strategy", "category": "CEO"},
+    "robert kiyosaki": {"title": "Author, Rich Dad Poor Dad", "category": "CEO"},
+    "raoul pal": {"title": "CEO, Real Vision", "category": "CEO"},
+    "anthony pompliano": {"title": "Founder, Pomp Investments", "category": "CEO"},
+    "willy woo": {"title": "On-chain Analyst", "category": "CEO"},
+    "plan b": {"title": "Bitcoin Analyst (Stock-to-Flow)", "category": "CEO"},
+    "adam back": {"title": "CEO, Blockstream", "category": "CEO"},
+    "max keiser": {"title": "Bitcoin Advocate / El Salvador Advisor", "category": "CEO"},
 }
 
 
@@ -208,16 +280,34 @@ def classify_btc_impact(text):
     bullish_count = sum(1 for k in BULLISH_KEYWORDS if k in text_lower)
     bearish_count = sum(1 for k in BEARISH_KEYWORDS if k in text_lower)
 
-    if bullish_count > bearish_count + 1:
-        if bullish_count >= 4:
+    # Check for strong positive/negative context
+    strong_bullish = any(k in text_lower for k in ["bitcoin will reach", "bitcoin to ", "btc target", "million", "billion", "all-time high", "ath", "moon", "skyrocket", "surge", "soar", "record", "rally", "boom"])
+    strong_bearish = any(k in text_lower for k in ["crash", "plunge", "collapse", "worthless", "zero", "ponzi", "scam", "fraud", "ban bitcoin", "prohibit"])
+
+    if strong_bullish:
+        return "VERY BULLISH"
+    if strong_bearish:
+        return "VERY BEARISH"
+
+    if bullish_count > bearish_count:
+        if bullish_count >= 3:
             return "VERY BULLISH"
         return "BULLISH"
-    elif bearish_count > bullish_count + 1:
-        if bearish_count >= 4:
+    elif bearish_count > bullish_count:
+        if bearish_count >= 3:
             return "VERY BEARISH"
         return "BEARISH"
+    
+    # Default to BULLISH if it mentions bitcoin positively at all
+    positive_context = any(k in text_lower for k in ["bitcoin", "btc", "crypto", "digital asset"])
+    negative_context = any(k in text_lower for k in ["concern", "warn", "risk", "threat", "problem"])
+    
+    if positive_context and not negative_context:
+        return "BULLISH"
+    elif negative_context:
+        return "BEARISH"
+    
     return "NEUTRAL"
-
 
 def classify_category(text):
     """Classify which region/category a regulatory item belongs to."""

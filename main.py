@@ -31,6 +31,7 @@ from purchase_tracker import detect_new_purchases, log_detected_purchases, forma
 from regulatory_scanner import run_full_scan as scan_regulatory
 from regulatory_tracker import format_regulatory_briefing
 import yfinance as yf
+import requests as req
 
 load_dotenv()
 
@@ -376,32 +377,32 @@ def main():
         print(f'  SCAN #{scan_number} at {current_time}')
         print(f'{"="*60}\n')
 
-        print('[1/10] Fetching tweets...\n')
+        print('[1/11] Fetching tweets...\n')
         new_count, skip_count = scan_all_accounts(accounts)
         print(f'\n  {new_count} new, {skip_count} duplicates.\n')
 
-        print('[2/10] Classifying + sending alerts...\n')
+        print('[2/11] Classifying + sending alerts...\n')
         signals, alerts_sent = process_and_alert()
         display_signals(signals)
         if not signals:
             print('\n  No purchase signals this scan.')
 
-        print('\n[3/10] Checking STRC issuance volume...\n')
+        print('\n[3/11] Checking STRC issuance volume...\n')
         check_strc_volume()
 
-        print('\n[4/10] Checking SEC EDGAR for 8-K filings...\n')
+        print('\n[4/11] Checking SEC EDGAR for 8-K filings...\n')
         check_edgar_filings()
 
-        print('\n[5/10] Running Multi-Signal Correlation Engine...\n')
+        print('\n[5/11] Running Multi-Signal Correlation Engine...\n')
         correlation = check_correlation()
 
-        print('\n[6/10] Checking daily email briefing...\n')
+        print('\n[6/11] Checking daily email briefing...\n')
         send_daily_email()
 
-        print('\n[7/10] Checking daily leaderboard...\n')
+        print('\n[7/11] Checking daily leaderboard...\n')
         send_daily_leaderboard()
 
-        print('\n[8/10] Detecting new BTC purchases...\n')
+        print('\n[8/11] Detecting new BTC purchases...\n')
         try:
             detected = detect_new_purchases()
             if detected:
@@ -417,13 +418,21 @@ def main():
         except Exception as e:
             print(f'  Purchase detection error: {e}')
 
-        print('\n[9/10] Scanning regulatory news & statements...\n')
+        print('\n[9/11] Scanning regulatory news & statements...\n')
         try:
             scan_regulatory()
         except Exception as e:
             print(f'  Regulatory scan error: {e}')
+        
 
-        print('\n[10/10] Scan complete.\n')
+        print('\n[10/11] Keeping Streamlit dashboard alive...\n')
+        try:
+            response = req.get("https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/", timeout=30)
+            print(f'  Dashboard ping: {response.status_code}')
+        except Exception as e:
+            print(f'  Dashboard ping failed: {e}')
+
+        print('\n[11/11] Scan complete.\n')
 
         send_scan_summary(scan_number, len(accounts), new_count, len(signals))
         print(f'  Scan #{scan_number} done.')
