@@ -8,12 +8,6 @@ Sources:
 2. Tweet scanner (executives already monitored)
 3. Supabase database (persisted items)
 4. Hardcoded fallback data
-
-Scans for:
-- New Bitcoin legislation worldwide
-- Government policy changes
-- Central bank statements about Bitcoin
-- CEO/executive statements about BTC treasury
 """
 
 import os
@@ -25,6 +19,10 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from supabase import create_client
+from logger import get_logger
+from freshness_tracker import freshness
+
+logger = get_logger(__name__)
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -50,7 +48,6 @@ REGULATORY_QUERIES = [
 ]
 
 STATEMENT_QUERIES = [
-    # CEOs and executives
     "Michael Saylor bitcoin 2026",
     "Larry Fink bitcoin crypto 2026",
     "Cathie Wood bitcoin prediction 2026",
@@ -59,52 +56,21 @@ STATEMENT_QUERIES = [
     "Jack Dorsey bitcoin 2026",
     "Elon Musk bitcoin crypto 2026",
     "Ryan Cohen bitcoin GameStop 2026",
-    "David Solomon Goldman Sachs crypto 2026",
-    "Jane Fraser Citigroup crypto 2026",
-    "Sam Altman bitcoin crypto 2026",
-    "Tim Cook Apple bitcoin 2026",
-    "Mark Zuckerberg crypto 2026",
-    "Changpeng Zhao CZ bitcoin 2026",
-    # Government officials
     "Trump bitcoin crypto statement 2026",
     "Jerome Powell bitcoin crypto Fed 2026",
-    "SEC crypto bitcoin statement 2026",
     "Paul Atkins SEC crypto 2026",
     "David Sacks crypto czar 2026",
-    "Scott Bessent Treasury bitcoin 2026",
     "Cynthia Lummis bitcoin 2026",
-    "Elizabeth Warren crypto 2026",
-    # Central bankers
     "Christine Lagarde bitcoin ECB 2026",
-    "Andrew Bailey Bank England bitcoin 2026",
-    "central bank bitcoin statement 2026",
-    "central bank digital currency bitcoin 2026",
-    # Asset managers and fund managers
-    "BlackRock bitcoin ETF statement 2026",
-    "Fidelity bitcoin statement 2026",
-    "Grayscale bitcoin statement 2026",
-    "VanEck bitcoin prediction 2026",
-    # Global leaders
     "Nayib Bukele bitcoin 2026",
     "Javier Milei bitcoin crypto 2026",
-    "bitcoin president prime minister 2026",
-    "government official bitcoin statement 2026",
-    # Broad financial
+    "BlackRock bitcoin ETF statement 2026",
+    "Fidelity bitcoin statement 2026",
     "Wall Street bitcoin statement 2026",
-    "bank CEO bitcoin crypto statement 2026",
-    "hedge fund bitcoin statement 2026",
-    "institutional investor bitcoin statement 2026",
     "sovereign wealth fund bitcoin 2026",
-    "pension fund bitcoin statement 2026",
-    # Broad crypto
-    "bitcoin price prediction CEO 2026",
-    "bitcoin adoption statement executive 2026",
     "bitcoin corporate treasury statement 2026",
-    "bitcoin regulation statement official 2026",
-    "bitcoin bullish bearish statement 2026",
 ]
 
-# Keywords for classification
 BULLISH_KEYWORDS = [
     "approve", "passed", "signed into law", "adopt", "reserve", "buy",
     "purchase", "bullish", "positive", "support", "embrace", "legal tender",
@@ -127,9 +93,7 @@ CATEGORY_KEYWORDS = {
     "Middle East & Africa": ["uae", "dubai", "saudi", "nigeria", "south africa", "israel", "turkey"],
 }
 
-# Notable people to track
 NOTABLE_PEOPLE = {
-    # Treasury company CEOs
     "michael saylor": {"title": "Executive Chairman, Strategy", "category": "CEO"},
     "phong le": {"title": "CEO, Strategy", "category": "CEO"},
     "fred thiel": {"title": "CEO, MARA Holdings", "category": "CEO"},
@@ -140,94 +104,30 @@ NOTABLE_PEOPLE = {
     "brian armstrong": {"title": "CEO, Coinbase", "category": "CEO"},
     "jack dorsey": {"title": "CEO, Block", "category": "CEO"},
     "elon musk": {"title": "CEO, Tesla & SpaceX", "category": "CEO"},
-    "michael mo": {"title": "CEO, KULR Technology", "category": "CEO"},
-    # Asset managers
     "larry fink": {"title": "CEO, BlackRock", "category": "CEO"},
     "cathie wood": {"title": "CEO, ARK Invest", "category": "CEO"},
-    "abigail johnson": {"title": "CEO, Fidelity Investments", "category": "CEO"},
-    "michael sonnenshein": {"title": "CEO, Grayscale", "category": "CEO"},
-    "hunter horsley": {"title": "CEO, Bitwise", "category": "CEO"},
-    "jan van eck": {"title": "CEO, VanEck", "category": "CEO"},
-    # Bank executives
     "jamie dimon": {"title": "CEO, JPMorgan Chase", "category": "CEO"},
     "david solomon": {"title": "CEO, Goldman Sachs", "category": "CEO"},
-    "james gorman": {"title": "Chairman, Morgan Stanley", "category": "CEO"},
-    "jane fraser": {"title": "CEO, Citigroup", "category": "CEO"},
-    "noel quinn": {"title": "CEO, HSBC", "category": "CEO"},
-    "sergio ermotti": {"title": "CEO, UBS", "category": "CEO"},
-    # US Government
     "donald trump": {"title": "President of the United States", "category": "Government"},
-    "jd vance": {"title": "Vice President of the United States", "category": "Government"},
     "scott bessent": {"title": "US Treasury Secretary", "category": "Government"},
     "jerome powell": {"title": "Chair, Federal Reserve", "category": "Government"},
-    "gary gensler": {"title": "Former SEC Chair", "category": "Government"},
     "paul atkins": {"title": "SEC Chair", "category": "Government"},
     "cynthia lummis": {"title": "US Senator (R-WY)", "category": "Government"},
-    "bill hagerty": {"title": "US Senator (R-TN)", "category": "Government"},
     "david sacks": {"title": "White House AI & Crypto Czar", "category": "Government"},
-    "janet yellen": {"title": "Former US Treasury Secretary", "category": "Government"},
-    # Global leaders
     "nayib bukele": {"title": "President of El Salvador", "category": "Government"},
     "javier milei": {"title": "President of Argentina", "category": "Government"},
     "christine lagarde": {"title": "President, European Central Bank", "category": "Government"},
     "ales michl": {"title": "Governor, Czech National Bank", "category": "Government"},
-    "andrew bailey": {"title": "Governor, Bank of England", "category": "Government"},
-    "kazuo ueda": {"title": "Governor, Bank of Japan", "category": "Government"},
-    "mohammed bin salman": {"title": "Crown Prince of Saudi Arabia", "category": "Government"},
-    "xi jinping": {"title": "President of China", "category": "Government"},
-    # Crypto & Tech
-    "changpeng zhao": {"title": "Founder, Binance", "category": "CEO"},
-    "cz": {"title": "Founder, Binance", "category": "CEO"},
-    "sam altman": {"title": "CEO, OpenAI", "category": "CEO"},
-    "peter thiel": {"title": "Co-founder, PayPal / Palantir", "category": "CEO"},
-    "mark cuban": {"title": "Investor & Entrepreneur", "category": "CEO"},
-    "chamath palihapitiya": {"title": "CEO, Social Capital", "category": "CEO"},
-    "tim cook": {"title": "CEO, Apple", "category": "CEO"},
-    "satya nadella": {"title": "CEO, Microsoft", "category": "CEO"},
-    # Additional finance leaders
+    "elizabeth warren": {"title": "US Senator (D-MA)", "category": "Government"},
+    "hester peirce": {"title": "SEC Commissioner", "category": "Government"},
     "ray dalio": {"title": "Founder, Bridgewater Associates", "category": "CEO"},
     "bill ackman": {"title": "CEO, Pershing Square", "category": "CEO"},
-    "ken griffin": {"title": "CEO, Citadel", "category": "CEO"},
-    "steve cohen": {"title": "CEO, Point72", "category": "CEO"},
-    "michael bloomberg": {"title": "Founder, Bloomberg LP", "category": "CEO"},
-    "warren buffett": {"title": "CEO, Berkshire Hathaway", "category": "CEO"},
-    "charlie munger": {"title": "Late Vice Chairman, Berkshire Hathaway", "category": "CEO"},
-    "mark cuban": {"title": "Investor & Entrepreneur", "category": "CEO"},
-    "chamath palihapitiya": {"title": "CEO, Social Capital", "category": "CEO"},
-    "peter thiel": {"title": "Co-founder, PayPal / Palantir", "category": "CEO"},
-    "marc andreessen": {"title": "Co-founder, a16z", "category": "CEO"},
-    "ben horowitz": {"title": "Co-founder, a16z", "category": "CEO"},
-    "mike novogratz": {"title": "CEO, Galaxy Digital", "category": "CEO"},
-    "barry silbert": {"title": "CEO, Digital Currency Group", "category": "CEO"},
-    "cameron winklevoss": {"title": "Co-founder, Gemini", "category": "CEO"},
-    "tyler winklevoss": {"title": "Co-founder, Gemini", "category": "CEO"},
-    "brad garlinghouse": {"title": "CEO, Ripple", "category": "CEO"},
-    "vlad tenev": {"title": "CEO, Robinhood", "category": "CEO"},
-    "dan schulman": {"title": "Former CEO, PayPal", "category": "CEO"},
-    # Additional government
-    "elizabeth warren": {"title": "US Senator (D-MA)", "category": "Government"},
-    "ted cruz": {"title": "US Senator (R-TX)", "category": "Government"},
-    "ron desantis": {"title": "Governor, Florida", "category": "Government"},
-    "robert f kennedy": {"title": "US Government Official", "category": "Government"},
-    "rfk": {"title": "US Government Official", "category": "Government"},
-    "vivek ramaswamy": {"title": "DOGE Co-Lead / Entrepreneur", "category": "Government"},
-    "gary gensler": {"title": "Former SEC Chair", "category": "Government"},
-    "hester peirce": {"title": "SEC Commissioner", "category": "Government"},
-    "rostin behnam": {"title": "CFTC Chair", "category": "Government"},
-    "janet yellen": {"title": "Former US Treasury Secretary", "category": "Government"},
-    "mario draghi": {"title": "Former ECB President / Italian PM", "category": "Government"},
-    "rishi sunak": {"title": "Former UK Prime Minister", "category": "Government"},
-    "narendra modi": {"title": "Prime Minister of India", "category": "Government"},
-    "vladimir putin": {"title": "President of Russia", "category": "Government"},
-    # Media and analysts
-    "michael say": {"title": "Executive Chairman, Strategy", "category": "CEO"},
+    "changpeng zhao": {"title": "Founder, Binance", "category": "CEO"},
+    "sam altman": {"title": "CEO, OpenAI", "category": "CEO"},
     "robert kiyosaki": {"title": "Author, Rich Dad Poor Dad", "category": "CEO"},
     "raoul pal": {"title": "CEO, Real Vision", "category": "CEO"},
     "anthony pompliano": {"title": "Founder, Pomp Investments", "category": "CEO"},
-    "willy woo": {"title": "On-chain Analyst", "category": "CEO"},
-    "plan b": {"title": "Bitcoin Analyst (Stock-to-Flow)", "category": "CEO"},
     "adam back": {"title": "CEO, Blockstream", "category": "CEO"},
-    "max keiser": {"title": "Bitcoin Advocate / El Salvador Advisor", "category": "CEO"},
 }
 
 
@@ -239,6 +139,7 @@ def fetch_google_news_rss(query, max_results=10):
         response = requests.get(url, headers=headers, timeout=10)
 
         if response.status_code != 200:
+            logger.debug(f"Google News RSS returned {response.status_code} for '{query}'")
             return []
 
         root = ET.fromstring(response.content)
@@ -250,26 +151,22 @@ def fetch_google_news_rss(query, max_results=10):
             pub_date = item.findtext("pubDate", "")
             description = item.findtext("description", "")
 
-            # Parse date
             try:
                 date_obj = datetime.strptime(pub_date[:25], "%a, %d %b %Y %H:%M:%S")
                 date_str = date_obj.strftime("%Y-%m-%d")
-            except:
+            except (ValueError, TypeError):
                 date_str = datetime.now().strftime("%Y-%m-%d")
 
-            # Clean HTML from description
             clean_desc = re.sub(r'<[^>]+>', '', description)
 
             articles.append({
-                "title": title,
-                "url": link,
-                "date": date_str,
-                "description": clean_desc[:500],
+                "title": title, "url": link,
+                "date": date_str, "description": clean_desc[:500],
             })
 
         return articles
     except Exception as e:
-        print(f"    RSS fetch error for '{query}': {e}")
+        logger.debug(f"RSS fetch error for '{query}': {e}")
         return []
 
 
@@ -280,7 +177,6 @@ def classify_btc_impact(text):
     bullish_count = sum(1 for k in BULLISH_KEYWORDS if k in text_lower)
     bearish_count = sum(1 for k in BEARISH_KEYWORDS if k in text_lower)
 
-    # Check for strong positive/negative context
     strong_bullish = any(k in text_lower for k in ["bitcoin will reach", "bitcoin to ", "btc target", "million", "billion", "all-time high", "ath", "moon", "skyrocket", "surge", "soar", "record", "rally", "boom"])
     strong_bearish = any(k in text_lower for k in ["crash", "plunge", "collapse", "worthless", "zero", "ponzi", "scam", "fraud", "ban bitcoin", "prohibit"])
 
@@ -288,26 +184,20 @@ def classify_btc_impact(text):
         return "VERY BULLISH"
     if strong_bearish:
         return "VERY BEARISH"
-
     if bullish_count > bearish_count:
-        if bullish_count >= 3:
-            return "VERY BULLISH"
-        return "BULLISH"
+        return "VERY BULLISH" if bullish_count >= 3 else "BULLISH"
     elif bearish_count > bullish_count:
-        if bearish_count >= 3:
-            return "VERY BEARISH"
-        return "BEARISH"
-    
-    # Default to BULLISH if it mentions bitcoin positively at all
+        return "VERY BEARISH" if bearish_count >= 3 else "BEARISH"
+
     positive_context = any(k in text_lower for k in ["bitcoin", "btc", "crypto", "digital asset"])
     negative_context = any(k in text_lower for k in ["concern", "warn", "risk", "threat", "problem"])
-    
+
     if positive_context and not negative_context:
         return "BULLISH"
     elif negative_context:
         return "BEARISH"
-    
     return "NEUTRAL"
+
 
 def classify_category(text):
     """Classify which region/category a regulatory item belongs to."""
@@ -335,25 +225,23 @@ def generate_item_id(text):
 
 def scan_regulatory_news():
     """Scan Google News for new regulatory developments."""
-    print("  Scanning for regulatory news...")
+    logger.info("Scanning for regulatory news...")
     new_items = []
 
     for query in REGULATORY_QUERIES:
         articles = fetch_google_news_rss(query, max_results=5)
         for article in articles:
-            # Skip old articles (more than 30 days)
             try:
                 article_date = datetime.strptime(article["date"], "%Y-%m-%d")
                 if (datetime.now() - article_date).days > 30:
                     continue
-            except:
+            except (ValueError, TypeError):
                 continue
 
             combined_text = f"{article['title']} {article['description']}"
             btc_impact = classify_btc_impact(combined_text)
             category = classify_category(combined_text)
 
-            # Only keep items that are clearly about regulation
             regulation_keywords = ["regulation", "law", "bill", "act", "legislation", "policy", "reserve", "legal", "ruling", "approval", "ban"]
             if not any(k in combined_text.lower() for k in regulation_keywords):
                 continue
@@ -376,7 +264,7 @@ def scan_regulatory_news():
                 "auto_detected": True,
             })
 
-    # Deduplicate by title similarity
+    # Deduplicate
     seen_titles = set()
     unique_items = []
     for item in new_items:
@@ -385,13 +273,16 @@ def scan_regulatory_news():
             seen_titles.add(title_key)
             unique_items.append(item)
 
-    print(f"  Found {len(unique_items)} regulatory news items")
+    logger.info(f"Found {len(unique_items)} regulatory news items")
+    if unique_items:
+        freshness.record_success("google_news_reg", detail=f"{len(unique_items)} items found")
+        freshness.set_provenance("regulatory", "Google News RSS (auto-scan)", "live")
     return unique_items
 
 
 def scan_notable_statements():
     """Scan Google News for notable statements about Bitcoin."""
-    print("  Scanning for notable statements...")
+    logger.info("Scanning for notable statements...")
     new_statements = []
 
     for query in STATEMENT_QUERIES:
@@ -401,7 +292,7 @@ def scan_notable_statements():
                 article_date = datetime.strptime(article["date"], "%Y-%m-%d")
                 if (datetime.now() - article_date).days > 30:
                     continue
-            except:
+            except (ValueError, TypeError):
                 continue
 
             combined_text = f"{article['title']} {article['description']}"
@@ -434,7 +325,10 @@ def scan_notable_statements():
             seen.add(key)
             unique.append(s)
 
-    print(f"  Found {len(unique)} notable statements")
+    logger.info(f"Found {len(unique)} notable statements")
+    if unique:
+        freshness.record_success("google_news_stmt", detail=f"{len(unique)} statements found")
+        freshness.set_provenance("statements", "Google News RSS (auto-scan)", "live")
     return unique
 
 
@@ -449,9 +343,9 @@ def save_regulatory_items(items):
             supabase.table("regulatory_items").insert(item).execute()
             saved += 1
         except Exception as e:
-            pass
+            logger.debug(f"Could not save regulatory item {item.get('item_id', '')}: {e}")
     if saved:
-        print(f"  {saved} new regulatory item(s) saved to database")
+        logger.info(f"{saved} new regulatory item(s) saved to database")
     return saved
 
 
@@ -466,9 +360,9 @@ def save_notable_statements(statements):
             supabase.table("notable_statements").insert(s).execute()
             saved += 1
         except Exception as e:
-            pass
+            logger.debug(f"Could not save statement {s.get('statement_id', '')}: {e}")
     if saved:
-        print(f"  {saved} new statement(s) saved to database")
+        logger.info(f"{saved} new statement(s) saved to database")
     return saved
 
 
@@ -476,7 +370,7 @@ def seed_hardcoded_data():
     """Seed the hardcoded regulatory items and statements into Supabase."""
     from regulatory_tracker import REGULATORY_ITEMS as HARDCODED_ITEMS, NOTABLE_STATEMENTS as HARDCODED_STATEMENTS
 
-    print("  Seeding hardcoded regulatory data...")
+    logger.info("Seeding hardcoded regulatory data...")
     reg_saved = 0
     for item in HARDCODED_ITEMS:
         item_id = f"seed_{generate_item_id(item['title'])}"
@@ -485,24 +379,17 @@ def seed_hardcoded_data():
             if existing.data:
                 continue
             row = {
-                "item_id": item_id,
-                "title": item["title"],
-                "category": item["category"],
-                "type": item["type"],
-                "status": item["status"],
-                "status_color": item["status_color"],
-                "date_updated": item["date_updated"],
-                "summary": item["summary"],
-                "impact": item["impact"],
-                "btc_impact": item["btc_impact"],
-                "auto_detected": False,
+                "item_id": item_id, "title": item["title"], "category": item["category"],
+                "type": item["type"], "status": item["status"], "status_color": item["status_color"],
+                "date_updated": item["date_updated"], "summary": item["summary"],
+                "impact": item["impact"], "btc_impact": item["btc_impact"], "auto_detected": False,
             }
             supabase.table("regulatory_items").insert(row).execute()
             reg_saved += 1
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Seed failed for regulatory item: {e}")
 
-    print(f"  {reg_saved} regulatory items seeded")
+    logger.info(f"{reg_saved} regulatory items seeded")
 
     stmt_saved = 0
     for s in HARDCODED_STATEMENTS:
@@ -512,64 +399,58 @@ def seed_hardcoded_data():
             if existing.data:
                 continue
             row = {
-                "statement_id": stmt_id,
-                "person": s["person"],
-                "title": s["title"],
-                "date": s["date"],
-                "statement": s["statement"],
-                "impact": s["impact"],
-                "category": s["category"],
-                "auto_detected": False,
+                "statement_id": stmt_id, "person": s["person"], "title": s["title"],
+                "date": s["date"], "statement": s["statement"],
+                "impact": s["impact"], "category": s["category"], "auto_detected": False,
             }
             supabase.table("notable_statements").insert(row).execute()
             stmt_saved += 1
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Seed failed for statement: {e}")
 
-    print(f"  {stmt_saved} statements seeded")
+    logger.info(f"{stmt_saved} statements seeded")
     return reg_saved, stmt_saved
 
 
 def get_all_regulatory_from_db():
-    """Get all regulatory items from database (hardcoded + auto-detected)."""
+    """Get all regulatory items from database."""
     try:
         result = supabase.table("regulatory_items").select("*").order("date_updated", desc=True).limit(100).execute()
         return result.data if result.data else []
-    except:
+    except Exception as e:
+        logger.error(f"Failed to fetch regulatory items from DB: {e}", exc_info=True)
         return []
 
 
 def get_all_statements_from_db():
-    """Get all statements from database (hardcoded + auto-detected)."""
+    """Get all statements from database."""
     try:
         result = supabase.table("notable_statements").select("*").order("date", desc=True).limit(100).execute()
         return result.data if result.data else []
-    except:
+    except Exception as e:
+        logger.error(f"Failed to fetch statements from DB: {e}", exc_info=True)
         return []
 
 
 def run_full_scan():
     """Run the full regulatory + statements scan."""
-    print("\n  Running regulatory & statements auto-scan...")
+    logger.info("Running regulatory & statements auto-scan...")
 
-    # Scan for new regulatory news
     reg_items = scan_regulatory_news()
     if reg_items:
         save_regulatory_items(reg_items)
 
-    # Scan for notable statements
     statements = scan_notable_statements()
     if statements:
         save_notable_statements(statements)
 
-    # Get totals from DB
     all_reg = get_all_regulatory_from_db()
     all_stmt = get_all_statements_from_db()
 
     auto_reg = len([r for r in all_reg if r.get("auto_detected")])
     auto_stmt = len([s for s in all_stmt if s.get("auto_detected")])
 
-    print(f"  Database totals: {len(all_reg)} regulatory items ({auto_reg} auto-detected) | {len(all_stmt)} statements ({auto_stmt} auto-detected)")
+    logger.info(f"DB totals: {len(all_reg)} regulatory items ({auto_reg} auto) | {len(all_stmt)} statements ({auto_stmt} auto)")
 
     return reg_items, statements
 
@@ -578,37 +459,10 @@ def run_full_scan():
 # QUICK TEST
 # ============================================
 if __name__ == "__main__":
-    print("\nRegulatory & Statements Auto-Scanner\n")
-    print("=" * 60)
-
-    # Step 1: Seed hardcoded data
-    print("\n[1] Seeding hardcoded data to Supabase...")
+    logger.info("Regulatory & Statements Auto-Scanner — testing...")
     seed_hardcoded_data()
-
-    # Step 2: Scan for new items
-    print("\n[2] Scanning Google News for regulatory developments...")
     reg_items = scan_regulatory_news()
-    for item in reg_items[:5]:
-        print(f"    📰 [{item['category']}] {item['title'][:80]}...")
-        print(f"       Impact: {item['btc_impact']} | Date: {item['date_updated']}")
-
-    # Step 3: Scan for statements
-    print("\n[3] Scanning for notable statements...")
     statements = scan_notable_statements()
-    for s in statements[:5]:
-        print(f"    📣 {s['person']} ({s['category']}): {s['statement'][:80]}...")
-        print(f"       Impact: {s['impact']} | Date: {s['date']}")
-
-    # Step 4: Save to DB
-    print("\n[4] Saving to database...")
     save_regulatory_items(reg_items)
     save_notable_statements(statements)
-
-    # Step 5: Show DB totals
-    print("\n[5] Database totals:")
-    all_reg = get_all_regulatory_from_db()
-    all_stmt = get_all_statements_from_db()
-    print(f"  Regulatory items: {len(all_reg)} ({len([r for r in all_reg if r.get('auto_detected')])} auto-detected)")
-    print(f"  Statements: {len(all_stmt)} ({len([s for s in all_stmt if s.get('auto_detected')])} auto-detected)")
-
-    print("\nRegulatory Scanner is ready!")
+    logger.info("Regulatory Scanner test complete")

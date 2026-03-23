@@ -6,3 +6,6 @@ python-telegram-bot==22.7
 yfinance==1.2.0
 streamlit==1.44.0
 plotly==5.24.0
+resend
+reportlab
+pandas

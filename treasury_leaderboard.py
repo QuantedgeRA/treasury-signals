@@ -4,21 +4,25 @@ treasury_leaderboard.py — v2.0
 BTC Treasury Company Leaderboard — LIVE DATA
 
 Pulls the latest holdings data from multiple sources:
-1. BitcoinTreasuries.net (primary source)
-2. Fallback to manually maintained data if scraping fails
-3. Supabase for historical snapshots
-
-Auto-updates every scan cycle.
+1. CoinGecko API (primary)
+2. BitcoinTreasuries.net (fallback)
+3. Supabase snapshot (fallback)
+4. Hardcoded fallback (last resort)
 """
 
 import json
 import os
+import re
 import requests
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from dotenv import load_dotenv
 from supabase import create_client
 from bs4 import BeautifulSoup
-from bs4 import BeautifulSoup
+from logger import get_logger
+from freshness_tracker import freshness
+
+logger = get_logger(__name__)
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -46,117 +50,34 @@ FALLBACK_COMPANIES = [
     {"company": "Core Scientific", "ticker": "CORZ", "btc_holdings": 0, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "USA", "sector": "Bitcoin Mining / AI"},
 ]
 
-# ============================================
-# SOVEREIGN / GOVERNMENT BTC HOLDERS
-# These are NOT on CoinGecko — we track them separately
-# Sources: Public records, blockchain analysis, press releases
-# ============================================
-
 SOVEREIGN_HOLDERS = [
-    {
-        "company": "🇺🇸 United States Government",
-        "ticker": "US-GOV",
-        "btc_holdings": 328372,
-        "avg_purchase_price": 0,
-        "total_cost_usd": 0,
-        "country": "US",
-        "sector": "Government (Seized + Strategic Reserve)",
-        "is_government": True,
-        "notes": "Fallback data — live fetch failed. Source: BitcoinTreasuries.net",
-    },
-    {
-        "company": "🇨🇳 China Government",
-        "ticker": "CN-GOV",
-        "btc_holdings": 194000,
-        "avg_purchase_price": 0,
-        "total_cost_usd": 0,
-        "country": "CN",
-        "sector": "Government (Seized Assets)",
-        "is_government": True,
-        "notes": "Fallback data — live fetch failed.",
-    },
-    {
-        "company": "🇬🇧 United Kingdom Government",
-        "ticker": "UK-GOV",
-        "btc_holdings": 61000,
-        "avg_purchase_price": 0,
-        "total_cost_usd": 0,
-        "country": "GB",
-        "sector": "Government (Seized Assets)",
-        "is_government": True,
-        "notes": "Fallback data — live fetch failed.",
-    },
-    {
-        "company": "🇺🇦 Ukraine Government",
-        "ticker": "UA-GOV",
-        "btc_holdings": 46351,
-        "avg_purchase_price": 0,
-        "total_cost_usd": 0,
-        "country": "UA",
-        "sector": "Government (Donations)",
-        "is_government": True,
-        "notes": "Fallback data — live fetch failed.",
-    },
-    {
-        "company": "🇧🇹 Bhutan (Druk Holding)",
-        "ticker": "BT-GOV",
-        "btc_holdings": 13029,
-        "avg_purchase_price": 0,
-        "total_cost_usd": 0,
-        "country": "BT",
-        "sector": "Government (Sovereign Mining)",
-        "is_government": True,
-        "notes": "Fallback data — live fetch failed.",
-    },
-    {
-        "company": "🇸🇻 El Salvador Government",
-        "ticker": "SV-GOV",
-        "btc_holdings": 6089,
-        "avg_purchase_price": 44300,
-        "total_cost_usd": 269700000,
-        "country": "SV",
-        "sector": "Government (Legal Tender)",
-        "is_government": True,
-        "notes": "Fallback data — live fetch failed.",
-    },
-    {
-        "company": "🇫🇮 Finland Government",
-        "ticker": "FI-GOV",
-        "btc_holdings": 90,
-        "avg_purchase_price": 0,
-        "total_cost_usd": 0,
-        "country": "FI",
-        "sector": "Government (Seized Assets)",
-        "is_government": True,
-        "notes": "Fallback data — live fetch failed.",
-    },
+    {"company": "🇺🇸 United States Government", "ticker": "US-GOV", "btc_holdings": 328372, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "US", "sector": "Government (Seized + Strategic Reserve)", "is_government": True, "notes": "Fallback data"},
+    {"company": "🇨🇳 China Government", "ticker": "CN-GOV", "btc_holdings": 194000, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "CN", "sector": "Government (Seized Assets)", "is_government": True, "notes": "Fallback data"},
+    {"company": "🇬🇧 United Kingdom Government", "ticker": "UK-GOV", "btc_holdings": 61000, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "GB", "sector": "Government (Seized Assets)", "is_government": True, "notes": "Fallback data"},
+    {"company": "🇺🇦 Ukraine Government", "ticker": "UA-GOV", "btc_holdings": 46351, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "UA", "sector": "Government (Donations)", "is_government": True, "notes": "Fallback data"},
+    {"company": "🇧🇹 Bhutan (Druk Holding)", "ticker": "BT-GOV", "btc_holdings": 13029, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "BT", "sector": "Government (Sovereign Mining)", "is_government": True, "notes": "Fallback data"},
+    {"company": "🇸🇻 El Salvador Government", "ticker": "SV-GOV", "btc_holdings": 6089, "avg_purchase_price": 44300, "total_cost_usd": 269700000, "country": "SV", "sector": "Government (Legal Tender)", "is_government": True, "notes": "Fallback data"},
+    {"company": "🇫🇮 Finland Government", "ticker": "FI-GOV", "btc_holdings": 90, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "FI", "sector": "Government (Seized Assets)", "is_government": True, "notes": "Fallback data"},
 ]
 
-# Cache for live data
 _live_data_cache = {"data": None, "fetched_at": None}
 
 
 def fetch_live_leaderboard():
-    """
-    Fetch live BTC treasury data from multiple sources.
-    Tries each source in order until one works.
-    """
+    """Fetch live BTC treasury data. Tries each source in order."""
     global _live_data_cache
 
-    # Use cache if less than 1 hour old
     if _live_data_cache["data"] and _live_data_cache["fetched_at"]:
         age_seconds = (datetime.now() - _live_data_cache["fetched_at"]).total_seconds()
         if age_seconds < 3600:
-            print("  Using cached leaderboard data (less than 1 hour old)")
+            logger.debug("Using cached leaderboard data (less than 1 hour old)")
             return _live_data_cache["data"]
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-    # Source 1: Try CoinGecko public companies endpoint
+    # Source 1: CoinGecko
     try:
-        print("  Trying CoinGecko public companies API...")
+        logger.debug("Trying CoinGecko public companies API...")
         response = requests.get(
             "https://api.coingecko.com/api/v3/companies/public_treasury/bitcoin",
             headers=headers, timeout=15
@@ -178,31 +99,35 @@ def fetch_live_leaderboard():
                     }
                     if company["btc_holdings"] > 0:
                         companies.append(company)
-                except:
+                except Exception as e:
+                    logger.debug(f"Skipping CoinGecko company entry: {e}")
                     continue
 
             if companies:
                 companies.sort(key=lambda x: x["btc_holdings"], reverse=True)
                 _live_data_cache["data"] = companies
                 _live_data_cache["fetched_at"] = datetime.now()
-                print(f"  ✅ CoinGecko LIVE: {len(companies)} companies fetched")
+                logger.info(f"CoinGecko LIVE: {len(companies)} companies fetched")
+                freshness.record_success("coingecko", detail=f"{len(companies)} companies fetched")
+                freshness.set_provenance("leaderboard_corporate", "CoinGecko API", "live")
                 return companies
         else:
-            print(f"  ⚠️ CoinGecko returned status {response.status_code}")
+            logger.warning(f"CoinGecko returned status {response.status_code}")
+            freshness.record_failure("coingecko", error=f"HTTP {response.status_code}")
     except Exception as e:
-        print(f"  ⚠️ CoinGecko failed: {e}")
+        logger.warning(f"CoinGecko failed: {e}")
+        freshness.record_failure("coingecko", error=str(e))
 
-    # Source 2: Try BitcoinTreasuries.net website scraping
+    # Source 2: BitcoinTreasuries.net scraping
     try:
-        print("  Trying BitcoinTreasuries.net scraping...")
+        logger.debug("Trying BitcoinTreasuries.net scraping...")
         response = requests.get("https://bitcointreasuries.net/", headers=headers, timeout=15)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "lxml")
-            # Look for table data
             tables = soup.find_all("table")
             if tables:
                 companies = []
-                for row in tables[0].find_all("tr")[1:]:  # Skip header
+                for row in tables[0].find_all("tr")[1:]:
                     cols = row.find_all("td")
                     if len(cols) >= 4:
                         try:
@@ -212,36 +137,35 @@ def fetch_live_leaderboard():
                             btc_holdings = int(float(btc_text)) if btc_text.replace(".", "").isdigit() else 0
                             if name and btc_holdings > 0:
                                 companies.append({
-                                    "company": name,
-                                    "ticker": ticker,
-                                    "btc_holdings": btc_holdings,
-                                    "avg_purchase_price": 0,
-                                    "total_cost_usd": 0,
-                                    "country": "Unknown",
-                                    "sector": "BTC Treasury",
+                                    "company": name, "ticker": ticker,
+                                    "btc_holdings": btc_holdings, "avg_purchase_price": 0,
+                                    "total_cost_usd": 0, "country": "Unknown", "sector": "BTC Treasury",
                                 })
-                        except:
+                        except Exception as e:
+                            logger.debug(f"Skipping BitcoinTreasuries row: {e}")
                             continue
                 if companies:
                     companies.sort(key=lambda x: x["btc_holdings"], reverse=True)
                     _live_data_cache["data"] = companies
                     _live_data_cache["fetched_at"] = datetime.now()
-                    print(f"  ✅ BitcoinTreasuries LIVE: {len(companies)} companies scraped")
+                    logger.info(f"BitcoinTreasuries LIVE: {len(companies)} companies scraped")
+                    freshness.record_success("bitcointreasuries", detail=f"{len(companies)} companies scraped")
+                    freshness.set_provenance("leaderboard_corporate", "BitcoinTreasuries.net", "live")
                     return companies
-            print("  ⚠️ Could not parse BitcoinTreasuries.net tables")
+            logger.warning("Could not parse BitcoinTreasuries.net tables")
     except Exception as e:
-        print(f"  ⚠️ BitcoinTreasuries.net scraping failed: {e}")
+        logger.warning(f"BitcoinTreasuries.net scraping failed: {e}")
 
-    # Source 3: Check Supabase for recent snapshot
+    # Source 3: Supabase cached snapshot
     try:
-        print("  Trying Supabase cached snapshot...")
+        logger.debug("Trying Supabase cached snapshot...")
         result = supabase.table("leaderboard_snapshots").select("*").order("snapshot_date", desc=True).limit(1).execute()
         if result.data:
             snapshot = result.data[0]
             snapshot_companies = json.loads(snapshot.get("companies_json", "[]"))
             if snapshot_companies:
-                print(f"  ✅ Using Supabase snapshot from {snapshot['snapshot_date']}")
-                # Merge snapshot data with fallback for full details
+                logger.warning(f"Using Supabase snapshot from {snapshot['snapshot_date']} (live sources unavailable)")
+                freshness.set_provenance("leaderboard_corporate", f"Supabase snapshot ({snapshot['snapshot_date']})", "cached")
                 merged = []
                 fallback_map = {c["ticker"]: c for c in FALLBACK_COMPANIES}
                 for sc in snapshot_companies:
@@ -253,18 +177,20 @@ def fetch_live_leaderboard():
                 if merged:
                     return merged
     except Exception as e:
-        print(f"  ⚠️ Supabase snapshot failed: {e}")
+        logger.warning(f"Supabase snapshot failed: {e}")
 
-    print("  Using fallback data (all live sources unavailable)")
+    logger.warning("ALL live sources unavailable — using hardcoded fallback data")
+    freshness.set_provenance("leaderboard_corporate", "Hardcoded fallback", "fallback")
     return None
 
+
 def fetch_sovereign_holdings():
-    """Fetch live government BTC holdings. Tries multiple sources."""
+    """Fetch live government BTC holdings."""
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-    # Source 1: Try BitcoinTreasuries.net API
+    # Source 1: BitcoinTreasuries.net API
     try:
-        print("  Trying BitcoinTreasuries.net API...")
+        logger.debug("Trying BitcoinTreasuries.net sovereign API...")
         response = requests.get("https://api.bitcointreasuries.net/views/countries", headers=headers, timeout=15)
         if response.status_code == 200:
             data = response.json()
@@ -316,43 +242,43 @@ def fetch_sovereign_holdings():
                                    "country": "", "sector": "Government",
                                    "is_government": True, "notes": "LIVE from BitcoinTreasuries.net"}
                     sovereigns.append(matched)
-                except:
+                except Exception as e:
+                    logger.debug(f"Skipping sovereign entry: {e}")
                     continue
             if sovereigns:
                 sovereigns.sort(key=lambda x: x["btc_holdings"], reverse=True)
-                print(f"  ✅ BitcoinTreasuries.net API: {len(sovereigns)} sovereign holders LIVE")
+                logger.info(f"BitcoinTreasuries.net API: {len(sovereigns)} sovereign holders LIVE")
+                freshness.record_success("bitcointreasuries", detail=f"{len(sovereigns)} sovereign holders")
+                freshness.set_provenance("leaderboard_sovereign", "BitcoinTreasuries.net API", "live")
                 return sovereigns
     except Exception as e:
-        print(f"  ⚠️ BitcoinTreasuries.net API failed: {e}")
+        logger.warning(f"BitcoinTreasuries.net sovereign API failed: {e}")
 
-    # Source 2: Try CoinGecko government holdings
+    # Source 2: CoinGecko (doesn't have governments directly)
     try:
-        print("  Trying CoinGecko government holdings...")
+        logger.debug("Trying CoinGecko government holdings...")
         response = requests.get("https://api.coingecko.com/api/v3/companies/public_treasury/bitcoin", headers=headers, timeout=15)
         if response.status_code == 200:
-            data = response.json()
-            # CoinGecko doesn't have governments directly but check for any
-            pass
-    except:
-        pass
+            pass  # CoinGecko doesn't have governments
+    except Exception as e:
+        logger.debug(f"CoinGecko government check: {e}")
 
-    # Source 3: Scan news for government BTC updates
+    # Source 3: Scan news
     try:
-        print("  Scanning news for sovereign BTC updates...")
+        logger.debug("Scanning news for sovereign BTC updates...")
         news_sovereigns = scan_sovereign_news()
         if news_sovereigns:
             return news_sovereigns
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"Sovereign news scan failed: {e}")
 
-    print("  ⚠️ All live sovereign sources failed, using fallback")
+    logger.warning("All live sovereign sources failed, using fallback")
+    freshness.set_provenance("leaderboard_sovereign", "Hardcoded fallback", "fallback")
     return None
 
 
 def scan_sovereign_news():
     """Scan news for latest government BTC holding updates."""
-    import xml.etree.ElementTree as ET
-
     queries = [
         "US government bitcoin holdings 2026",
         "government bitcoin reserve 2026",
@@ -388,16 +314,13 @@ def scan_sovereign_news():
 
             for item in root.findall(".//item")[:3]:
                 title = item.findtext("title", "").lower()
-
-                # Check for BTC amount patterns
-                import re
                 btc_match = re.search(r'([\d,]+)\s*(?:btc|bitcoin)', title)
                 if not btc_match:
                     continue
 
                 try:
                     btc_amount = int(btc_match.group(1).replace(",", ""))
-                except:
+                except ValueError:
                     continue
 
                 if btc_amount < 100:
@@ -410,24 +333,23 @@ def scan_sovereign_news():
                             "btc_holdings": btc_amount,
                             "avg_purchase_price": 0, "total_cost_usd": 0,
                             "country": country, "sector": "Government",
-                            "is_government": True,
-                            "notes": "Auto-detected from news",
+                            "is_government": True, "notes": "Auto-detected from news",
                         }
                         break
-        except:
+        except Exception as e:
+            logger.debug(f"Sovereign news query failed for '{query}': {e}")
             continue
 
     if updates:
         result = sorted(updates.values(), key=lambda x: x["btc_holdings"], reverse=True)
-        print(f"  Found {len(result)} sovereign updates from news")
+        logger.info(f"Found {len(result)} sovereign updates from news")
+        freshness.set_provenance("leaderboard_sovereign", "Google News (auto-detected)", "live")
         return result
     return None
 
+
 def get_treasury_companies():
-    """
-    Get the best available treasury company data.
-    Tries live data first, falls back to hardcoded data.
-    """
+    """Get the best available treasury company data."""
     live_data = fetch_live_leaderboard()
     if live_data:
         return live_data
@@ -441,11 +363,9 @@ def get_leaderboard(sort_by="btc_holdings"):
     """Get the treasury leaderboard sorted by the given field."""
     companies = get_treasury_companies()
     companies = sorted(companies, key=lambda x: x.get(sort_by, 0), reverse=True)
-
     for i, company in enumerate(companies):
         company["rank"] = i + 1
         company["btc_value_usd"] = company["btc_holdings"] * 72000
-
     return companies
 
 
@@ -506,58 +426,24 @@ def get_leaderboard_with_live_price(btc_price, include_governments=True):
 
     return companies, summary
 
+
 def format_leaderboard_text(companies, summary):
     source = "LIVE" if summary.get("data_source") == "live" else "CACHED"
     lines = []
     lines.append("=" * 70)
     lines.append(f"  BTC TREASURY LEADERBOARD [{source}]")
     lines.append(f"  BTC Price: ${summary['btc_price_used']:,.0f} | Updated: {summary['updated_at'][:19]}")
-    lines.append(f"  Corporate: {summary.get('corporate_count', 0)} companies | Sovereign: {summary.get('sovereign_count', 0)} governments")
     lines.append("=" * 70)
     lines.append("")
     lines.append(f"  {'#':<4} {'Entity':<30} {'BTC':>10} {'Value ($B)':>12} {'Type':>10}")
     lines.append(f"  {'-'*4} {'-'*30} {'-'*10} {'-'*12} {'-'*10}")
-
     for c in companies:
         if c["btc_holdings"] > 0:
             entity_type = "GOV" if c.get("is_government") else "CORP"
             lines.append(f"  {c['rank']:<4} {c['company'][:30]:<30} {c['btc_holdings']:>10,} ${c['btc_value_b']:>10.2f} {entity_type:>10}")
-
     lines.append("")
     lines.append(f"  TOTAL: {summary['total_btc']:,} BTC = ${summary['total_value_b']:.2f}B across {summary['total_companies']} entities")
     lines.append("=" * 70)
-
-    return "\n".join(lines)
-
-def format_leaderboard_telegram(companies, summary, top_n=10):
-    source = "LIVE" if summary.get("data_source") == "live" else "CACHED"
-    lines = []
-    lines.append(f"🏆 BTC TREASURY LEADERBOARD [{source}]\n")
-    lines.append(f"BTC: ${summary['btc_price_used']:,.0f}")
-    lines.append(f"Total: {summary['total_btc']:,} BTC (${summary['total_value_b']:.1f}B)")
-    lines.append(f"Corporate: {summary['total_corporate_btc']:,} BTC ({summary['corporate_count']} companies)")
-    lines.append(f"Sovereign: {summary['total_sovereign_btc']:,} BTC ({summary['sovereign_count']} governments)\n")
-
-    medals = ["🥇", "🥈", "🥉"]
-
-    for c in companies[:top_n]:
-        if c["btc_holdings"] > 0:
-            rank = c["rank"]
-            medal = medals[rank - 1] if rank <= 3 else f"#{rank}"
-            name = c["company"][:25]
-            gov_tag = " [GOV]" if c.get("is_government") else ""
-            lines.append(f"{medal} {name}{gov_tag}")
-            lines.append(f"   {c['btc_holdings']:,} BTC (${c['btc_value_b']:.2f}B)")
-            if c.get("unrealized_pnl_pct") and c["unrealized_pnl_pct"] != 0:
-                pnl_emoji = "📈" if c["unrealized_pnl_pct"] > 0 else "📉"
-                lines.append(f"   {pnl_emoji} P&L: {c['unrealized_pnl_pct']:+.1f}%")
-            lines.append("")
-
-    lines.append("Full leaderboard: bitcointreasuries.net")
-    lines.append("---")
-    lines.append("Treasury Signal Intelligence")
-    lines.append("BTC Treasury Leaderboard™")
-
     return "\n".join(lines)
 
 
@@ -598,16 +484,14 @@ def save_leaderboard_to_db(companies, summary):
             "total_btc": summary["total_btc"],
             "total_value_b": summary["total_value_b"],
             "companies_json": json.dumps([{
-                "ticker": c["ticker"],
-                "btc_holdings": c["btc_holdings"],
-                "rank": c["rank"],
+                "ticker": c["ticker"], "btc_holdings": c["btc_holdings"], "rank": c["rank"],
             } for c in companies[:20]]),
         }
         supabase.table("leaderboard_snapshots").upsert(row, on_conflict="snapshot_date").execute()
-        print(f"  Leaderboard snapshot saved for {row['snapshot_date']}")
+        logger.info(f"Leaderboard snapshot saved for {row['snapshot_date']}")
         return True
     except Exception as e:
-        print(f"  Could not save snapshot: {e}")
+        logger.error(f"Could not save leaderboard snapshot: {e}", exc_info=True)
         return False
 
 
@@ -615,17 +499,9 @@ def save_leaderboard_to_db(companies, summary):
 # QUICK TEST
 # ============================================
 if __name__ == "__main__":
-    print("\nBTC Treasury Leaderboard v2.0 — LIVE DATA\n")
-
+    logger.info("BTC Treasury Leaderboard v2.0 — testing...")
     btc_price = 72456
-
     companies, summary = get_leaderboard_with_live_price(btc_price)
-
-    print(f"  Data source: {summary.get('data_source', 'unknown').upper()}")
-    print(f"  Companies: {summary['total_companies']}")
-    print(f"  Total BTC: {summary['total_btc']:,}")
-    print(f"  Total Value: ${summary['total_value_b']:.2f}B\n")
-
+    logger.info(f"Source: {summary.get('data_source', 'unknown').upper()} | Companies: {summary['total_companies']} | Total: {summary['total_btc']:,} BTC (${summary['total_value_b']:.2f}B)")
     print(format_leaderboard_text(companies, summary))
-    print("\n\nTelegram Format:\n")
-    print(format_leaderboard_telegram(companies, summary))
+    logger.info("Leaderboard test complete")

@@ -32,11 +32,24 @@ from purchase_tracker import get_recent_purchases, get_purchase_stats
 from correlation_engine import CorrelationEngine
 from market_intelligence import generate_action_signal, get_overnight_changes, get_risk_dashboard, get_peer_activity, get_week_ahead
 import yfinance as yf
+from logger import get_logger
+from freshness_tracker import freshness
+from subscriber_manager import subscribers as sub_mgr
+from watchlist_manager import get_watchlist_activity, format_watchlist_email_html
+
+logger = get_logger(__name__)
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+
+# Email sender configuration
+# Update these in .env after setting up your custom domain on Resend
+EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "Treasury Signal Intelligence")
+EMAIL_FROM_ADDRESS = os.getenv("EMAIL_FROM_ADDRESS", "onboarding@resend.dev")
+EMAIL_REPLY_TO = os.getenv("EMAIL_REPLY_TO", "")
+DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 resend.api_key = RESEND_API_KEY
@@ -51,7 +64,12 @@ def get_market_data():
             data["btc_price"] = round(float(hist["Close"].iloc[-1]), 2)
             data["btc_prev"] = round(float(hist["Close"].iloc[-2]), 2) if len(hist) > 1 else data["btc_price"]
             data["btc_change"] = round(((data["btc_price"] - data["btc_prev"]) / data["btc_prev"]) * 100, 2)
-    except:
+            freshness.record_success("btc_yfinance", detail=f"BTC ${data['btc_price']:,.0f}")
+            freshness.set_provenance("btc_price", "Yahoo Finance", "live")
+    except Exception as e:
+        logger.warning(f"BTC price fetch failed for briefing: {e}")
+        freshness.record_failure("btc_yfinance", error=str(e))
+        freshness.set_provenance("btc_price", "Unavailable", "fallback")
         data["btc_price"] = 0
         data["btc_change"] = 0
     try:
@@ -61,7 +79,12 @@ def get_market_data():
             data["mstr_price"] = round(float(hist["Close"].iloc[-1]), 2)
             data["mstr_prev"] = round(float(hist["Close"].iloc[-2]), 2) if len(hist) > 1 else data["mstr_price"]
             data["mstr_change"] = round(((data["mstr_price"] - data["mstr_prev"]) / data["mstr_prev"]) * 100, 2)
-    except:
+            freshness.record_success("mstr_yfinance", detail=f"MSTR ${data['mstr_price']:,.2f}")
+            freshness.set_provenance("mstr_price", "Yahoo Finance", "live")
+    except Exception as e:
+        logger.warning(f"MSTR price fetch failed for briefing: {e}")
+        freshness.record_failure("mstr_yfinance", error=str(e))
+        freshness.set_provenance("mstr_price", "Unavailable", "fallback")
         data["mstr_price"] = 0
         data["mstr_change"] = 0
     try:
@@ -74,7 +97,8 @@ def get_market_data():
             data["strc_price"] = 0
             data["strc_volume_m"] = 0
             data["strc_ratio"] = 0
-    except:
+    except Exception as e:
+        logger.warning(f"STRC data fetch failed for briefing: {e}")
         data["strc_price"] = 0
         data["strc_volume_m"] = 0
         data["strc_ratio"] = 0
@@ -86,7 +110,8 @@ def get_recent_signals(hours=24):
         cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
         result = supabase.table("tweets").select("*").eq("is_signal", True).gte("inserted_at", cutoff).order("confidence_score", desc=True).limit(10).execute()
         return result.data if result.data else []
-    except:
+    except Exception as e:
+        logger.error(f"Failed to fetch recent signals: {e}", exc_info=True)
         return []
 
 
@@ -94,7 +119,8 @@ def get_all_signals():
     try:
         result = supabase.table("tweets").select("*").eq("is_signal", True).order("inserted_at", desc=True).execute()
         return result.data if result.data else []
-    except:
+    except Exception as e:
+        logger.error(f"Failed to fetch all signals: {e}", exc_info=True)
         return []
 
 
@@ -108,14 +134,258 @@ def get_accuracy_data():
         predicted = len([p for p in all_purchases if p.get("was_predicted")])
         hit_rate = round(predicted / total * 100, 1) if total > 0 else 0
         return {"total_purchases": total, "predicted": predicted, "hit_rate": hit_rate, "total_predictions": len(all_predictions)}
-    except:
+    except Exception as e:
+        logger.error(f"Failed to fetch accuracy data: {e}", exc_info=True)
         return {"total_purchases": 0, "predicted": 0, "hit_rate": 0, "total_predictions": 0}
 
 
-def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, reg_stats, reg_items, accuracy, statements, purchases, purchase_stats, correlation, action=None, risk=None, changes=None, peers=None, week_ahead=None):
+def _get_feedback_email_html():
+    """Get feedback loop insights HTML for the email."""
+    try:
+        from feedback_loop import feedback_engine
+        return feedback_engine.format_for_email_html()
+    except Exception:
+        return ""
+
+
+def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, reg_stats, reg_items, accuracy, statements, purchases, purchase_stats, correlation, action=None, risk=None, changes=None, peers=None, week_ahead=None, subscriber=None, personalization=None, pattern_match=None):
 
     today = datetime.now().strftime("%A, %B %d, %Y")
     time_now = datetime.now().strftime("%I:%M %p ET")
+    personalization = personalization or {}
+    pattern_match = pattern_match or {"score": 0, "matching_patterns": [], "narrative": ""}
+
+    # Personalization
+    subscriber_name = subscriber.get("name", "").split()[0] if subscriber else ""
+    subscriber_company = subscriber.get("company_name", "") if subscriber else ""
+    subscriber_ticker = subscriber.get("ticker", "") if subscriber else ""
+    subscriber_btc = float(subscriber.get("btc_holdings", 0)) if subscriber else 0
+    subscriber_cost = float(subscriber.get("total_invested_usd", 0)) if subscriber else 0
+    subscriber_avg_price = float(subscriber.get("avg_purchase_price", 0)) if subscriber else 0
+    has_profile = subscriber is not None and subscriber_company
+
+    # Build personalized greeting
+    if has_profile and subscriber_name:
+        greeting_html = f'<span style="color: #e0e0e0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em;">Good morning, {subscriber_name}</span>'
+    else:
+        greeting_html = '<span style="color: #e0e0e0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em;">Executive Daily Briefing</span>'
+
+    # Build "Your Position" section if subscriber has holdings
+    your_position_html = ""
+    if has_profile and subscriber_btc > 0:
+        btc_price = market.get("btc_price", 0)
+        position_value = subscriber_btc * btc_price
+        position_value_m = position_value / 1_000_000
+
+        # Calculate P&L
+        pnl_html = ""
+        if subscriber_cost > 0:
+            pnl = position_value - subscriber_cost
+            pnl_pct = (pnl / subscriber_cost) * 100
+            pnl_color = "#10B981" if pnl >= 0 else "#EF4444"
+            pnl_arrow = "▲" if pnl >= 0 else "▼"
+            pnl_html = f"""
+                <td width="25%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px;">
+                    <span style="color: {pnl_color}; font-size: 20px; font-weight: 800; font-family: 'Courier New', monospace;">{pnl_arrow}{abs(pnl_pct):.1f}%</span>
+                    <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Unrealized P&L</span>
+                    <br><span style="color: {pnl_color}; font-size: 10px;">${pnl/1_000_000:+,.1f}M</span>
+                </td>
+                <td width="2%"></td>"""
+
+        # Find rank
+        corporate = [c for c in leaderboard if not c.get("is_government") and c.get("btc_holdings", 0) > 0]
+        corporate.sort(key=lambda x: x.get("btc_holdings", 0), reverse=True)
+        rank = len(corporate) + 1
+        next_gap = 0
+        for i, c in enumerate(corporate):
+            if subscriber_btc >= c.get("btc_holdings", 0):
+                rank = i + 1
+                if i > 0:
+                    next_gap = corporate[i-1]["btc_holdings"] - subscriber_btc
+                break
+
+        rank_html = f"""
+            <td width="25%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px; border: 1px solid #E67E2240;">
+                <span style="color: #E67E22; font-size: 24px; font-weight: 800; font-family: 'Courier New', monospace;">#{rank}</span>
+                <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Your Rank</span>
+                <br><span style="color: #6b7280; font-size: 10px;">of {len(corporate)} companies</span>
+            </td>"""
+
+        gap_html = ""
+        if next_gap > 0 and rank > 1:
+            gap_html = f'<p style="color: #9ca3af; font-size: 11px; margin: 8px 0 0 0; text-align: center;">🎯 Buy <span style="color: #E67E22; font-weight: 700;">{next_gap:,.0f} BTC</span> to move up to #{rank-1}</p>'
+
+        your_position_html = f"""
+            <!-- YOUR POSITION -->
+            <tr><td style="padding: 16px 36px 8px 36px;">
+                <span style="color: #E67E22; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">📍 Your Position — {subscriber_company}</span>
+                {f'<span style="color: #4b5563; font-size: 10px; margin-left: 8px;">({subscriber_ticker})</span>' if subscriber_ticker else ''}
+                <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 10px;">
+                    <tr>
+                        <td width="25%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px;">
+                            <span style="color: #f0f0f0; font-size: 20px; font-weight: 800; font-family: 'Courier New', monospace;">{subscriber_btc:,.0f}</span>
+                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Your BTC</span>
+                        </td>
+                        <td width="2%"></td>
+                        <td width="25%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px;">
+                            <span style="color: #f0f0f0; font-size: 20px; font-weight: 800; font-family: 'Courier New', monospace;">${position_value_m:,.1f}M</span>
+                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Current Value</span>
+                        </td>
+                        <td width="2%"></td>
+                        {pnl_html}
+                        {rank_html}
+                    </tr>
+                </table>
+                {gap_html}
+            </td></tr>
+            <tr><td style="padding: 8px 36px;"><div style="border-top: 1px solid #1e2a3a;"></div></td></tr>
+        """
+    elif has_profile and subscriber_btc == 0:
+        # Subscriber has profile but no BTC yet — show encouragement
+        corporate = [c for c in leaderboard if not c.get("is_government") and c.get("btc_holdings", 0) > 0]
+        smallest = corporate[-1] if corporate else None
+        smallest_text = f"The smallest holder on our leaderboard ({smallest['company']}) holds {smallest['btc_holdings']:,} BTC." if smallest else ""
+        your_position_html = f"""
+            <!-- YOUR POSITION (no holdings yet) -->
+            <tr><td style="padding: 16px 36px 8px 36px;">
+                <div style="background: linear-gradient(135deg, #1a0f00 0%, #111827 100%); border: 1px solid #E67E2230; border-radius: 12px; padding: 18px 24px; text-align: center;">
+                    <span style="color: #E67E22; font-size: 12px; font-weight: 700;">📍 {subscriber_company}</span>
+                    <p style="color: #9ca3af; font-size: 12px; margin: 8px 0 0 0;">Your company hasn't added Bitcoin to the treasury yet. {smallest_text}</p>
+                </div>
+            </td></tr>
+        """
+
+    # ============================================
+    # DEEP PERSONALIZATION SECTIONS (Phase 6)
+    # ============================================
+
+    # Holdings change acknowledgment
+    holdings_change_html = ""
+    holdings_change = personalization.get("holdings_change")
+    if holdings_change:
+        direction = holdings_change["direction"]
+        change = abs(holdings_change["change_btc"])
+        prev = holdings_change["previous_btc"]
+        curr = holdings_change["current_btc"]
+        ch_color = "#10B981" if direction == "increased" else "#EF4444"
+        ch_icon = "📈" if direction == "increased" else "📉"
+        holdings_change_html = f"""
+            <tr><td style="padding: 4px 36px 8px 36px;">
+                <div style="background: rgba(16,185,129,0.06); border: 1px solid {ch_color}30; border-radius: 8px; padding: 10px 16px;">
+                    <span style="color: {ch_color}; font-size: 12px; font-weight: 600;">{ch_icon} Your holdings {direction} from {prev:,.0f} to {curr:,.0f} BTC ({'+' if direction == 'increased' else '-'}{change:,.0f} BTC since yesterday)</span>
+                </div>
+            </td></tr>
+        """
+
+    # Personalized context paragraph (after action signal)
+    personalized_context_html = ""
+    context_text = personalization.get("context", "")
+    if context_text and has_profile:
+        personalized_context_html = f"""
+            <tr><td style="padding: 0 36px 12px 36px;">
+                <div style="background: linear-gradient(135deg, #1a0f00 0%, #111827 100%); border-left: 3px solid #E67E22; border-radius: 0 8px 8px 0; padding: 14px 18px;">
+                    <span style="color: #E67E22; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">What This Means For {subscriber_company}</span>
+                    <p style="color: #d1d5db; font-size: 13px; line-height: 1.6; margin: 8px 0 0 0;">{context_text}</p>
+                </div>
+            </td></tr>
+        """
+
+    # Competitor spotlight
+    competitor_spotlight_html = ""
+    spotlight = personalization.get("competitor_spotlight", [])
+    if spotlight and has_profile:
+        rows = ""
+        for comp in spotlight[:3]:
+            rel_color = "#10B981" if comp["relationship"] == "behind" else "#EF4444" if comp["relationship"] == "ahead" else "#F59E0B"
+            rel_icon = "⬇️" if comp["relationship"] == "behind" else "⬆️" if comp["relationship"] == "ahead" else "↔️"
+            purchase_badge = f'<br><span style="color: #E67E22; font-size: 10px;">💰 {comp["recent_purchase"]}</span>' if comp.get("recent_purchase") else ""
+            rows += f"""
+                <tr>
+                    <td style="padding: 10px 18px; border-bottom: 1px solid #1e2a3a;">
+                        <span style="color: #9ca3af; font-size: 11px;">#{comp['rank']}</span>
+                        <strong style="color: #e0e0e0; font-size: 13px; margin-left: 6px;">{comp['company'][:30]}</strong>
+                        {f'<span style="color: #4b5563; font-size: 11px;"> ({comp["ticker"]})</span>' if comp.get("ticker") else ""}
+                    </td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #1e2a3a; text-align: right;">
+                        <span style="color: #f0f0f0; font-family: 'Courier New', monospace; font-size: 12px; font-weight: 600;">{comp['btc_holdings']:,}</span>
+                        <span style="color: #6b7280; font-size: 10px;"> BTC</span>
+                    </td>
+                    <td style="padding: 10px 18px; border-bottom: 1px solid #1e2a3a; text-align: right;">
+                        <span style="color: {rel_color}; font-size: 11px; font-weight: 600;">{rel_icon} {comp['rel_text']}</span>
+                        {purchase_badge}
+                    </td>
+                </tr>"""
+
+        competitor_spotlight_html = f"""
+            <tr><td style="padding: 8px 36px 12px 36px;">
+                <span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">🔍 Competitor Spotlight</span>
+                <p style="color: #4b5563; font-size: 11px; margin: 2px 0 8px 0;">Companies closest to {subscriber_company} on the leaderboard</p>
+                <table width="100%" cellpadding="0" cellspacing="0" style="background: #111827; border-radius: 10px; overflow: hidden;">
+                    <tr>
+                        <td style="padding: 6px 18px; border-bottom: 1px solid #1e2a3a; color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Company</td>
+                        <td style="padding: 6px 14px; border-bottom: 1px solid #1e2a3a; color: #4b5563; font-size: 9px; font-weight: 600; text-align: right; text-transform: uppercase;">Holdings</td>
+                        <td style="padding: 6px 18px; border-bottom: 1px solid #1e2a3a; color: #4b5563; font-size: 9px; font-weight: 600; text-align: right; text-transform: uppercase;">vs You</td>
+                    </tr>
+                    {rows}
+                </table>
+            </td></tr>
+        """
+
+    # Sector peers
+    sector_peers_html = ""
+    sector_peers = personalization.get("sector_peers", [])
+    if sector_peers and has_profile:
+        peer_rows = ""
+        for p in sector_peers[:5]:
+            peer_rows += f"""
+                <tr>
+                    <td style="padding: 6px 18px; border-bottom: 1px solid #1e2a3a;">
+                        <span style="color: #9ca3af; font-size: 11px;">#{p['rank']}</span>
+                        <span style="color: #d1d5db; font-size: 12px; margin-left: 6px;">{p['company'][:30]}</span>
+                    </td>
+                    <td style="padding: 6px 18px; border-bottom: 1px solid #1e2a3a; text-align: right;">
+                        <span style="color: #f0f0f0; font-family: 'Courier New', monospace; font-size: 11px;">{p['btc_holdings']:,} BTC</span>
+                    </td>
+                </tr>"""
+
+        subscriber_sector = subscriber.get("sector", "Your Sector") if subscriber else "Your Sector"
+        sector_peers_html = f"""
+            <tr><td style="padding: 4px 36px 12px 36px;">
+                <span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">🏢 Peers in {subscriber_sector}</span>
+                <table width="100%" cellpadding="0" cellspacing="0" style="background: #111827; border-radius: 10px; overflow: hidden; margin-top: 6px;">
+                    {peer_rows}
+                </table>
+            </td></tr>
+        """
+
+    # Watchlist activity (Phase 8)
+    watchlist_html = ""
+    watchlist_activity = personalization.get("watchlist_activity", [])
+    if watchlist_activity and has_profile:
+        watchlist_html = format_watchlist_email_html(watchlist_activity)
+
+    # Historical pattern match (Phase 14)
+    pattern_html = ""
+    pm_score = pattern_match.get("score", 0)
+    pm_patterns = pattern_match.get("matching_patterns", [])
+    pm_narrative = pattern_match.get("narrative", "")
+    if pm_score > 0 or pm_patterns:
+        pm_color = "#EF4444" if pm_score >= 70 else "#F59E0B" if pm_score >= 40 else "#6B7280"
+        pm_icon = "🔴" if pm_score >= 70 else "🟡" if pm_score >= 40 else "⚪"
+        pm_rows = ""
+        for p in pm_patterns[:4]:
+            pm_rows += f"""<tr><td style="padding: 6px 18px; border-bottom: 1px solid #1e2a3a;"><span style="color: #10B981;">✅</span> <span style="color: #d1d5db; font-size: 12px;">{p['name']}</span><br><span style="color: #9ca3af; font-size: 11px;">{p['match_detail']}</span></td><td style="padding: 6px 14px; border-bottom: 1px solid #1e2a3a; text-align: right; vertical-align: top;"><span style="color: #6b7280; font-size: 10px;">{p['historical_frequency'][:40]}</span></td></tr>"""
+
+        pattern_html = f"""
+            <tr><td style="padding: 8px 36px 12px 36px;">
+                <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                    <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">🔮 Historical Pattern Match</span></td>
+                    <td style="text-align: right;"><span style="color: {pm_color}; font-size: 18px; font-weight: 800; font-family: 'Courier New', monospace;">{pm_icon} {pm_score}/100</span></td>
+                </tr></table>
+                <p style="color: #9ca3af; font-size: 11px; margin: 4px 0 8px 0;">{pm_narrative[:200]}</p>
+                {'<table width="100%" cellpadding="0" cellspacing="0" style="background: #111827; border-radius: 10px; overflow: hidden;">' + pm_rows + '</table>' if pm_rows else ''}
+            </td></tr>
+        """
 
     btc_price = market.get("btc_price", 0)
     btc_change = market.get("btc_change", 0)
@@ -370,6 +640,22 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
     action_text = action.get("action", "⚪ HOLD") if action else "⚪ HOLD"
     action_score = action.get("score", 0) if action else 0
     action_summary = action.get("summary", "No strong signals.") if action else "No strong signals."
+
+    # Build confidence breakdown HTML for email
+    _breakdown = action.get("confidence_breakdown", []) if action else []
+    _breakdown_html = ""
+    if _breakdown:
+        _bd_rows = ""
+        for stream in _breakdown:
+            pct = (stream["contribution"] / stream["max"] * 100) if stream["max"] > 0 else 0
+            bar_color = "#10B981" if pct >= 60 else "#F59E0B" if pct >= 30 else "#374151"
+            bar_width = max(2, min(int(pct), 100))
+            _bd_rows += f"""<tr>
+                <td style="padding: 2px 0; color: #6b7280; font-size: 10px; width: 120px;">{stream['icon']} {stream['stream']}</td>
+                <td style="padding: 2px 8px;"><div style="background: #1e2a3a; border-radius: 3px; height: 5px; width: 100%;"><div style="background: {bar_color}; border-radius: 3px; height: 5px; width: {bar_width}%;"></div></div></td>
+                <td style="padding: 2px 0; color: #9ca3af; font-size: 10px; font-family: 'Courier New', monospace; text-align: right; width: 40px;">{stream['contribution']}/{stream['max']}</td>
+            </tr>"""
+        _breakdown_html = f'<table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 12px; border-top: 1px solid #1e2a3a; padding-top: 8px;"><tr><td colspan="3" style="color: #4b5563; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding-bottom: 4px;">Confidence Breakdown</td></tr>{_bd_rows}</table>'
     fg_value = risk.get("fear_greed_value", 50) if risk else 50
     fg_label = risk.get("fear_greed_label", "Neutral") if risk else "Neutral"
     vol_30d = risk.get("volatility_30d", 0) if risk else 0
@@ -404,7 +690,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                 <table width="100%" cellpadding="0" cellspacing="0"><tr>
                     <td>
                         <span style="color: #E67E22; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em;">Treasury Signal Intelligence</span>
-                        <br><span style="color: #e0e0e0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em;">Executive Daily Briefing</span>
+                        <br>{greeting_html}
                         <br><span style="color: #4b5563; font-size: 12px;">{today} · {time_now}</span>
                     </td>
                     <td style="text-align: right; vertical-align: top;">
@@ -414,6 +700,16 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
             </td></tr>
 
             <tr><td style="padding: 0 36px;"><div style="border-top: 1px solid #1e2a3a;"></div></td></tr>
+
+            {holdings_change_html}
+
+            {your_position_html}
+
+            {competitor_spotlight_html}
+
+            {sector_peers_html}
+
+            {watchlist_html}
 
             <!-- ⓪ ACTION SIGNAL -->
             <tr><td style="padding: 24px 36px 16px 36px;">
@@ -429,10 +725,15 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                                 <br><span style="color: #4b5563; font-size: 10px;">/100</span>
                             </td>
                         </tr></table>
-                        <p style="color: #d1d5db; font-size: 13px; line-height: 1.6; margin: 12px 0 0 0;">{action_summary}</p>
+                        <p style="color: #d1d5db; font-size: 13px; line-height: 1.6; margin: 12px 0 0 0;">{action_summary[:300]}</p>
+                        {_breakdown_html}
                     </td></tr>
                 </table>
             </td></tr>
+
+            {personalized_context_html}
+
+            {pattern_html}
 
             <!-- RISK DASHBOARD -->
             <tr><td style="padding: 0 36px 16px 36px;">
@@ -502,6 +803,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
             <!-- ② MARKET SNAPSHOT -->
             <tr><td style="padding: 8px 36px 16px 36px;">
                 <span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">② Market Snapshot</span>
+                {freshness.format_provenance_html("btc_price")}
                 <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 10px;">
                     <tr>
                         <td width="32%" style="padding: 16px; text-align: center; background: #111827; border-radius: 12px;">
@@ -582,7 +884,9 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
             <tr><td style="padding: 0 36px 16px 36px;">
                 <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
-                        <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑥ BTC Treasury Leaderboard</span></td>
+                        <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑥ BTC Treasury Leaderboard</span>
+                        {freshness.format_provenance_html("leaderboard_corporate")}
+                        </td>
                         <td style="text-align: right;">
                             <a href="https://bitcointreasuries.net" style="color: #E67E22; font-size: 11px; font-weight: 600; text-decoration: none;">View all {lb_summary['total_companies']} companies →</a>
                         </td>
@@ -614,7 +918,9 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
             <tr><td style="padding: 0 36px 16px 36px;">
                 <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
-                        <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑦ Global Regulatory Landscape</span></td>
+                        <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑦ Global Regulatory Landscape</span>
+                        {freshness.format_provenance_html("regulatory")}
+                        </td>
                         <td style="text-align: right;">
                             <a href="https://www.congress.gov/search?q=bitcoin+crypto&s=1" style="color: #E67E22; font-size: 11px; font-weight: 600; text-decoration: none;">Congress.gov →</a>
                             <span style="color: #4b5563; font-size: 11px;"> · </span>
@@ -729,13 +1035,27 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                 </table>
             </td></tr>
 
+            <!-- Data Freshness Status -->
+            <tr><td style="padding: 0 36px;">
+                {freshness.format_for_email()}
+            </td></tr>
+
+            <!-- AI Learning Insights (Phase 15) -->
+            {_get_feedback_email_html()}
+
             <!-- Footer -->
             <tr><td style="padding: 24px 36px; border-top: 1px solid #1e2a3a;">
                 <span style="color: #E67E22; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;">Treasury Signal Intelligence™</span>
                 <br><span style="color: #374151; font-size: 10px;">Multi-Signal Correlation Engine™ · BTC Treasury Leaderboard™ · Global Regulatory Tracker™</span>
                 <br><span style="color: #1f2937; font-size: 10px; margin-top: 8px; display: inline-block;">
                     Data: TwitterAPI.io · Yahoo Finance · SEC EDGAR · bitcointreasuries · Not financial advice.<br>
-                    © 2026 Treasury Signal Intelligence. All rights reserved.
+                    © {datetime.now().year} Treasury Signal Intelligence. All rights reserved.
+                </span>
+                <br><span style="color: #1f2937; font-size: 9px; margin-top: 12px; display: inline-block;">
+                    You're receiving this because you subscribed to Treasury Signal Intelligence.
+                    <br><a href="{DASHBOARD_URL}/?page=unsubscribe&email={subscriber.get('email', '') if subscriber else ''}" style="color: #4b5563; text-decoration: underline;">Unsubscribe</a>
+                    · <a href="{DASHBOARD_URL}" style="color: #4b5563; text-decoration: underline;">Dashboard</a>
+                    {f' · <a href="mailto:{EMAIL_REPLY_TO}" style="color: #4b5563; text-decoration: underline;">Contact Us</a>' if EMAIL_REPLY_TO else ''}
                 </span>
             </td></tr>
 
@@ -748,24 +1068,43 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
     return html
 
 
-def send_briefing(to_email, html_content):
+def send_briefing(to_email, html_content, subscriber=None):
     try:
+        # Personalized subject line
+        if subscriber and subscriber.get("company_name"):
+            company_short = subscriber["company_name"][:30]
+            subject = f"🔶 {company_short} — Daily Intelligence Briefing — {datetime.now().strftime('%b %d, %Y')}"
+        else:
+            subject = f"🔶 Daily Intelligence Briefing — {datetime.now().strftime('%b %d, %Y')}"
+
         params = {
-            "from": "Treasury Signal Intelligence <onboarding@resend.dev>",
+            "from": f"{EMAIL_FROM_NAME} <{EMAIL_FROM_ADDRESS}>",
             "to": [to_email],
-            "subject": f"🔶 Daily Intelligence Briefing — {datetime.now().strftime('%b %d, %Y')}",
+            "subject": subject,
             "html": html_content,
         }
+
+        # Add reply-to if configured
+        if EMAIL_REPLY_TO:
+            params["reply_to"] = EMAIL_REPLY_TO
+
+        # Add unsubscribe header for email client support
+        unsubscribe_url = f"{DASHBOARD_URL}/?page=unsubscribe&email={to_email}"
+        params["headers"] = {
+            "List-Unsubscribe": f"<{unsubscribe_url}>",
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        }
+
         email = resend.Emails.send(params)
-        print(f"  Email sent to {to_email}: {email.get('id', 'unknown')}")
+        logger.info(f"Email sent to {to_email} from {EMAIL_FROM_ADDRESS}: {email.get('id', 'unknown')}")
         return True
     except Exception as e:
-        print(f"  Email ERROR: {e}")
+        logger.error(f"Email send failed for {to_email}: {e}", exc_info=True)
         return False
 
 
-def generate_and_send_briefing(to_email):
-    print("  Generating executive briefing v4.0 (full CEO intelligence)...")
+def generate_and_send_briefing(to_email, subscriber=None):
+    logger.info("Generating executive briefing v5.0 (personalized CEO intelligence)...")
 
     market = get_market_data()
     signals = get_recent_signals(hours=24)
@@ -787,6 +1126,22 @@ def generate_and_send_briefing(to_email):
     correlation = engine.calculate_correlation()
 
     risk = get_risk_dashboard()
+
+    # Historical pattern matching (Phase 14) — compute BEFORE action signal
+    pattern_match = {"score": 0, "matched_count": 0, "total_patterns": 0, "matching_patterns": [], "narrative": ""}
+    try:
+        from pattern_analyzer import pattern_engine
+        pattern_match = pattern_engine.match_current_conditions(
+            recent_signals=signals,
+            strc_ratio=market.get("strc_ratio", 0),
+            fear_greed=risk.get("fear_greed_value", 50),
+            btc_change_pct=market.get("btc_change", 0),
+            recent_purchases=purchases,
+        )
+        logger.info(f"Pattern match for email: {pattern_match['score']}/100 ({pattern_match['matched_count']} patterns)")
+    except Exception as e:
+        logger.debug(f"Pattern analysis for email skipped: {e}")
+
     action = generate_action_signal(
         correlation_score=correlation["correlated_score"],
         active_streams=correlation["active_streams"],
@@ -794,6 +1149,8 @@ def generate_and_send_briefing(to_email):
         signals_24h=signals,
         btc_change=market.get("btc_change", 0),
         fear_greed_value=risk["fear_greed_value"],
+        pattern_match=pattern_match,
+        subscriber=subscriber,
     )
     changes = get_overnight_changes(
         btc_price, market.get("mstr_price", 0), market.get("strc_ratio", 0),
@@ -802,21 +1159,46 @@ def generate_and_send_briefing(to_email):
     peers = get_peer_activity()
     week_ahead = get_week_ahead()
 
+    # Deep personalization (Phase 6 + Phase 8)
+    personalization = {}
+    if subscriber and subscriber.get("email"):
+        try:
+            sub_email = subscriber["email"]
+            personalization["sector_peers"] = sub_mgr.get_sector_peers(sub_email, leaderboard)
+            personalization["competitor_spotlight"] = sub_mgr.get_competitor_spotlight(sub_email, btc_price, leaderboard, purchases)
+            personalization["context"] = sub_mgr.get_personalized_context(sub_email, btc_price, action, leaderboard)
+            personalization["holdings_change"] = sub_mgr.track_holdings_change(sub_email)
+
+            # Watchlist activity (Phase 8)
+            watchlist = subscriber.get("watchlist", [])
+            if isinstance(watchlist, str):
+                import json as _json
+                watchlist = _json.loads(watchlist) if watchlist else []
+            if watchlist:
+                personalization["watchlist_activity"] = get_watchlist_activity(
+                    watchlist=watchlist, signals=signals,
+                    purchases=purchases, leaderboard=leaderboard,
+                )
+                logger.info(f"Watchlist: {len(watchlist)} companies tracked, {len(personalization.get('watchlist_activity', []))} activities found")
+
+            logger.info(f"Personalization: {len(personalization.get('sector_peers', []))} peers, {len(personalization.get('competitor_spotlight', []))} competitors")
+        except Exception as e:
+            logger.warning(f"Personalization data failed for {subscriber.get('email', '')}: {e}")
+
     html = build_briefing_html(
         market, signals, all_signals, leaderboard, lb_summary,
         reg_stats, reg_items, accuracy, statements, purchases,
-        purchase_stats, correlation, action, risk, changes, peers, week_ahead
+        purchase_stats, correlation, action, risk, changes, peers, week_ahead,
+        subscriber=subscriber, personalization=personalization,
+        pattern_match=pattern_match
     )
 
-    print(f"  Market: BTC ${btc_price:,.0f} | MSTR ${market.get('mstr_price', 0):,.2f}")
-    print(f"  Action: {action['action']} (score: {action['score']})")
-    print(f"  Risk: {risk['risk_level']} | Fear & Greed: {risk['fear_greed_value']}")
-    print(f"  Changes: {len(changes)} | Peers: {len(peers)} | Events: {len(week_ahead)}")
-    print(f"  Leaderboard: {lb_summary['total_companies']} companies | {lb_summary['total_btc']:,} BTC")
-    print(f"  Regulatory: {reg_stats['total_items']} items | Statements: {reg_stats['total_statements']}")
-    print(f"  Accuracy: {accuracy['total_predictions']} predictions | {accuracy['hit_rate']}% hit rate")
+    if subscriber:
+        logger.info(f"Briefing personalized for {subscriber.get('name', '')} ({subscriber.get('company_name', '')})")
+    logger.info(f"Briefing: BTC ${btc_price:,.0f} | Action: {action['action']} | Risk: {risk['risk_level']}")
+    logger.info(f"Briefing: {lb_summary['total_companies']} companies | {reg_stats['total_items']} reg items | {accuracy['hit_rate']}% hit rate")
 
-    success = send_briefing(to_email, html)
+    success = send_briefing(to_email, html, subscriber=subscriber)
     return success, html
 
 
