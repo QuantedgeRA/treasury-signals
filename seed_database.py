@@ -219,6 +219,16 @@ CREATE TABLE IF NOT EXISTS learned_weights (
     success_rate DECIMAL DEFAULT 0,
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- LLM-generated narratives
+CREATE TABLE IF NOT EXISTS narratives (
+    id BIGSERIAL PRIMARY KEY,
+    narrative_type TEXT NOT NULL,
+    narrative_date TEXT NOT NULL,
+    content TEXT DEFAULT '',
+    generated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(narrative_type, narrative_date)
+);
 """
 
 

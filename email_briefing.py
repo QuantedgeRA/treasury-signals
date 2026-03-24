@@ -36,6 +36,7 @@ from logger import get_logger
 from freshness_tracker import freshness
 from subscriber_manager import subscribers as sub_mgr
 from watchlist_manager import get_watchlist_activity, format_watchlist_email_html
+from narrative_engine import narrator
 
 logger = get_logger(__name__)
 
@@ -148,12 +149,13 @@ def _get_feedback_email_html():
         return ""
 
 
-def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, reg_stats, reg_items, accuracy, statements, purchases, purchase_stats, correlation, action=None, risk=None, changes=None, peers=None, week_ahead=None, subscriber=None, personalization=None, pattern_match=None):
+def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, reg_stats, reg_items, accuracy, statements, purchases, purchase_stats, correlation, action=None, risk=None, changes=None, peers=None, week_ahead=None, subscriber=None, personalization=None, pattern_match=None, llm_narratives=None):
 
     today = datetime.now().strftime("%A, %B %d, %Y")
     time_now = datetime.now().strftime("%I:%M %p ET")
     personalization = personalization or {}
     pattern_match = pattern_match or {"score": 0, "matching_patterns": [], "narrative": ""}
+    llm_narratives = llm_narratives or {}
 
     # Personalization
     subscriber_name = subscriber.get("name", "").split()[0] if subscriber else ""
@@ -369,6 +371,11 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
     pm_score = pattern_match.get("score", 0)
     pm_patterns = pattern_match.get("matching_patterns", [])
     pm_narrative = pattern_match.get("narrative", "")
+
+    # Use LLM pattern explanation if available
+    llm_pattern = llm_narratives.get("pattern", "")
+    if llm_pattern:
+        pm_narrative = llm_pattern
     if pm_score > 0 or pm_patterns:
         pm_color = "#EF4444" if pm_score >= 70 else "#F59E0B" if pm_score >= 40 else "#6B7280"
         pm_icon = "🔴" if pm_score >= 70 else "🟡" if pm_score >= 40 else "⚪"
@@ -382,7 +389,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                     <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">🔮 Historical Pattern Match</span></td>
                     <td style="text-align: right;"><span style="color: {pm_color}; font-size: 18px; font-weight: 800; font-family: 'Courier New', monospace;">{pm_icon} {pm_score}/100</span></td>
                 </tr></table>
-                <p style="color: #9ca3af; font-size: 11px; margin: 4px 0 8px 0;">{pm_narrative[:200]}</p>
+                <p style="color: #9ca3af; font-size: 11px; margin: 4px 0 8px 0;">{pm_narrative[:400]}</p>
                 {'<table width="100%" cellpadding="0" cellspacing="0" style="background: #111827; border-radius: 10px; overflow: hidden;">' + pm_rows + '</table>' if pm_rows else ''}
             </td></tr>
         """
@@ -641,6 +648,11 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
     action_score = action.get("score", 0) if action else 0
     action_summary = action.get("summary", "No strong signals.") if action else "No strong signals."
 
+    # Use LLM daily narrative if available (replaces templated summary)
+    llm_daily = llm_narratives.get("daily", "")
+    if llm_daily:
+        action_summary = llm_daily
+
     # Build confidence breakdown HTML for email
     _breakdown = action.get("confidence_breakdown", []) if action else []
     _breakdown_html = ""
@@ -725,7 +737,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                                 <br><span style="color: #4b5563; font-size: 10px;">/100</span>
                             </td>
                         </tr></table>
-                        <p style="color: #d1d5db; font-size: 13px; line-height: 1.6; margin: 12px 0 0 0;">{action_summary[:300]}</p>
+                        <p style="color: #d1d5db; font-size: 13px; line-height: 1.6; margin: 12px 0 0 0;">{action_summary[:500]}</p>
                         {_breakdown_html}
                     </td></tr>
                 </table>
@@ -1185,12 +1197,37 @@ def generate_and_send_briefing(to_email, subscriber=None):
         except Exception as e:
             logger.warning(f"Personalization data failed for {subscriber.get('email', '')}: {e}")
 
+    # LLM-powered narratives
+    llm_narratives = {}
+    try:
+        daily_narrative = narrator.generate_daily_narrative(
+            action_signal=action,
+            pattern_match=pattern_match,
+            market_data=market,
+            risk_data=risk,
+            signals=signals,
+            purchases=purchases,
+            subscriber=subscriber,
+        )
+        if daily_narrative:
+            llm_narratives["daily"] = daily_narrative
+
+        if pattern_match.get("score", 0) > 0:
+            pattern_explanation = narrator.explain_pattern_match(pattern_match)
+            if pattern_explanation:
+                llm_narratives["pattern"] = pattern_explanation
+
+        if llm_narratives:
+            logger.info(f"LLM narratives: {', '.join(llm_narratives.keys())} ({sum(len(v) for v in llm_narratives.values())} chars)")
+    except Exception as e:
+        logger.debug(f"LLM narratives skipped: {e}")
+
     html = build_briefing_html(
         market, signals, all_signals, leaderboard, lb_summary,
         reg_stats, reg_items, accuracy, statements, purchases,
         purchase_stats, correlation, action, risk, changes, peers, week_ahead,
         subscriber=subscriber, personalization=personalization,
-        pattern_match=pattern_match
+        pattern_match=pattern_match, llm_narratives=llm_narratives
     )
 
     if subscriber:

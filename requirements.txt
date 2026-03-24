@@ -11,3 +11,4 @@ reportlab
 pandas
 lxml
 beautifulsoup4
+anthropic

@@ -30,6 +30,7 @@ from edgar_monitor import scan_edgar_filings, format_edgar_alert, TREASURY_COMPA
 from correlation_engine import CorrelationEngine
 from pattern_analyzer import pattern_engine
 from feedback_loop import feedback_engine
+from narrative_engine import narrator
 from accuracy_tracker import log_prediction
 from email_briefing import generate_and_send_briefing
 from treasury_leaderboard import get_leaderboard_with_live_price, format_leaderboard_telegram
@@ -42,6 +43,7 @@ from subscriber_manager import subscribers
 from watchlist_manager import get_watchlist_activity, format_watchlist_telegram
 import yfinance as yf
 import requests as req
+from price_predictor import predictor
 
 logger = get_logger(__name__)
 
@@ -436,6 +438,18 @@ def main():
                     if d["btc_amount"] >= 1000:
                         send_to_free(msg)
                 logger.info(f"{len(detected)} purchase(s) detected and logged")
+
+                # LLM purchase analysis
+                try:
+                    for d in detected[:2]:
+                        analysis = narrator.analyze_purchase(d, market_context={
+                            "btc_price": btc_price if 'btc_price' in dir() else 70000,
+                            "fear_greed": 50,
+                        }, was_predicted=d.get("was_predicted", False))
+                        if analysis:
+                            logger.info(f"LLM Purchase Analysis: {analysis[:100]}...")
+                except Exception as e:
+                    logger.debug(f"LLM purchase analysis skipped: {e}")
             else:
                 logger.info("No new purchases detected")
 
@@ -466,6 +480,13 @@ def main():
                     logger.info("Feedback loop: learning cycle complete")
         except Exception as e:
             logger.debug(f"Feedback loop: {e}")
+
+        # Price prediction model (runs once per day)
+        try:
+            if scan_number == 1 or (scan_number % 24 == 0):
+                predictor.analyze()
+        except Exception as e:
+            logger.debug(f"Price predictor: {e}")
 
         # Watchlist alerts (Phase 8)
         try:
