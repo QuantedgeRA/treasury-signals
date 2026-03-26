@@ -4335,3 +4335,15 @@
 2026-03-25 23:32:42 | INFO     | main                      |   CoinGecko               -> 148 public companies (with cost basis)
 2026-03-25 23:32:42 | INFO     | main                      |   CoinGecko supplement    -> +147 new entities
 2026-03-25 23:33:17 | INFO     | main                      | Treasury Sync COMPLETE: 470 entities, 3,300,845 BTC (457 public_company, 13 defi)
+2026-03-25 23:57:43 | INFO     | main                      | Treasury Sync v4 — full sync...
+2026-03-25 23:57:43 | INFO     | main                      | Treasury Sync v4: starting full entity sync...
+2026-03-25 23:57:43 | INFO     | main                      | ─── Layer 1: CoinGecko (PRIMARY) ───
+2026-03-25 23:57:43 | INFO     | main                      |   CoinGecko               -> 148 public companies (PRIMARY)
+2026-03-25 23:57:43 | INFO     | main                      | ─── Layer 2: BitcoinTreasuries.net (SUPPLEMENT) ───
+2026-03-25 23:57:45 | INFO     | main                      |   Public Companies          ->  269 scraped,  240 new
+2026-03-25 23:57:46 | INFO     | main                      |   Private Companies         ->   27 scraped,   13 new
+2026-03-25 23:57:46 | INFO     | main                      |   Government Entities       ->   12 scraped,   11 new
+2026-03-25 23:57:47 | INFO     | main                      |   ETFs and Exchanges        ->   47 scraped,   45 new
+2026-03-25 23:57:48 | INFO     | main                      |   DeFi and Other            ->   17 scraped,   13 new
+2026-03-25 23:58:21 | INFO     | main                      | Treasury Sync COMPLETE: 470 entities (148 from CoinGecko, 322 from BT supplement), 3,110,472 BTC
+2026-03-25 23:58:21 | INFO     | main                      |   Breakdown: 457 public_company, 13 defi
