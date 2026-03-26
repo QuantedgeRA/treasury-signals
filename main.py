@@ -44,6 +44,7 @@ from watchlist_manager import get_watchlist_activity, format_watchlist_telegram
 import yfinance as yf
 import requests as req
 from price_predictor import predictor
+from treasury_sync import sync as treasury_sync
 
 logger = get_logger(__name__)
 
@@ -487,6 +488,12 @@ def main():
                 predictor.analyze()
         except Exception as e:
             logger.debug(f"Price predictor: {e}")
+
+        # Sync ALL entities from BitcoinTreasuries.net to Supabase
+        try:
+            treasury_sync.run()
+        except Exception as e:
+            logger.debug(f"Treasury sync: {e}")
 
         # Watchlist alerts (Phase 8)
         try:

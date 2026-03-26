@@ -1,110 +1,98 @@
-# LLM-Powered Intelligence Narratives — Setup Guide
+# Treasury Sync — Setup Guide
 
-## What This Does
+## What This Fixes
 
-Replaces templated text with Claude-written analyst-quality prose. Every daily briefing now reads like it was written by a Goldman Sachs morning analyst, not a Python template.
-
-Three narrative types:
-1. **Daily Intelligence Summary** — replaces the action signal summary
-2. **Pattern Explanation** — explains historical patterns in plain English
-3. **Purchase Analysis** — contextualizes detected purchases when they happen
+Your `treasury_companies` table only has 14 hardcoded companies.
+BitcoinTreasuries.net tracks 100+ entities (public companies, private companies,
+ETFs, governments). This module fetches ALL of them and syncs to Supabase every
+scan cycle — so your landing page, leaderboard, adoption tracker, and every
+other page shows accurate, up-to-date data.
 
 ---
 
-## Before You Deploy
-
-### 1. Create the narratives table in Supabase
+## Step 1 — Run this SQL in Supabase SQL Editor
 
 ```sql
-CREATE TABLE IF NOT EXISTS narratives (
-    id BIGSERIAL PRIMARY KEY,
-    narrative_type TEXT NOT NULL,
-    narrative_date TEXT NOT NULL,
-    content TEXT DEFAULT '',
-    generated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(narrative_type, narrative_date)
-);
+-- Add entity_type and ensure last_updated columns exist
+ALTER TABLE treasury_companies 
+  ADD COLUMN IF NOT EXISTS entity_type TEXT DEFAULT 'public_company';
+
+ALTER TABLE treasury_companies 
+  ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+-- Add entity_count to leaderboard_snapshots if not exists
+ALTER TABLE leaderboard_snapshots 
+  ADD COLUMN IF NOT EXISTS entity_count INTEGER DEFAULT 0;
+
+-- Create index for faster queries
+CREATE INDEX IF NOT EXISTS idx_treasury_companies_holdings 
+  ON treasury_companies(btc_holdings DESC);
+
+CREATE INDEX IF NOT EXISTS idx_treasury_companies_type 
+  ON treasury_companies(entity_type);
 ```
 
-### 2. Confirm your .env has the API key
+## Step 2 — Add treasury_sync.py to your Python scanner folder
 
-In your `treasury-signals/.env`:
-```
-ANTHROPIC_API_KEY=sk-ant-your-key-here
+Copy `treasury_sync.py` into your `treasury-signals` folder alongside the
+other Python files.
+
+## Step 3 — Update main.py
+
+Add this import at the top with the other imports:
+```python
+from treasury_sync import sync as treasury_sync
 ```
 
-### 3. Confirm requirements.txt has anthropic
+Find the leaderboard section in your scan loop (search for "leaderboard" or
+"save_leaderboard_to_db") and add this RIGHT AFTER the leaderboard save:
+
+```python
+        # Sync all entities to treasury_companies table
+        try:
+            treasury_sync.run()
+        except Exception as e:
+            logger.debug(f"Treasury sync: {e}")
+```
+
+## Step 4 — Push to Render
 
 ```
-anthropic
+cd "treasury-signals folder"
+git add .
+git commit -m "Add treasury sync - fetch all entities from BitcoinTreasuries.net"
+git push
 ```
+
+## Step 5 — Run it manually first (optional)
+
+If you want to populate the data immediately without waiting for the
+next scan cycle:
+
+```
+python treasury_sync.py
+```
+
+This will fetch all entities and upsert them into Supabase right away.
 
 ---
 
-## How to Deploy
+## What Happens After Setup
 
-### Python scanner (treasury-signals folder):
-1. Add `narrative_engine.py` (new file)
-2. Replace `main.py`, `email_briefing.py`, `seed_database.py`
-3. Run `python main.py`
+1. **Every scan cycle (60 min)**, the sync module runs
+2. It fetches from BitcoinTreasuries.net API → CoinGecko → HTML scrape (fallback)
+3. All entities are upserted into `treasury_companies`
+4. The `leaderboard_snapshots` table gets updated with the accurate entity count
+5. **Every page in your dashboard** automatically shows the correct numbers
+   because they all read from `treasury_companies`
 
-### Next.js dashboard (treasury-dashboard folder):
-1. Extract `treasury-dashboard-v3.tar.gz` into your dashboard folder (replaces existing files)
-2. Run `npm run dev`
+## Expected Results
 
----
+After the first sync, your landing page should show:
+- **100+** companies tracked (instead of 14)
+- **2,000,000+** total BTC monitored (instead of 655,881)
+- Accurate sovereign holder count
+- Accurate signal count
 
-## What You'll See
-
-### Scanner Logs
-```
-ℹ️  [narrative_engine] Daily narrative generated: 287 chars
-ℹ️  [narrative_engine] Pattern explanation generated: 142 chars
-ℹ️  [email_briefing] LLM narratives: daily, pattern (429 chars)
-```
-
-### Email Briefing
-The action signal summary and pattern match section now contain Claude-written prose instead of templated text. If the API is unavailable, it falls back to the original templates.
-
-### Next.js Dashboard
-The dashboard loads the latest narrative from Supabase and displays it in the Action Signal card with an "AI-generated analysis" badge.
-
----
-
-## How It Works
-
-```
-Scanner runs → gathers market data, signals, patterns
-                    ↓
-           narrator.generate_daily_narrative()
-                    ↓
-           Claude Haiku writes 150-word intelligence brief
-                    ↓
-           Saved to Supabase 'narratives' table
-                    ↓
-    Email uses it as action summary
-    Dashboard loads it from Supabase
-```
-
-### Graceful Fallback
-If the Anthropic API key is missing, the package isn't installed, or the API call fails — the system falls back to the original templated text. Nothing breaks. The LLM is purely additive.
-
-### Cost
-Claude Haiku at ~$0.25/million input tokens and ~$1.25/million output tokens. Each daily narrative uses roughly 500 input + 200 output tokens. At one briefing per hour, that's about $0.50/month.
-
----
-
-## Files
-
-### Python (treasury-signals folder)
-| File | Status |
-|------|--------|
-| `narrative_engine.py` | **NEW** — Claude API integration, 3 narrative generators, Supabase storage |
-| `main.py` | Updated — imports narrator, generates purchase analyses |
-| `email_briefing.py` | Updated — generates daily + pattern narratives, uses in email, longer text limits |
-| `seed_database.py` | Updated — narratives table SQL added |
-
-### Next.js (treasury-dashboard folder)
-| File | Status |
-|------|--------|
-| `src/app/dashboard/page.js` | Updated — loads narrative from Supabase, displays with AI badge |
+The Live Data page, Leaderboard, Adoption Tracker, Competitive Intelligence,
+and all other pages will also update automatically.
