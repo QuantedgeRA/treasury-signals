@@ -46,6 +46,8 @@ import requests as req
 from price_predictor import predictor
 from treasury_sync import sync as treasury_sync
 from competitor_alerts import check_competitor_purchase
+from velocity_tracker import velocity
+velocity.run()
 
 logger = get_logger(__name__)
 
