@@ -1,32 +1,33 @@
 """
-treasury_sync.py — Master Data Sync Engine v2.0
+treasury_sync.py — Master Data Sync Engine v3.1
 -------------------------------------------------
 Fetches ALL Bitcoin-holding entities from BitcoinTreasuries.net:
-  - 100 Public Companies
-  - 72 Private Companies
-  - 13 Government Entities
-  - 48 ETFs and Exchanges
-  - 16 DeFi / Others
 
-Total: ~249 entities, all synced to Supabase treasury_companies table.
+  Page                     URL                          Expected
+  ───────────────────────────────────────────────────────────────
+  Public Companies         /                            ~100
+  Private Companies        /private-companies           ~74
+  Government Entities      /governments                 ~16
+  ETFs and Exchanges       /etfs-and-exchanges          ~49
+  DeFi and Other           /defi-and-other              ~17
+                                                        ─────
+                                                        ~256 total
 
-Sources (in priority order):
-1. BitcoinTreasuries.net API (all category endpoints)
-2. BitcoinTreasuries.net HTML scrape (fallback — all tables)
-3. CoinGecko public companies API (supplement)
+Supplements with CoinGecko API for cost basis data.
 
 Usage:
     from treasury_sync import sync
-    sync.run()   # Full sync — call once per scan cycle
+    sync.run()
 """
 
 import os
-import json
 import re
+import json
 import requests
 from datetime import datetime
 from dotenv import load_dotenv
 from supabase import create_client
+from bs4 import BeautifulSoup
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -38,26 +39,14 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-# All known BitcoinTreasuries.net API endpoints
-BT_API_ENDPOINTS = [
-    # Primary entity endpoints
-    ("https://api.bitcointreasuries.net/views/entities", "entities", "public_company"),
-    ("https://api.bitcointreasuries.net/views/treasuries", "treasuries", "public_company"),
-    # Category-specific endpoints
-    ("https://api.bitcointreasuries.net/views/public", "public", "public_company"),
-    ("https://api.bitcointreasuries.net/views/private", "private", "private_company"),
-    ("https://api.bitcointreasuries.net/views/etf", "etf", "etf"),
-    ("https://api.bitcointreasuries.net/views/etfs", "etfs", "etf"),
-    ("https://api.bitcointreasuries.net/views/funds", "funds", "etf"),
-    ("https://api.bitcointreasuries.net/views/defi", "defi", "defi"),
-    ("https://api.bitcointreasuries.net/views/countries", "countries", "government"),
-    ("https://api.bitcointreasuries.net/views/governments", "governments", "government"),
-    # Alternative patterns
-    ("https://api.bitcointreasuries.net/entities", "entities_alt", "public_company"),
-    ("https://api.bitcointreasuries.net/treasuries", "treasuries_alt", "public_company"),
+BT_PAGES = [
+    {"url": "https://bitcointreasuries.net/", "category": "public_company", "label": "Public Companies", "is_government": False},
+    {"url": "https://bitcointreasuries.net/private-companies", "category": "private_company", "label": "Private Companies", "is_government": False},
+    {"url": "https://bitcointreasuries.net/governments", "category": "government", "label": "Government Entities", "is_government": True},
+    {"url": "https://bitcointreasuries.net/etfs-and-exchanges", "category": "etf", "label": "ETFs and Exchanges", "is_government": False},
+    {"url": "https://bitcointreasuries.net/defi-and-other", "category": "defi", "label": "DeFi and Other", "is_government": False},
 ]
 
-# Sovereign flag mapping
 SOVEREIGN_FLAGS = {
     "united states": ("🇺🇸 United States", "US-GOV", "US"),
     "china": ("🇨🇳 China", "CN-GOV", "CN"),
@@ -85,399 +74,358 @@ SOVEREIGN_FLAGS = {
     "venezuela": ("🇻🇪 Venezuela", "VE-GOV", "VE"),
     "iran": ("🇮🇷 Iran", "IR-GOV", "IR"),
     "turkey": ("🇹🇷 Turkey", "TR-GOV", "TR"),
+    "tonga": ("🇹🇴 Tonga", "TO-GOV", "TO"),
+    "kazakhstan": ("🇰🇿 Kazakhstan", "KZ-GOV", "KZ"),
+    "hong kong": ("🇭🇰 Hong Kong", "HK-GOV", "HK"),
+    "ethiopia": ("🇪🇹 Ethiopia", "ET-GOV", "ET"),
+    "myanmar": ("🇲🇲 Myanmar", "MM-GOV", "MM"),
+    "colombia": ("🇨🇴 Colombia", "CO-GOV", "CO"),
+    "liechtenstein": ("🇱🇮 Liechtenstein", "LI-GOV", "LI"),
+    "montenegro": ("🇲🇪 Montenegro", "ME-GOV", "ME"),
 }
 
 
 class TreasurySync:
-    """Syncs ALL Bitcoin-holding entities to Supabase."""
 
     def __init__(self):
         self._last_sync = None
         self._entity_count = 0
 
     def run(self):
-        """Full sync: fetch from all sources, merge, upsert to DB."""
-        logger.info("Treasury Sync v2: starting full entity sync...")
+        logger.info("Treasury Sync v3.1: starting full entity sync...")
 
-        all_entities = {}  # ticker -> entity dict (deduped by ticker)
+        all_entities = {}
 
-        # ─── Phase 1: BitcoinTreasuries.net API (all endpoints) ───
-        api_entities = self._fetch_all_bt_api_endpoints()
-        for e in api_entities:
-            key = e["ticker"]
-            all_entities[key] = e
-        logger.info(f"Treasury Sync: {len(all_entities)} entities from BT API endpoints")
+        # ─── Phase 1: Scrape all 5 BitcoinTreasuries.net pages ───
+        for page in BT_PAGES:
+            try:
+                entities = self._scrape_page(page)
+                new = 0
+                for e in entities:
+                    key = e["ticker"]
+                    if key not in all_entities:
+                        all_entities[key] = e
+                        new += 1
+                    elif e.get("btc_holdings", 0) > all_entities[key].get("btc_holdings", 0):
+                        all_entities[key]["btc_holdings"] = e["btc_holdings"]
+                logger.info(f"  {page['label']:25s} -> {len(entities):>4} scraped, {new:>4} new")
+            except Exception as e:
+                logger.warning(f"  {page['label']:25s} -> FAILED: {e}")
 
-        # ─── Phase 2: BitcoinTreasuries.net HTML scrape (catches anything API missed) ───
-        html_entities = self._scrape_all_html_tables()
-        new_from_html = 0
-        for e in html_entities:
-            key = e["ticker"]
-            if key not in all_entities:
-                all_entities[key] = e
-                new_from_html += 1
-            else:
-                # Update holdings if HTML has more recent data
-                if e.get("btc_holdings", 0) > all_entities[key].get("btc_holdings", 0):
-                    all_entities[key]["btc_holdings"] = e["btc_holdings"]
-        if new_from_html > 0:
-            logger.info(f"Treasury Sync: +{new_from_html} new entities from HTML scrape")
+        bt_total = len(all_entities)
+        logger.info(f"Treasury Sync: {bt_total} entities from BitcoinTreasuries.net")
 
-        # ─── Phase 3: CoinGecko (supplement with cost basis data) ───
-        cg_entities = self._fetch_coingecko()
-        new_from_cg = 0
-        for e in cg_entities:
-            key = e["ticker"]
-            if key not in all_entities:
-                all_entities[key] = e
-                new_from_cg += 1
-            else:
-                existing = all_entities[key]
-                if not existing.get("country") or existing["country"] in ("Unknown", ""):
-                    existing["country"] = e.get("country", "")
-                if e.get("total_cost_usd", 0) > 0 and existing.get("total_cost_usd", 0) == 0:
-                    existing["total_cost_usd"] = e["total_cost_usd"]
-                    existing["avg_purchase_price"] = e.get("avg_purchase_price", 0)
-        if new_from_cg > 0:
-            logger.info(f"Treasury Sync: +{new_from_cg} new entities from CoinGecko")
+        # ─── Phase 2: CoinGecko supplement ───
+        try:
+            cg_entities = self._fetch_coingecko()
+            new_cg = 0
+            for e in cg_entities:
+                key = e["ticker"]
+                if key not in all_entities:
+                    all_entities[key] = e
+                    new_cg += 1
+                else:
+                    existing = all_entities[key]
+                    if not existing.get("country") or existing["country"] in ("", "Unknown"):
+                        existing["country"] = e.get("country", "")
+                    if e.get("total_cost_usd", 0) > 0 and existing.get("total_cost_usd", 0) == 0:
+                        existing["total_cost_usd"] = e["total_cost_usd"]
+                        existing["avg_purchase_price"] = e.get("avg_purchase_price", 0)
+            if new_cg > 0:
+                logger.info(f"  CoinGecko supplement    -> +{new_cg} new entities")
+        except Exception as e:
+            logger.debug(f"  CoinGecko failed: {e}")
 
         if not all_entities:
-            logger.warning("Treasury Sync: no entities fetched from any source")
+            logger.warning("Treasury Sync: no entities fetched")
             return 0
 
-        # ─── Upsert all to Supabase ───
+        # ─── Phase 3: Upsert ───
         count = self._upsert_all(all_entities)
         self._last_sync = datetime.now()
         self._entity_count = count
 
-        # ─── Update snapshot ───
-        self._update_snapshot_count(all_entities)
+        # ─── Phase 4: Update snapshot ───
+        self._update_snapshot(all_entities)
 
         # ─── Summary ───
         by_type = {}
         for e in all_entities.values():
             t = e.get("entity_type", "unknown")
             by_type[t] = by_type.get(t, 0) + 1
-
-        type_summary = ", ".join(f"{v} {k}" for k, v in sorted(by_type.items(), key=lambda x: -x[1]))
-        logger.info(f"Treasury Sync COMPLETE: {count} entities synced ({type_summary})")
+        type_str = ", ".join(f"{v} {k}" for k, v in sorted(by_type.items(), key=lambda x: -x[1]))
+        total_btc = sum(e.get("btc_holdings", 0) for e in all_entities.values())
+        logger.info(f"Treasury Sync COMPLETE: {count} entities, {total_btc:,} BTC ({type_str})")
         return count
 
-    # ═══════════════════════════════════════════════════════════════
-    # PHASE 1: BitcoinTreasuries.net API (all endpoints)
-    # ═══════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════
+    # SCRAPING
+    # ═══════════════════════════════════════════════════════════
 
-    def _fetch_all_bt_api_endpoints(self):
-        """Hit every known BT API endpoint and merge results."""
-        all_entities = []
-        seen_tickers = set()
-        successful_endpoints = []
+    def _scrape_page(self, page):
+        """Scrape all tables from a BT page."""
+        entities = []
+        resp = requests.get(page["url"], headers=HEADERS, timeout=20)
+        if resp.status_code != 200:
+            return []
 
-        for url, source_name, default_type in BT_API_ENDPOINTS:
-            try:
-                resp = requests.get(url, headers=HEADERS, timeout=20)
-                if resp.status_code != 200:
-                    continue
+        soup = BeautifulSoup(resp.text, "lxml")
+        tables = soup.find_all("table")
 
-                data = resp.json()
-                if not isinstance(data, list) or len(data) == 0:
-                    continue
-
-                count_before = len(all_entities)
-                for item in data:
-                    try:
-                        entity = self._parse_bt_entity(item, source_name, default_type)
-                        if entity and entity.get("btc_holdings", 0) > 0 and entity["ticker"] not in seen_tickers:
-                            all_entities.append(entity)
-                            seen_tickers.add(entity["ticker"])
-                    except Exception:
-                        continue
-
-                new_count = len(all_entities) - count_before
-                if new_count > 0:
-                    successful_endpoints.append(f"{source_name}({new_count})")
-                    logger.debug(f"Treasury Sync: {url} → {new_count} new entities")
-
-            except Exception as e:
-                logger.debug(f"Treasury Sync: {url} failed: {e}")
+        for table in tables:
+            rows = table.find_all("tr")
+            if len(rows) < 2:
                 continue
 
-        if successful_endpoints:
-            logger.info(f"Treasury Sync: BT API endpoints: {', '.join(successful_endpoints)}")
+            # Detect table format from first data row
+            first_row_cols = rows[1].find_all("td")
+            first_texts = [td.get_text(strip=True) for td in first_row_cols]
+            fmt = self._detect_format(first_texts)
 
-        return all_entities
-
-    def _parse_bt_entity(self, item, source, default_type):
-        """Parse a single entity from any BT API endpoint."""
-        # Extract name
-        name = ""
-        for field in ["name", "company", "entity", "title", "label"]:
-            name = item.get(field, "")
-            if name:
-                break
-        if not name:
-            return None
-
-        # Extract ticker
-        ticker = ""
-        for field in ["symbol", "ticker", "code"]:
-            ticker = item.get(field, "")
-            if ticker:
-                break
-        if not ticker:
-            ticker = re.sub(r'[^A-Za-z0-9]', '', name.upper()[:10])
-        ticker = ticker.upper().strip()
-        if not ticker:
-            return None
-
-        # Extract BTC holdings
-        btc = 0
-        for field in ["total_holdings", "btc", "btc_holdings", "holdings", "total_btc", "bitcoin", "amount"]:
-            val = item.get(field)
-            if val:
-                try:
-                    btc = int(float(str(val).replace(",", "").replace(" ", "")))
-                    if btc > 0:
-                        break
-                except:
-                    pass
-
-        if btc <= 0:
-            return None
-
-        # Extract country
-        country = item.get("country") or item.get("domicile") or item.get("jurisdiction") or ""
-
-        # Determine entity type
-        entity_type = default_type
-        is_gov = False
-        category = (item.get("category") or item.get("type") or item.get("entity_type") or "").lower()
-        name_lower = name.lower()
-
-        if any(kw in category for kw in ["gov", "country", "nation", "sovereign", "state"]):
-            entity_type = "government"
-            is_gov = True
-        elif any(kw in category for kw in ["etf", "fund", "trust", "etp", "exchange"]):
-            entity_type = "etf"
-        elif any(kw in category for kw in ["private"]):
-            entity_type = "private_company"
-        elif any(kw in category for kw in ["defi", "protocol", "dao"]):
-            entity_type = "defi"
-        elif any(kw in name_lower for kw in ["government", " gov", "reserve"]):
-            entity_type = "government"
-            is_gov = True
-        elif any(kw in name_lower for kw in ["etf", "grayscale", "ishares", "fidelity wise", "bitwise", "ark 21", "vaneck", "invesco", "wisdomtree", "valkyrie", "franklin"]):
-            entity_type = "etf"
-        elif any(kw in name_lower for kw in ["protocol", "defi", "dao", "wrapped", "bridge"]):
-            entity_type = "defi"
-
-        # Handle sovereign entities specifically
-        if source == "countries" or entity_type == "government":
-            is_gov = True
-            entity_type = "government"
-            # Try to match flag
-            for key, (display, gov_ticker, gov_country) in SOVEREIGN_FLAGS.items():
-                if key in name_lower:
-                    name = display
-                    ticker = gov_ticker
-                    country = gov_country
-                    break
-            else:
-                if not ticker.endswith("-GOV"):
-                    ticker = f"{ticker[:4]}-GOV"
-
-        # Sector mapping
-        sector = item.get("sector") or item.get("industry") or ""
-        if not sector:
-            sector = self._guess_sector(name, entity_type)
-
-        # Cost basis
-        cost = 0
-        avg_price = 0
-        for field in ["total_entry_value_usd", "total_cost_usd", "cost_basis", "entry_value"]:
-            val = item.get(field)
-            if val:
-                try:
-                    cost = int(float(str(val).replace(",", "")))
-                    if btc > 0 and cost > 0:
-                        avg_price = int(cost / btc)
-                    break
-                except:
-                    pass
-
-        return {
-            "ticker": ticker,
-            "company": name,
-            "btc_holdings": btc,
-            "avg_purchase_price": avg_price,
-            "total_cost_usd": cost,
-            "country": country,
-            "sector": sector,
-            "is_government": is_gov,
-            "entity_type": entity_type,
-            "data_source": f"bt_{source}",
-        }
-
-    def _guess_sector(self, name, entity_type):
-        """Guess sector from entity name and type."""
-        name_lower = name.lower()
-        if entity_type == "government":
-            return "Government"
-        elif entity_type == "etf":
-            return "ETF / Fund"
-        elif entity_type == "defi":
-            return "DeFi / Protocol"
-        elif any(kw in name_lower for kw in ["mining", "miner", "mara", "riot", "cleanspark", "bitfarms", "hut 8", "iris energy", "core scientific"]):
-            return "Bitcoin Mining"
-        elif any(kw in name_lower for kw in ["exchange", "coinbase", "kraken", "binance"]):
-            return "Crypto Exchange"
-        elif any(kw in name_lower for kw in ["bank", "financial", "capital"]):
-            return "Financial Services"
-        elif any(kw in name_lower for kw in ["tesla", "auto"]):
-            return "Automotive"
-        elif any(kw in name_lower for kw in ["game", "gme"]):
-            return "Retail / Gaming"
-        elif any(kw in name_lower for kw in ["block", "square", "payment", "pay"]):
-            return "Fintech / Payments"
-        else:
-            return "Technology"
-
-    # ═══════════════════════════════════════════════════════════════
-    # PHASE 2: HTML Scrape (catches everything API might miss)
-    # ═══════════════════════════════════════════════════════════════
-
-    def _scrape_all_html_tables(self):
-        """Scrape ALL tables from BitcoinTreasuries.net HTML."""
-        entities = []
-        try:
-            from bs4 import BeautifulSoup
-
-            # Scrape multiple pages to get all categories
-            pages = [
-                ("https://bitcointreasuries.net/", "main"),
-                ("https://bitcointreasuries.net/entities/public", "public"),
-                ("https://bitcointreasuries.net/entities/private", "private"),
-                ("https://bitcointreasuries.net/entities/etf", "etf"),
-                ("https://bitcointreasuries.net/entities/defi", "defi"),
-                ("https://bitcointreasuries.net/entities/countries", "government"),
-            ]
-
-            seen_tickers = set()
-
-            for url, category in pages:
-                try:
-                    resp = requests.get(url, headers=HEADERS, timeout=20)
-                    if resp.status_code != 200:
-                        continue
-
-                    soup = BeautifulSoup(resp.text, "lxml")
-                    tables = soup.find_all("table")
-
-                    for table in tables:
-                        rows = table.find_all("tr")[1:]  # skip header
-                        for row in rows:
-                            cols = row.find_all("td")
-                            if len(cols) < 2:
-                                continue
-                            try:
-                                entity = self._parse_html_row(cols, category)
-                                if entity and entity["ticker"] not in seen_tickers:
-                                    entities.append(entity)
-                                    seen_tickers.add(entity["ticker"])
-                            except Exception:
-                                continue
-
-                except Exception as e:
-                    logger.debug(f"Treasury Sync: HTML scrape {url} failed: {e}")
+            for row in rows[1:]:
+                cols = row.find_all("td")
+                if len(cols) < 3:
                     continue
-
-            if entities:
-                logger.info(f"Treasury Sync: HTML scrape — {len(entities)} entities from {len(pages)} pages")
-
-        except ImportError:
-            logger.debug("Treasury Sync: BeautifulSoup not available for HTML scrape")
-        except Exception as e:
-            logger.warning(f"Treasury Sync: HTML scrape failed: {e}")
+                try:
+                    entity = self._parse_row_positional(cols, fmt, page)
+                    if entity and entity.get("btc_holdings", 0) > 0:
+                        entities.append(entity)
+                except Exception:
+                    continue
 
         return entities
 
-    def _parse_html_row(self, cols, category):
-        """Parse a single HTML table row."""
-        # Try to extract name from first column
-        name = cols[0].get_text(strip=True)
-        if not name:
+    def _detect_format(self, texts):
+        """Detect which table format we're dealing with.
+
+        Format A (category pages: private, etf, defi, gov):
+            col[0]=rank, col[1]=flag, col[2]=name, col[3]=₿btc, col[4]=$usd, col[5]=%supply
+            Headers: ['#', 'Name', 'Bitcoin', 'In USD', '/21M']
+
+        Format B (main page tables 0-2):
+            col[0]=rank, col[1]=name, col[2]=flag, col[3]=ticker, col[4]=btc_number, col[5]=ratio
+            Headers: ['Rank', '', 'Country flag', 'Ticker', 'Bitcoin']
+
+        Format C (main page table 3):
+            col[0]=rank, col[1]=flag, col[2]=nameTickerBuy, col[3]=₿btc, col[4]=$usd, col[5]=$cap, col[6]=$hidden
+        """
+        if len(texts) < 4:
+            return "unknown"
+
+        # Check if col[3] starts with ₿ (bitcoin symbol)
+        col3 = texts[3] if len(texts) > 3 else ""
+        has_btc_symbol = "₿" in col3 or "\u20bf" in col3
+
+        # Check if col[1] looks like a short flag (non-ASCII, short)
+        col1 = texts[1]
+        col1_is_flag = len(col1) <= 6 and not col1.isascii()
+
+        if has_btc_symbol and col1_is_flag:
+            # Could be format A or C
+            # Format A: col[2] is a clean name
+            # Format C: col[2] has ticker embedded like "StrategyMSTRBuy"
+            col2 = texts[2]
+            if "$" in (texts[4] if len(texts) > 4 else ""):
+                # Both A and C have $ in col[4]
+                # In format C, col[2] tends to have uppercase letters embedded
+                return "A"  # Treat the same — positional parsing handles both
+            return "A"
+
+        # Format B: col[1] is the name (long text), col[3] is ticker (short)
+        if not col1_is_flag and len(col1) > 3:
+            return "B"
+
+        return "A"  # Default
+
+    def _parse_row_positional(self, cols, fmt, page):
+        """Parse row based on detected format."""
+        texts = [td.get_text(strip=True) for td in cols]
+
+        if fmt == "B":
+            return self._parse_format_b(texts, page)
+        else:
+            return self._parse_format_a(texts, page)
+
+    def _parse_format_a(self, texts, page):
+        """Parse format A/C: [rank, flag, name, ₿btc, $usd, ...]
+        Used by: category pages + main page table 3.
+        """
+        if len(texts) < 4:
             return None
 
-        # Remove any rank numbers from beginning
-        name = re.sub(r'^\d+\s*', '', name).strip()
-        if not name:
+        # col[0] = rank (skip)
+        # col[1] = flag (skip)
+        # col[2] = name (may have ticker embedded)
+        # col[3] = ₿xxx,xxx
+
+        raw_name = texts[2]
+        if not raw_name:
             return None
 
-        # Try to extract ticker
-        ticker = ""
-        if len(cols) > 1:
-            potential_ticker = cols[1].get_text(strip=True)
-            # Only use as ticker if it looks like one (short, alpha)
-            if potential_ticker and len(potential_ticker) <= 12 and re.match(r'^[A-Za-z0-9.\-:]+$', potential_ticker):
-                ticker = potential_ticker.upper()
+        # Extract BTC from col[3]
+        btc = self._extract_btc(texts[3])
 
-        if not ticker:
-            ticker = re.sub(r'[^A-Za-z0-9]', '', name.upper()[:10])
-
-        # Find BTC amount — scan all columns for a number
-        btc = 0
-        for col in cols[1:]:
-            text = col.get_text(strip=True).replace(",", "").replace(" ", "")
-            # Look for a reasonably-sized number
-            match = re.search(r'([\d.]+)', text)
-            if match:
-                try:
-                    val = float(match.group(1))
-                    if 1 <= val <= 50_000_000:  # reasonable BTC range
-                        btc = int(val)
-                        break
-                except:
-                    pass
+        # If col[3] didn't have BTC, try other columns
+        if btc <= 0:
+            for t in texts[3:]:
+                btc = self._extract_btc(t)
+                if btc > 0:
+                    break
 
         if btc <= 0:
             return None
 
-        # Map category
-        type_map = {
-            "main": "public_company", "public": "public_company",
-            "private": "private_company", "etf": "etf",
-            "defi": "defi", "government": "government",
-        }
-        entity_type = type_map.get(category, "public_company")
-        is_gov = entity_type == "government"
+        # Parse name and ticker
+        name, ticker = self._extract_name_ticker(raw_name)
 
-        # Handle government names
+        if not name:
+            return None
+        if not ticker:
+            ticker = re.sub(r'[^A-Za-z0-9]', '', name.upper()[:10])
+        if not ticker:
+            return None
+
+        # Handle governments
+        is_gov = page["is_government"]
+        entity_type = page["category"]
+
         if is_gov:
-            for key, (display, gov_ticker, gov_country) in SOVEREIGN_FLAGS.items():
+            for key, (display, gov_ticker, country) in SOVEREIGN_FLAGS.items():
                 if key in name.lower():
                     name = display
                     ticker = gov_ticker
                     break
+            else:
+                if not ticker.endswith("-GOV"):
+                    ticker = f"{ticker[:5]}-GOV"
 
         return {
-            "ticker": ticker,
-            "company": name,
+            "ticker": ticker.upper(),
+            "company": name[:200],
+            "btc_holdings": btc,
+            "avg_purchase_price": 0,
+            "total_cost_usd": 0,
+            "country": self._get_country(name, is_gov),
+            "sector": self._guess_sector(name, entity_type),
+            "is_government": is_gov,
+            "entity_type": entity_type,
+            "data_source": f"bt_{page['category']}",
+        }
+
+    def _parse_format_b(self, texts, page):
+        """Parse format B: [rank, name, flag, ticker, btc_number, ratio]
+        Used by: main page tables 0-2.
+        """
+        if len(texts) < 5:
+            return None
+
+        # col[1] = company name
+        # col[3] = ticker
+        # col[4] = btc number (plain, no ₿)
+
+        name = texts[1]
+        ticker = texts[3] if len(texts) > 3 else ""
+
+        if not name:
+            return None
+
+        # BTC is in col[4] — plain number with commas
+        btc_text = texts[4] if len(texts) > 4 else "0"
+        btc_clean = btc_text.replace(",", "").replace(" ", "")
+        btc_clean = re.sub(r'[^\d.]', '', btc_clean)
+        btc = 0
+        if btc_clean:
+            try:
+                btc = int(float(btc_clean))
+            except:
+                pass
+
+        if btc <= 0:
+            return None
+
+        if not ticker:
+            ticker = re.sub(r'[^A-Za-z0-9]', '', name.upper()[:10])
+
+        return {
+            "ticker": ticker.upper(),
+            "company": name[:200],
             "btc_holdings": btc,
             "avg_purchase_price": 0,
             "total_cost_usd": 0,
             "country": "",
-            "sector": self._guess_sector(name, entity_type),
-            "is_government": is_gov,
-            "entity_type": entity_type,
-            "data_source": f"bt_html_{category}",
+            "sector": self._guess_sector(name, page["category"]),
+            "is_government": False,
+            "entity_type": "public_company",
+            "data_source": "bt_public_top",
         }
 
-    # ═══════════════════════════════════════════════════════════════
-    # PHASE 3: CoinGecko (supplement)
-    # ═══════════════════════════════════════════════════════════════
+    def _extract_btc(self, text):
+        """Extract BTC amount from text like '₿762,099' or '₿164,000'."""
+        if not text:
+            return 0
+        # Remove ₿ symbol and commas
+        clean = text.replace("₿", "").replace("\u20bf", "").replace(",", "").replace(" ", "")
+        clean = re.sub(r'[^\d.]', '', clean)
+        if clean:
+            try:
+                return int(float(clean))
+            except:
+                pass
+        return 0
+
+    def _extract_name_ticker(self, raw):
+        """Extract name and ticker from strings like 'Block.one' or 'StrategyMSTRBuy'."""
+        if not raw:
+            return "", ""
+
+        # Check for embedded ticker pattern: "CompanyNameTICKERBuy" or "CompanyNameTICKER"
+        # Look for transition from lowercase/space to UPPERCASE at end
+        match = re.search(r'^(.+?)([A-Z][A-Z0-9]{1,7})(Buy|Sel)?$', raw)
+        if match:
+            name_part = match.group(1).strip()
+            ticker_part = match.group(2)
+            # Make sure name_part is reasonable (not just one char)
+            if len(name_part) >= 2:
+                return name_part, ticker_part
+
+        # No embedded ticker — name is the whole string
+        return raw.strip(), ""
+
+    def _get_country(self, name, is_gov):
+        """Try to get country code."""
+        if is_gov:
+            for key, (_, _, country) in SOVEREIGN_FLAGS.items():
+                if key in name.lower():
+                    return country
+        return ""
+
+    def _guess_sector(self, name, entity_type):
+        n = name.lower()
+        if entity_type == "government":
+            return "Government"
+        if entity_type == "etf":
+            return "ETF / Fund"
+        if entity_type == "defi":
+            return "DeFi / Protocol"
+        if entity_type == "private_company":
+            return "Private Company"
+        if any(kw in n for kw in ["mining", "miner", "mara", "riot", "cleanspark", "bitfarms", "hut 8", "iris", "core scientific", "bitfufu", "canaan"]):
+            return "Bitcoin Mining"
+        if any(kw in n for kw in ["exchange", "coinbase", "kraken", "binance"]):
+            return "Crypto Exchange"
+        if any(kw in n for kw in ["bank", "financial", "capital"]):
+            return "Financial Services"
+        if any(kw in n for kw in ["tesla"]):
+            return "Automotive"
+        if any(kw in n for kw in ["block", "square", "payment"]):
+            return "Fintech / Payments"
+        return "Technology"
+
+    # ═══════════════════════════════════════════════════════════
+    # COINGECKO
+    # ═══════════════════════════════════════════════════════════
 
     def _fetch_coingecko(self):
-        """Fetch public companies from CoinGecko."""
         entities = []
         try:
             resp = requests.get(
@@ -486,7 +434,6 @@ class TreasurySync:
             )
             if resp.status_code != 200:
                 return []
-
             data = resp.json()
             for item in data.get("companies", []):
                 try:
@@ -495,42 +442,30 @@ class TreasurySync:
                     btc = int(item.get("total_holdings", 0))
                     if not ticker or not name or btc <= 0:
                         continue
-
                     cost = int(float(item.get("total_entry_value_usd", 0) or 0))
                     avg = int(cost / btc) if btc > 0 and cost > 0 else 0
-
                     entities.append({
-                        "ticker": ticker,
-                        "company": name,
-                        "btc_holdings": btc,
-                        "avg_purchase_price": avg,
-                        "total_cost_usd": cost,
-                        "country": item.get("country", ""),
-                        "sector": "Technology",
-                        "is_government": False,
-                        "entity_type": "public_company",
+                        "ticker": ticker, "company": name, "btc_holdings": btc,
+                        "avg_purchase_price": avg, "total_cost_usd": cost,
+                        "country": item.get("country", ""), "sector": "Technology",
+                        "is_government": False, "entity_type": "public_company",
                         "data_source": "coingecko",
                     })
                 except Exception:
                     continue
-
             if entities:
-                logger.info(f"Treasury Sync: CoinGecko — {len(entities)} public companies")
-
+                logger.info(f"  CoinGecko               -> {len(entities)} public companies (with cost basis)")
         except Exception as e:
-            logger.debug(f"Treasury Sync: CoinGecko failed: {e}")
-
+            logger.debug(f"CoinGecko failed: {e}")
         return entities
 
-    # ═══════════════════════════════════════════════════════════════
-    # DATABASE OPERATIONS
-    # ═══════════════════════════════════════════════════════════════
+    # ═══════════════════════════════════════════════════════════
+    # DATABASE
+    # ═══════════════════════════════════════════════════════════
 
     def _upsert_all(self, all_entities):
-        """Upsert all entities to treasury_companies table."""
         count = 0
         errors = 0
-
         for ticker, entity in all_entities.items():
             try:
                 row = {
@@ -545,53 +480,35 @@ class TreasurySync:
                     "data_source": entity.get("data_source", "sync"),
                     "last_updated": datetime.now().isoformat(),
                 }
-
-                supabase.table("treasury_companies").upsert(
-                    row, on_conflict="ticker"
-                ).execute()
+                supabase.table("treasury_companies").upsert(row, on_conflict="ticker").execute()
                 count += 1
-
             except Exception as e:
                 errors += 1
-                if errors <= 5:
-                    logger.debug(f"Treasury Sync: upsert error for {ticker}: {e}")
-
+                if errors <= 3:
+                    logger.debug(f"Upsert error {ticker}: {e}")
         if errors > 0:
-            logger.warning(f"Treasury Sync: {errors} upsert errors out of {count + errors}")
-
+            logger.warning(f"Treasury Sync: {errors} upsert errors")
         return count
 
-    def _update_snapshot_count(self, all_entities):
-        """Update today's leaderboard snapshot with accurate totals."""
+    def _update_snapshot(self, all_entities):
         try:
             today = datetime.now().strftime("%Y-%m-%d")
             total_btc = sum(e.get("btc_holdings", 0) for e in all_entities.values())
-            entity_count = len(all_entities)
-
             supabase.table("leaderboard_snapshots").upsert({
                 "snapshot_date": today,
                 "total_btc": total_btc,
-                "entity_count": entity_count,
+                "entity_count": len(all_entities),
             }, on_conflict="snapshot_date").execute()
-
-            logger.debug(f"Treasury Sync: snapshot — {entity_count} entities, {total_btc:,} BTC")
         except Exception as e:
-            logger.debug(f"Treasury Sync: snapshot update failed: {e}")
+            logger.debug(f"Snapshot update failed: {e}")
 
 
-# ============================================
-# GLOBAL INSTANCE
-# ============================================
 sync = TreasurySync()
 
-
-# ============================================
-# QUICK TEST
-# ============================================
 if __name__ == "__main__":
-    logger.info("Treasury Sync v2 — running full sync test...")
+    logger.info("Treasury Sync v3.1 — full sync...")
     count = sync.run()
     print(f"\n{'='*60}")
-    print(f"  TREASURY SYNC v2 COMPLETE")
+    print(f"  TREASURY SYNC v3.1 COMPLETE")
     print(f"  {count} entities synced to Supabase")
     print(f"{'='*60}\n")
