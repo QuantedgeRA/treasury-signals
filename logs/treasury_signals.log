@@ -4233,3 +4233,83 @@
 2026-03-23 18:46:35 | INFO     | main                      | Tweets: 0 | Signals: 0 | Correlation: 20/100 (1/4)
 2026-03-23 18:46:35 | INFO     | main                      | Next scan in 60 minutes. Press Ctrl+C to stop.
 2026-03-23 19:03:29 | INFO     | main                      | Stopped by user. Goodbye!
+2026-03-25 22:37:35 | INFO     | main                      | Treasury Sync — running full sync test...
+2026-03-25 22:37:35 | INFO     | main                      | Treasury Sync: starting full entity sync...
+2026-03-25 22:37:35 | DEBUG    | main                      | Treasury Sync: trying https://api.bitcointreasuries.net/views/entities...
+2026-03-25 22:37:35 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/views/entities failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/entities (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001D0F9977440>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:37:35 | DEBUG    | main                      | Treasury Sync: trying https://api.bitcointreasuries.net/views/treasuries...
+2026-03-25 22:37:35 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/views/treasuries failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/treasuries (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001D0F99A4110>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:37:35 | DEBUG    | main                      | Treasury Sync: scraping BitcoinTreasuries.net HTML...
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '..'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '..3659'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '..'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '..'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '..'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '..36'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '..'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '..9238'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: skip HTML row: could not convert string to float: '.'
+2026-03-25 22:37:38 | INFO     | main                      | Treasury Sync: scraped 30 entities from HTML
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: fetching CoinGecko public companies...
+2026-03-25 22:37:38 | INFO     | main                      | Treasury Sync: CoinGecko — 148 public companies
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: fetching sovereign holders...
+2026-03-25 22:37:38 | DEBUG    | main                      | Treasury Sync: sovereign API failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/countries (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001D0F9AF35C0>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:37:51 | DEBUG    | main                      | Treasury Sync: snapshot updated — 159 entities, 1,251,335 BTC
+2026-03-25 22:37:51 | INFO     | main                      | Treasury Sync: 159 entities synced to Supabase from 159 total
+2026-03-25 22:48:09 | INFO     | main                      | Treasury Sync v2 — running full sync test...
+2026-03-25 22:48:09 | INFO     | main                      | Treasury Sync v2: starting full entity sync...
+2026-03-25 22:48:09 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/views/entities failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/entities (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001E47A73D880>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:48:09 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/views/treasuries failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/treasuries (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001E47A73E6C0>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:48:09 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/views/public failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/public (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001E47A73E0F0>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:48:09 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/views/private failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/private (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001E47A73DF70>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:48:09 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/views/etf failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/etf (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001E47A73EE70>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:48:09 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/views/etfs failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/etfs (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001E47A73F5C0>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:48:09 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/views/funds failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/funds (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001E47A73FDA0>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:48:09 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/views/defi failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/defi (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001E47A770620>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:48:09 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/views/countries failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/countries (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001E47A73EED0>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:48:09 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/views/governments failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/governments (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001E47A73EEA0>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:48:09 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/entities failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /entities (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001E47A73D190>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:48:10 | DEBUG    | main                      | Treasury Sync: https://api.bitcointreasuries.net/treasuries failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /treasuries (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001E47A770110>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-25 22:48:10 | INFO     | main                      | Treasury Sync: 0 entities from BT API endpoints
+2026-03-25 22:48:14 | INFO     | main                      | Treasury Sync: CoinGecko — 148 public companies
+2026-03-25 22:48:14 | INFO     | main                      | Treasury Sync: +148 new entities from CoinGecko
+2026-03-25 22:48:24 | DEBUG    | main                      | Treasury Sync: snapshot — 148 entities, 1,187,124 BTC
+2026-03-25 22:48:24 | INFO     | main                      | Treasury Sync COMPLETE: 148 entities synced (148 public_company)
