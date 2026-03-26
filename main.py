@@ -45,6 +45,7 @@ import yfinance as yf
 import requests as req
 from price_predictor import predictor
 from treasury_sync import sync as treasury_sync
+from competitor_alerts import check_competitor_purchase
 
 logger = get_logger(__name__)
 

@@ -4396,3 +4396,15 @@
 2026-03-26 00:42:44 | INFO     | main                      |   Public Companies          ->  269 scraped,  138 new,  131 merged
 2026-03-26 00:43:13 | INFO     | main                      | Treasury Sync COMPLETE: 383 unique entities, 2,184,315 BTC
 2026-03-26 00:43:13 | INFO     | main                      |   Breakdown: 285 public_company, 47 etf, 24 private_company, 15 defi, 12 government
+2026-03-26 01:02:22 | INFO     | main                      | Treasury Sync v5.2 — full sync...
+2026-03-26 01:02:22 | INFO     | main                      | Treasury Sync v5.2: starting full entity sync...
+2026-03-26 01:02:22 | INFO     | main                      | --- Layer 1: CoinGecko (PRIMARY) ---
+2026-03-26 01:02:22 | INFO     | main                      |   CoinGecko               -> 148 fetched, 147 unique
+2026-03-26 01:02:22 | INFO     | main                      | --- Layer 2: BitcoinTreasuries.net (SUPPLEMENT) ---
+2026-03-26 01:02:23 | INFO     | main                      |   Private Companies         ->   27 scraped,   24 new,    3 merged
+2026-03-26 01:02:24 | INFO     | main                      |   Government Entities       ->   12 scraped,   12 new,    0 merged
+2026-03-26 01:02:25 | INFO     | main                      |   ETFs and Exchanges        ->   47 scraped,   47 new,    0 merged
+2026-03-26 01:02:28 | INFO     | main                      |   DeFi and Other            ->   17 scraped,   15 new,    2 merged
+2026-03-26 01:02:31 | INFO     | main                      |   Public Companies          ->  269 scraped,  138 new,  131 merged
+2026-03-26 01:02:57 | INFO     | main                      | Treasury Sync COMPLETE: 383 unique entities, 2,182,083 BTC
+2026-03-26 01:02:57 | INFO     | main                      |   Breakdown: 285 public_company, 47 etf, 24 private_company, 15 defi, 12 government
