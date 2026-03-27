@@ -4641,3 +4641,15 @@
 2026-03-27 07:10:49 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 10","parameters":{"retry_after":10}}
 2026-03-27 07:10:50 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 9","parameters":{"retry_after":9}}
 2026-03-27 07:10:50 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 9","parameters":{"retry_after":9}}
+2026-03-27 09:02:09 | INFO     | main                      | Treasury Sync v5.2 — full sync...
+2026-03-27 09:02:09 | INFO     | main                      | Treasury Sync v5.2: starting full entity sync...
+2026-03-27 09:02:09 | INFO     | main                      | --- Layer 1: CoinGecko (PRIMARY) ---
+2026-03-27 09:02:09 | INFO     | main                      |   CoinGecko               -> 148 fetched, 147 unique
+2026-03-27 09:02:09 | INFO     | main                      | --- Layer 2: BitcoinTreasuries.net (SUPPLEMENT) ---
+2026-03-27 09:02:12 | INFO     | main                      |   Private Companies         ->   26 scraped,   23 new,    3 merged
+2026-03-27 09:02:12 | INFO     | main                      |   Government Entities       ->   12 scraped,   12 new,    0 merged
+2026-03-27 09:02:13 | INFO     | main                      |   ETFs and Exchanges        ->   47 scraped,   47 new,    0 merged
+2026-03-27 09:02:14 | INFO     | main                      |   DeFi and Other            ->   17 scraped,   15 new,    2 merged
+2026-03-27 09:02:16 | INFO     | main                      |   Public Companies          ->  268 scraped,  139 new,  129 merged
+2026-03-27 09:02:41 | INFO     | main                      | Treasury Sync COMPLETE: 383 unique entities, 2,151,710 BTC
+2026-03-27 09:02:41 | INFO     | main                      |   Breakdown: 286 public_company, 47 etf, 23 private_company, 15 defi, 12 government

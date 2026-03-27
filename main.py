@@ -46,6 +46,8 @@ import requests as req
 from price_predictor import predictor
 from treasury_sync import sync as treasury_sync
 from competitor_alerts import check_competitor_purchase
+from pro_briefing import send_pro_briefings
+from telegram_alerts import alerts as telegram_alerts
 #from velocity_tracker import velocity
 #velocity.run()
 
@@ -329,6 +331,18 @@ def send_daily_email():
         else:
             logger.debug(f"Daily briefing scheduled for 7am (current hour: {now.hour})")
 
+# Send personalized Pro briefings
+        try:
+            send_pro_briefings()
+        except Exception as e:
+            logger.debug(f"Pro briefing: {e}")
+
+        # Free channel: weekly summary on Mondays only
+        try:
+            if datetime.now().weekday() == 0:
+                telegram_alerts.send_weekly_summary()
+        except Exception as e:
+            logger.debug(f"Weekly summary: {e}")
 
 def send_daily_leaderboard():
     global last_leaderboard_date
