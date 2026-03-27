@@ -4408,3 +4408,236 @@
 2026-03-26 01:02:31 | INFO     | main                      |   Public Companies          ->  269 scraped,  138 new,  131 merged
 2026-03-26 01:02:57 | INFO     | main                      | Treasury Sync COMPLETE: 383 unique entities, 2,182,083 BTC
 2026-03-26 01:02:57 | INFO     | main                      |   Breakdown: 285 public_company, 47 etf, 24 private_company, 15 defi, 12 government
+2026-03-27 07:08:18 | INFO     | velocity_tracker          | Velocity Tracker: starting...
+2026-03-27 07:08:45 | INFO     | velocity_tracker          | Velocity Tracker: 383 snapshots recorded for 2026-03-27
+2026-03-27 07:08:54 | INFO     | velocity_tracker          | Velocity Tracker: 147 NEW ENTRANTS detected!
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 POP Culture Group Co. Ltd.  (CPOP.US): 300 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 KULR Technology Group (KULR.US): 1,056 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Bitmax Co (377030.KQ): 551 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 AsiaStrategy (SORA.US): 30 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Walnut Capital Limited (905.HK): 10 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 WonderFi (WNDR.TO): 39 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Merchant Bankers Co (MBK) (3121.T): 17 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Phoenix Group PLC (PHX.AD): 682 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Murano (MRNO): 21 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 S-Science Company (5721.T): 296 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Phoenix Digital Assets (PNIX.AQ): 247 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Aker ASA (AKER.OL): 754 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Block (XYZ.US): 8,780 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 WEMADE (112040.KQ): 223 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 XXI (XXI.US): 43,514 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Trump Media & Technology Group Corp. (DJT.US): 11,542 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 KindlyMD (NAKA.US): 5,398 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Hyperscale Data (GPUS.US): 627 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Méliuz (CASH3.SA): 604 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Coinbase Global (COIN.US): 15,389 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 ATAI Life Sciences N.V. (ATAI.US): 58 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Alliance Resource Partners, L.P. (ARLP.US): 541 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Genius Group (GNS.US): 180 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Metaplanet (3350.T): 35,102 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Neowiz holdings (042420.KQ): 123 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Gemini Space Station (GEMI.US): 5,304 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 YUXING (8005.HK): 78 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Tap Global (TAP.AQ): 5 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Hut 8 Mining Corp (HUT.US): 13,696 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 The Smarter Web Company PLC (SWC.AQ): 2,689 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 DigitalX (DCC.AX): 503 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 B HODL (HODL.AQ): 158 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Bitcoin Depot (BTM.US): 100 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 GSTechnologies (GST.L): 8 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 LM Funding America (LMFA.US): 356 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Matador Technologies (MATA.V): 175 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 DMG Blockchain Solutions (DMGI.V): 403 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 Tesla (TSLA.US): 11,509 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 BitMine Immersion (BMNR.US): 193 BTC
+2026-03-27 07:08:54 | INFO     | velocity_tracker          |   🆕 CIMG (IMG.US): 730 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Strive (ASST.US): 13,310 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Neptune Digital Assets (NDA.V): 410 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 CDT Equity  (CDT): 17 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Thumzup Media (TZUP.US): 9 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Sequans Communications S.A. (SQNS.US): 2,189 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 American Bitcoin (ABTC.US): 6,235 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Empery Digital (EMPD.US): 3,561 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 OranjeBTC (OBTC3.SA): 3,722 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 LIXTE Biotechnology (LIXT.US): 10 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 GD Culture Group (GDC.US): 7,500 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 HIVE Digital Technologies (HIVE.US): 210 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Remixpoint (3825.T): 1,411 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Canaan (CAN.US): 1,778 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Quantum Solutions (2338.T): 5 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 LQWD Technologies Corp. (LQWD.V): 252 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Vanadi Coffee, SA (VANA.MC): 183 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Nano Labs (NA.US): 1,000 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Ming Shing Group (MSW.US): 833 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Coinshares International Limited (CS.ST): 236 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 K33 AB (K33.ST): 141 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Galaxy Digital Holdings Ltd (GLXY.US): 18,400 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Green Minerals AS (GEM.OL): 4 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 CleanSpark (CLSK.US): 13,363 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 MARA Holdings (MARA.US): 38,689 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Circle Internet Group (CRCL.US): 74 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Prenetics (PRE.US): 510 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Exodus Movement (EXOD.US): 1,694 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Globant (GLOB): 15 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 The Brooker Group (BTC.BK): 164 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Capital B (ALCPB.PA): 2,888 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Bitcoin Treasury Corp (BTCT.V): 187 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Bit Digital (BTBT.US): 6 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Next Technology Holding (NXTT.US): 5,833 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Fold Holdings (FLD.US): 1,526 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 GameStop Corp. (GME.US): 4,710 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Boyaa Interactive International Limited (434.HK): 4,091 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 LiveOne (LVO.US): 43 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Sixty-Six Capital (SIX.CN): 148 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 H100 Group (GS9.F): 1,046 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Cathedra Bitcoin (CBIT.V): 7 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 ProCap BTC (BRR.US): 5,457 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 FRMO Corp. (FRMO.US): 159 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Where Food Comes From (WFCF): 7 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Strategy (MSTR.US): 762,099 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Mogo (MOGO.US): 50 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 NEXON Co., Ltd. (3659.T): 1,717 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 London Bitcoin Company (formerly Vinanz) (BTC.L): 85 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Moon Inc (1723.HK): 29 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Gumi Inc (3903.T): 80 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Coinsilium (COIN.AQ): 182 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Sphere 3D (ANY): 22 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 ZOOZ (ZOOZ.TA): 1,036 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Fragbite Group (FRAG.ST): 28 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Cango (CANG.US): 3,313 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 USBC (USBC.US): 1,000 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Bullish (BLSH.US): 24,400 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 DevvStream (DEVS): 22 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 3U Holding AG (UUU.DE): 427 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Net Holding A.S. (NTHOL.E.IS): 352 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 SBC Medical Group Holdings (SBC.US): 66 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 BitStrat Holdings (6113.HK): 43 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Vaultz Capital (V3TC.AQ): 135 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Gyet Co. (7603.T): 124 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 BITFUFU (FUFU.US): 1,764 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Jasmine International PCL (JAS.BK): 8 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Anap Holdings (3189.T): 1,346 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Banxa Holdings (BNXA.V): 136 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 DeFi Technologies (DEFI.NE): 251 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Bitcoin Group SE (ADE.DE): 3,605 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 BIGG Digital Assets (BIGG.V): 100 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 DDC Enterprise Limited (DDC.US): 2,383 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Hamak Strategy (HAMA.L): 20 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Bitplanet Co (049470.KQ): 265 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Parataxis Korea (288330.KQ): 200 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Convano (6574.T): 762 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Bitcoin Standard Treasury Company (CEPO.US): 30,021 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Bitfarms Ltd. (BITF.US): 1,658 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 TeraWulf (WULF.US): 4 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 RSXYZ PCL (XYZ.BK): 50 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 DigiPowerX (DGX.V): 112 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Norwegian Block Exchange (NBX.OL): 13 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Virtu Financial (VIRT.US): 410 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Kitabo (3409.T): 11 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Satsuma Technology (SATS.L): 620 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Riot Platforms (RIOT.US): 18,005 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Rumble (RUM.US): 210 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Yueda Digital Holding (YDKG.US): 819 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 AI Fusion Capital Group (254A.T): 37 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 OneMedNet Corporation (ONMD): 5 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Samara Asset Group (SRAG.DU): 540 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 The9 Limited (NTCY.US): 285 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Linekong Interactive Group Co., Ltd (8267.HK): 44 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 BTCS S.A. (BTF.WA): 137 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 333D (T3D.AX): 2 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 SOS Limited (SOS.US): 802 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Robin Energy (RBNE): 43 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Abits Group (ABTS): 15 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Microcloud Hologram (HOLO.US): 2,353 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 MercadoLibre (MELI.BA): 570 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 K Wave Media (KWM.US): 88 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Belgravia Hartford Capital (BLGV.CN): 83 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Horizon Kinetics Holding Corp (HKHC.US): 131 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Locate Technologies (LOC.AX): 12 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Core Scientific (CORZ.US): 613 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Cipher Mining (CIFR.US): 1,500 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 ðºð¸ (Â¿28): 2 BTC
+2026-03-27 07:08:55 | INFO     | velocity_tracker          |   🆕 Treasury (NEDSE.AS): 1,111 BTC
+2026-03-27 07:09:22 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 34","parameters":{"retry_after":34}}
+2026-03-27 07:09:23 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 33","parameters":{"retry_after":33}}
+2026-03-27 07:09:23 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 32","parameters":{"retry_after":32}}
+2026-03-27 07:09:24 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 32","parameters":{"retry_after":32}}
+2026-03-27 07:09:25 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 30","parameters":{"retry_after":30}}
+2026-03-27 07:09:25 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 31","parameters":{"retry_after":31}}
+2026-03-27 07:09:26 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 29","parameters":{"retry_after":29}}
+2026-03-27 07:09:27 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 29","parameters":{"retry_after":29}}
+2026-03-27 07:09:27 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 28","parameters":{"retry_after":28}}
+2026-03-27 07:09:28 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 28","parameters":{"retry_after":28}}
+2026-03-27 07:09:29 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 26","parameters":{"retry_after":26}}
+2026-03-27 07:09:29 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 27","parameters":{"retry_after":27}}
+2026-03-27 07:09:30 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 25","parameters":{"retry_after":25}}
+2026-03-27 07:09:30 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 26","parameters":{"retry_after":26}}
+2026-03-27 07:09:31 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 24","parameters":{"retry_after":24}}
+2026-03-27 07:09:32 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 24","parameters":{"retry_after":24}}
+2026-03-27 07:09:33 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 22","parameters":{"retry_after":22}}
+2026-03-27 07:09:33 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 23","parameters":{"retry_after":23}}
+2026-03-27 07:09:34 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 21","parameters":{"retry_after":21}}
+2026-03-27 07:09:35 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 21","parameters":{"retry_after":21}}
+2026-03-27 07:09:35 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 20","parameters":{"retry_after":20}}
+2026-03-27 07:09:36 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 20","parameters":{"retry_after":20}}
+2026-03-27 07:09:37 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 19","parameters":{"retry_after":19}}
+2026-03-27 07:09:37 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 19","parameters":{"retry_after":19}}
+2026-03-27 07:09:38 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 17","parameters":{"retry_after":17}}
+2026-03-27 07:09:38 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 18","parameters":{"retry_after":18}}
+2026-03-27 07:09:39 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 16","parameters":{"retry_after":16}}
+2026-03-27 07:09:39 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 17","parameters":{"retry_after":17}}
+2026-03-27 07:09:40 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 15","parameters":{"retry_after":15}}
+2026-03-27 07:09:41 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 15","parameters":{"retry_after":15}}
+2026-03-27 07:09:41 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 14","parameters":{"retry_after":14}}
+2026-03-27 07:09:42 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 14","parameters":{"retry_after":14}}
+2026-03-27 07:09:43 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 12","parameters":{"retry_after":12}}
+2026-03-27 07:09:43 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 13","parameters":{"retry_after":13}}
+2026-03-27 07:09:44 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 11","parameters":{"retry_after":11}}
+2026-03-27 07:09:44 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 12","parameters":{"retry_after":12}}
+2026-03-27 07:09:45 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 10","parameters":{"retry_after":10}}
+2026-03-27 07:09:45 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 11","parameters":{"retry_after":11}}
+2026-03-27 07:09:46 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 9","parameters":{"retry_after":9}}
+2026-03-27 07:09:46 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 10","parameters":{"retry_after":10}}
+2026-03-27 07:09:55 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 3","parameters":{"retry_after":3}}
+2026-03-27 07:10:25 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 34","parameters":{"retry_after":34}}
+2026-03-27 07:10:26 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 33","parameters":{"retry_after":33}}
+2026-03-27 07:10:27 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 33","parameters":{"retry_after":33}}
+2026-03-27 07:10:27 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 32","parameters":{"retry_after":32}}
+2026-03-27 07:10:28 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 31","parameters":{"retry_after":31}}
+2026-03-27 07:10:29 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 31","parameters":{"retry_after":31}}
+2026-03-27 07:10:29 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 30","parameters":{"retry_after":30}}
+2026-03-27 07:10:30 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 29","parameters":{"retry_after":29}}
+2026-03-27 07:10:31 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 29","parameters":{"retry_after":29}}
+2026-03-27 07:10:31 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 28","parameters":{"retry_after":28}}
+2026-03-27 07:10:32 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 27","parameters":{"retry_after":27}}
+2026-03-27 07:10:32 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 27","parameters":{"retry_after":27}}
+2026-03-27 07:10:33 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 26","parameters":{"retry_after":26}}
+2026-03-27 07:10:34 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 26","parameters":{"retry_after":26}}
+2026-03-27 07:10:34 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 25","parameters":{"retry_after":25}}
+2026-03-27 07:10:35 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 24","parameters":{"retry_after":24}}
+2026-03-27 07:10:36 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 24","parameters":{"retry_after":24}}
+2026-03-27 07:10:36 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 23","parameters":{"retry_after":23}}
+2026-03-27 07:10:37 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 22","parameters":{"retry_after":22}}
+2026-03-27 07:10:37 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 22","parameters":{"retry_after":22}}
+2026-03-27 07:10:38 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 21","parameters":{"retry_after":21}}
+2026-03-27 07:10:38 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 21","parameters":{"retry_after":21}}
+2026-03-27 07:10:39 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 20","parameters":{"retry_after":20}}
+2026-03-27 07:10:40 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 20","parameters":{"retry_after":20}}
+2026-03-27 07:10:40 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 19","parameters":{"retry_after":19}}
+2026-03-27 07:10:41 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 18","parameters":{"retry_after":18}}
+2026-03-27 07:10:42 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 18","parameters":{"retry_after":18}}
+2026-03-27 07:10:42 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 17","parameters":{"retry_after":17}}
+2026-03-27 07:10:43 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 16","parameters":{"retry_after":16}}
+2026-03-27 07:10:43 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 16","parameters":{"retry_after":16}}
+2026-03-27 07:10:44 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 15","parameters":{"retry_after":15}}
+2026-03-27 07:10:44 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 15","parameters":{"retry_after":15}}
+2026-03-27 07:10:45 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 14","parameters":{"retry_after":14}}
+2026-03-27 07:10:45 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 14","parameters":{"retry_after":14}}
+2026-03-27 07:10:46 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 13","parameters":{"retry_after":13}}
+2026-03-27 07:10:47 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 12","parameters":{"retry_after":12}}
+2026-03-27 07:10:47 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 12","parameters":{"retry_after":12}}
+2026-03-27 07:10:48 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 11","parameters":{"retry_after":11}}
+2026-03-27 07:10:49 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 10","parameters":{"retry_after":10}}
+2026-03-27 07:10:49 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 10","parameters":{"retry_after":10}}
+2026-03-27 07:10:50 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003891860984: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 9","parameters":{"retry_after":9}}
+2026-03-27 07:10:50 | ERROR    | telegram_bot              | Telegram API returned 429 for channel -1003549335711: {"ok":false,"error_code":429,"description":"Too Many Requests: retry after 9","parameters":{"retry_after":9}}

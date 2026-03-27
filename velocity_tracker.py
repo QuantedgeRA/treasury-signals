@@ -136,9 +136,15 @@ class VelocityTracker:
 
             if self._new_entrants:
                 logger.info(f"Velocity Tracker: {len(self._new_entrants)} NEW ENTRANTS detected!")
-                for ne in self._new_entrants:
+                for ne in self._new_entrants[:5]:
                     logger.info(f"  🆕 {ne['company']} ({ne['ticker']}): {ne['btc_holdings']:,} BTC")
-                self._send_new_entrant_alerts()
+                if len(self._new_entrants) > 5:
+                    logger.info(f"  ... and {len(self._new_entrants) - 5} more")
+                # Only send alerts if fewer than 10 new entrants (skip first-run flood)
+                if len(self._new_entrants) <= 10:
+                    self._send_new_entrant_alerts()
+                else:
+                    logger.info(f"Velocity Tracker: skipping alerts for {len(self._new_entrants)} entrants (first run / bulk load)")
         else:
             logger.info("Velocity Tracker: no previous data yet — new entrant detection starts tomorrow")
 
