@@ -4938,3 +4938,8 @@
 2026-03-30 17:49:33 | INFO     | entity_name_fixer         |   Name fix: scraped 16 DeFi from website
 2026-03-30 17:49:33 | DEBUG    | entity_name_fixer         |   Name fix: no garbled DeFi found
 2026-03-30 17:49:33 | INFO     | entity_name_fixer         | Name fix total: 67 entities updated
+2026-03-30 18:01:23 | INFO     | entity_name_fixer         |   Name fix: scraped 44 ETFs from website
+2026-03-30 18:01:24 | INFO     | entity_name_fixer         |   Name fix: scraped 72 Private Companies from website
+2026-03-30 18:01:24 | DEBUG    | entity_name_fixer         |   Name fix: no garbled Private Companies found
+2026-03-30 18:01:25 | INFO     | entity_name_fixer         |   Name fix: scraped 16 DeFi from website
+2026-03-30 18:01:25 | DEBUG    | entity_name_fixer         |   Name fix: no garbled DeFi found

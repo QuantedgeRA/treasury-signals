@@ -188,8 +188,12 @@ def fix_entity_names(supabase_client=None):
             current_name = row.get("company", "")
             best_btc = row["_real_btc"] if row["_real_btc"] > 0 else target["btc"]
 
+            # Clean non-ASCII junk from scraped names
+            clean_name = re.sub(r'[^\x20-\x7E]', '', target_name).strip()
+            if not clean_name:
+                clean_name = target_name[:200]
             supabase_client.table("treasury_companies").update({
-                "company": target["name"][:200],
+                "company": clean_name[:200],
                 "btc_holdings": best_btc,
             }).eq("id", row["id"]).execute()
             logger.info(f"  Name fix: '{current_name[:20]}' → '{target['name']}' ({best_btc:,} BTC)")
