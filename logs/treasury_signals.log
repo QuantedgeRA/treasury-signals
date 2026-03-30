@@ -4943,3 +4943,408 @@
 2026-03-30 18:01:24 | DEBUG    | entity_name_fixer         |   Name fix: no garbled Private Companies found
 2026-03-30 18:01:25 | INFO     | entity_name_fixer         |   Name fix: scraped 16 DeFi from website
 2026-03-30 18:01:25 | DEBUG    | entity_name_fixer         |   Name fix: no garbled DeFi found
+2026-03-30 18:15:26 | INFO     | shares_updater            | Shares updater: starting (all public companies)...
+2026-03-30 18:15:27 | INFO     | shares_updater            |   Found 285 public companies to check
+2026-03-30 18:17:15 | INFO     | shares_updater            | Shares updater: 143 updated, 13 errors, 129 skipped
+2026-03-30 18:22:32 | INFO     | gov_entities              |   Gov scrape: fetched 16 BTC amounts from website
+2026-03-30 18:22:40 | INFO     | entity_name_fixer         |   Name fix: scraped 44 ETFs from website
+2026-03-30 18:22:43 | INFO     | shares_updater            | Shares updater: starting (all public companies)...
+2026-03-30 18:22:44 | INFO     | shares_updater            |   Found 285 public companies to check
+2026-03-30 18:24:28 | INFO     | shares_updater            | Shares updater: 143 updated, 13 errors, 129 skipped
+2026-03-30 18:36:40 | INFO     | database                  | Supabase connection initialized
+2026-03-30 18:36:42 | INFO     | main                      | ============================================================
+2026-03-30 18:36:42 | INFO     | main                      | TREASURY PURCHASE SIGNAL INTELLIGENCE v2.0
+2026-03-30 18:36:42 | INFO     | main                      | ============================================================
+2026-03-30 18:36:43 | INFO     | main                      | Database already seeded
+2026-03-30 18:36:43 | INFO     | main                      | Monitoring 24 X accounts
+2026-03-30 18:36:43 | INFO     | main                      | Monitoring 11 companies on SEC EDGAR
+2026-03-30 18:36:43 | INFO     | main                      | STRC volume tracking: ACTIVE
+2026-03-30 18:36:43 | INFO     | main                      | Correlation Engine: ACTIVE
+2026-03-30 18:36:43 | INFO     | main                      | Auto-Prediction Logging: ACTIVE
+2026-03-30 18:36:43 | INFO     | main                      | Daily Email Briefing: ACTIVE (subscriber-based)
+2026-03-30 18:36:43 | INFO     | main                      | Daily Leaderboard: ACTIVE
+2026-03-30 18:36:43 | INFO     | main                      | ================================================== SCAN #1 ==================================================
+2026-03-30 18:36:43 | INFO     | main                      | Scan #1 | [1/11] Fetching tweets...
+2026-03-30 18:36:43 | DEBUG    | main                      | Scanning @saylor (Strategy (MSTR))...
+2026-03-30 18:36:49 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @saylor: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:36:50 | DEBUG    | main                      | @saylor: no tweets returned
+2026-03-30 18:36:50 | DEBUG    | main                      | Scanning @Strategy (Strategy (MSTR))...
+2026-03-30 18:36:56 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @Strategy: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:36:56 | DEBUG    | main                      | @Strategy: no tweets returned
+2026-03-30 18:36:56 | DEBUG    | main                      | Scanning @MARAHoldings (MARA Holdings)...
+2026-03-30 18:37:02 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @MARAHoldings: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:37:02 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 3 consecutive failures — HTTP 402 for @MARAHoldings
+2026-03-30 18:37:02 | DEBUG    | main                      | @MARAHoldings: no tweets returned
+2026-03-30 18:37:02 | DEBUG    | main                      | Scanning @fgthiel (MARA Holdings - CEO)...
+2026-03-30 18:37:08 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @fgthiel: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:37:08 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 4 consecutive failures — HTTP 402 for @fgthiel
+2026-03-30 18:37:08 | DEBUG    | main                      | @fgthiel: no tweets returned
+2026-03-30 18:37:08 | DEBUG    | main                      | Scanning @TwentyOneCap (Twenty One Capital (XXI))...
+2026-03-30 18:37:14 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @TwentyOneCap: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:37:14 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 5 consecutive failures — HTTP 402 for @TwentyOneCap
+2026-03-30 18:37:14 | DEBUG    | main                      | @TwentyOneCap: no tweets returned
+2026-03-30 18:37:14 | DEBUG    | main                      | Scanning @Metaplanet (Metaplanet Inc.)...
+2026-03-30 18:37:20 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @Metaplanet: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:37:20 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 6 consecutive failures — HTTP 402 for @Metaplanet
+2026-03-30 18:37:20 | DEBUG    | main                      | @Metaplanet: no tweets returned
+2026-03-30 18:37:20 | DEBUG    | main                      | Scanning @gerovich (Metaplanet - CEO)...
+2026-03-30 18:37:27 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @gerovich: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:37:27 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 7 consecutive failures — HTTP 402 for @gerovich
+2026-03-30 18:37:27 | DEBUG    | main                      | @gerovich: no tweets returned
+2026-03-30 18:37:27 | DEBUG    | main                      | Scanning @RiotPlatforms (Riot Platforms (RIOT))...
+2026-03-30 18:37:33 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @RiotPlatforms: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:37:33 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 8 consecutive failures — HTTP 402 for @RiotPlatforms
+2026-03-30 18:37:33 | DEBUG    | main                      | @RiotPlatforms: no tweets returned
+2026-03-30 18:37:33 | DEBUG    | main                      | Scanning @coinbase (Coinbase Global (COIN))...
+2026-03-30 18:37:39 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @coinbase: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:37:39 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 9 consecutive failures — HTTP 402 for @coinbase
+2026-03-30 18:37:39 | DEBUG    | main                      | @coinbase: no tweets returned
+2026-03-30 18:37:39 | DEBUG    | main                      | Scanning @Hut8Corp (Hut 8 Mining (HUT))...
+2026-03-30 18:37:45 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @Hut8Corp: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:37:45 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 10 consecutive failures — HTTP 402 for @Hut8Corp
+2026-03-30 18:37:45 | DEBUG    | main                      | @Hut8Corp: no tweets returned
+2026-03-30 18:37:45 | DEBUG    | main                      | Scanning @CleanSpark_Inc (CleanSpark (CLSK))...
+2026-03-30 18:37:51 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @CleanSpark_Inc: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:37:52 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 11 consecutive failures — HTTP 402 for @CleanSpark_Inc
+2026-03-30 18:37:52 | DEBUG    | main                      | @CleanSpark_Inc: no tweets returned
+2026-03-30 18:37:52 | DEBUG    | main                      | Scanning @VivekGRamaswamy (Strive (ASST))...
+2026-03-30 18:37:58 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @VivekGRamaswamy: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:37:58 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 12 consecutive failures — HTTP 402 for @VivekGRamaswamy
+2026-03-30 18:37:58 | DEBUG    | main                      | @VivekGRamaswamy: no tweets returned
+2026-03-30 18:37:58 | DEBUG    | main                      | Scanning @Tesla (Tesla (TSLA))...
+2026-03-30 18:38:04 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @Tesla: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:38:04 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 13 consecutive failures — HTTP 402 for @Tesla
+2026-03-30 18:38:04 | DEBUG    | main                      | @Tesla: no tweets returned
+2026-03-30 18:38:04 | DEBUG    | main                      | Scanning @GameStop (GameStop (GME))...
+2026-03-30 18:38:10 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @GameStop: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:38:10 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 14 consecutive failures — HTTP 402 for @GameStop
+2026-03-30 18:38:10 | DEBUG    | main                      | @GameStop: no tweets returned
+2026-03-30 18:38:10 | DEBUG    | main                      | Scanning @GalaxyDigitalHQ (Galaxy Digital (GLXY))...
+2026-03-30 18:38:17 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @GalaxyDigitalHQ: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:38:17 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 15 consecutive failures — HTTP 402 for @GalaxyDigitalHQ
+2026-03-30 18:38:17 | DEBUG    | main                      | @GalaxyDigitalHQ: no tweets returned
+2026-03-30 18:38:17 | DEBUG    | main                      | Scanning @CoreScientific (Core Scientific (CORZ))...
+2026-03-30 18:38:23 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @CoreScientific: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:38:23 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 16 consecutive failures — HTTP 402 for @CoreScientific
+2026-03-30 18:38:23 | DEBUG    | main                      | @CoreScientific: no tweets returned
+2026-03-30 18:38:23 | DEBUG    | main                      | Scanning @Bitfarms (Bitfarms (BITF))...
+2026-03-30 18:38:29 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @Bitfarms: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:38:29 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 17 consecutive failures — HTTP 402 for @Bitfarms
+2026-03-30 18:38:29 | DEBUG    | main                      | @Bitfarms: no tweets returned
+2026-03-30 18:38:29 | DEBUG    | main                      | Scanning @CanaanInc (Canaan Inc. (CAN))...
+2026-03-30 18:38:35 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @CanaanInc: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:38:35 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 18 consecutive failures — HTTP 402 for @CanaanInc
+2026-03-30 18:38:35 | DEBUG    | main                      | @CanaanInc: no tweets returned
+2026-03-30 18:38:35 | DEBUG    | main                      | Scanning @CipherMining (Cipher Mining (CIFR))...
+2026-03-30 18:38:41 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @CipherMining: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:38:41 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 19 consecutive failures — HTTP 402 for @CipherMining
+2026-03-30 18:38:41 | DEBUG    | main                      | @CipherMining: no tweets returned
+2026-03-30 18:38:41 | DEBUG    | main                      | Scanning @KULRTech (KULR Technology (KULR))...
+2026-03-30 18:38:47 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @KULRTech: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:38:47 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 20 consecutive failures — HTTP 402 for @KULRTech
+2026-03-30 18:38:47 | DEBUG    | main                      | @KULRTech: no tweets returned
+2026-03-30 18:38:47 | DEBUG    | main                      | Scanning @ExodusMovement (Exodus Movement (EXOD))...
+2026-03-30 18:38:53 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @ExodusMovement: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:38:54 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 21 consecutive failures — HTTP 402 for @ExodusMovement
+2026-03-30 18:38:54 | DEBUG    | main                      | @ExodusMovement: no tweets returned
+2026-03-30 18:38:54 | DEBUG    | main                      | Scanning @TeraWulf (TeraWulf (WULF))...
+2026-03-30 18:39:00 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @TeraWulf: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:39:00 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 22 consecutive failures — HTTP 402 for @TeraWulf
+2026-03-30 18:39:00 | DEBUG    | main                      | @TeraWulf: no tweets returned
+2026-03-30 18:39:00 | DEBUG    | main                      | Scanning @HIVEDigiTech (HIVE Digital (HIVE))...
+2026-03-30 18:39:06 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @HIVEDigiTech: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:39:06 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 23 consecutive failures — HTTP 402 for @HIVEDigiTech
+2026-03-30 18:39:06 | DEBUG    | main                      | @HIVEDigiTech: no tweets returned
+2026-03-30 18:39:06 | DEBUG    | main                      | Scanning @BlockInc (Block Inc. (XYZ))...
+2026-03-30 18:39:12 | ERROR    | twitter_client            | TwitterAPI returned status 402 for @BlockInc: {"error":"Unauthorized","message":"Credits is not enough.Please recharge"}
+2026-03-30 18:39:12 | WARNING  | freshness_tracker         | Freshness: twitter_api ❌ 24 consecutive failures — HTTP 402 for @BlockInc
+2026-03-30 18:39:12 | DEBUG    | main                      | @BlockInc: no tweets returned
+2026-03-30 18:39:12 | INFO     | main                      | Tweets: 0 new, 0 duplicates
+2026-03-30 18:39:12 | DEBUG    | main                      | Scan #1 | [1/11] Fetching tweets completed in 149.6s
+2026-03-30 18:39:12 | INFO     | main                      | Scan #1 | [2/11] Classifying + alerting...
+2026-03-30 18:39:13 | DEBUG    | freshness_tracker         | Freshness: supabase ✅ Fetched 0 unprocessed tweets
+2026-03-30 18:39:13 | INFO     | main                      | No new tweets to classify
+2026-03-30 18:39:13 | DEBUG    | main                      | Scan #1 | [2/11] Classifying + alerting completed in 0.8s
+2026-03-30 18:39:13 | INFO     | main                      | Scan #1 | [3/11] STRC issuance volume...
+2026-03-30 18:39:14 | DEBUG    | strc_tracker              | STRC: $99.96 | Vol: 2,098,609 (209.8M) | Ratio: 0.85x
+2026-03-30 18:39:14 | DEBUG    | freshness_tracker         | Freshness: strc_yfinance ✅ $99.96 | 209.8M vol | 0.85x
+2026-03-30 18:39:14 | INFO     | main                      | STRC: $209.8M volume, 0.85x avg — ✅ NORMAL
+2026-03-30 18:39:14 | DEBUG    | main                      | Scan #1 | [3/11] STRC issuance volume completed in 0.8s
+2026-03-30 18:39:14 | INFO     | main                      | Scan #1 | [4/11] SEC EDGAR 8-K filings...
+2026-03-30 18:39:14 | DEBUG    | edgar_monitor             | Checking Strategy (MSTR) on EDGAR...
+2026-03-30 18:39:14 | INFO     | edgar_monitor             | EDGAR: Strategy (MSTR) has 1 recent 8-K(s)
+2026-03-30 18:39:15 | DEBUG    | edgar_monitor             | Checking MARA Holdings on EDGAR...
+2026-03-30 18:39:15 | DEBUG    | edgar_monitor             | EDGAR: MARA Holdings — no recent 8-K filings
+2026-03-30 18:39:15 | DEBUG    | edgar_monitor             | Checking Riot Platforms on EDGAR...
+2026-03-30 18:39:16 | DEBUG    | edgar_monitor             | EDGAR: Riot Platforms — no recent 8-K filings
+2026-03-30 18:39:16 | DEBUG    | edgar_monitor             | Checking CleanSpark on EDGAR...
+2026-03-30 18:39:16 | DEBUG    | edgar_monitor             | EDGAR: CleanSpark — no recent 8-K filings
+2026-03-30 18:39:16 | DEBUG    | edgar_monitor             | Checking Tesla on EDGAR...
+2026-03-30 18:39:16 | DEBUG    | edgar_monitor             | EDGAR: Tesla — no recent 8-K filings
+2026-03-30 18:39:16 | DEBUG    | edgar_monitor             | Checking Coinbase Global on EDGAR...
+2026-03-30 18:39:17 | DEBUG    | edgar_monitor             | EDGAR: Coinbase Global — no recent 8-K filings
+2026-03-30 18:39:17 | DEBUG    | edgar_monitor             | Checking Hut 8 Mining on EDGAR...
+2026-03-30 18:39:17 | DEBUG    | edgar_monitor             | EDGAR: Hut 8 Mining — no recent 8-K filings
+2026-03-30 18:39:17 | DEBUG    | edgar_monitor             | Checking GameStop on EDGAR...
+2026-03-30 18:39:18 | DEBUG    | edgar_monitor             | EDGAR: GameStop — no recent 8-K filings
+2026-03-30 18:39:18 | DEBUG    | edgar_monitor             | Checking Core Scientific on EDGAR...
+2026-03-30 18:39:18 | DEBUG    | edgar_monitor             | EDGAR: Core Scientific — no recent 8-K filings
+2026-03-30 18:39:18 | DEBUG    | edgar_monitor             | Checking Bitfarms on EDGAR...
+2026-03-30 18:39:18 | DEBUG    | edgar_monitor             | EDGAR: Bitfarms — no recent 8-K filings
+2026-03-30 18:39:18 | DEBUG    | edgar_monitor             | Checking KULR Technology on EDGAR...
+2026-03-30 18:39:19 | DEBUG    | edgar_monitor             | EDGAR: KULR Technology — no recent 8-K filings
+2026-03-30 18:39:19 | INFO     | edgar_monitor             | EDGAR scan complete: 1 noteworthy filing(s)
+2026-03-30 18:39:19 | DEBUG    | freshness_tracker         | Freshness: sec_edgar ✅ 1 noteworthy filing(s)
+2026-03-30 18:39:19 | DEBUG    | correlation_engine        | EDGAR filing added: Strategy (MSTR) (MSTR) btc_related=False
+2026-03-30 18:39:19 | INFO     | accuracy_tracker          | Prediction logged: pred_MSTR_20260330_183919 (edgar_8k, score: 40)
+2026-03-30 18:39:19 | INFO     | main                      | EDGAR: HIGH-PRIORITY — Strategy (MSTR) filed 8-K on 2026-03-30
+2026-03-30 18:39:20 | INFO     | telegram_bot              | EDGAR alert sent to PAID channel
+2026-03-30 18:39:20 | INFO     | main                      | EDGAR: 1 noteworthy filing(s), 1 new alert(s)
+2026-03-30 18:39:20 | DEBUG    | main                      | Scan #1 | [4/11] SEC EDGAR 8-K filings completed in 5.7s
+2026-03-30 18:39:20 | INFO     | main                      | Scan #1 | [5/11] Correlation Engine...
+2026-03-30 18:39:20 | DEBUG    | correlation_engine        | Correlation: 20/100 | 1/4 streams | ⚪ NONE
+2026-03-30 18:39:20 | INFO     | main                      | Correlation: 20/100 | 1/4 streams | ⚪ NONE
+2026-03-30 18:39:20 | DEBUG    | main                      |   Strategy (MSTR) 8-K filing detected
+2026-03-30 18:39:20 | DEBUG    | freshness_tracker         | Freshness: fear_greed ✅ Value: 8 (Extreme Fear)
+2026-03-30 18:39:20 | INFO     | market_intelligence       | Risk dashboard: HIGH | F&G: 8 | Vol: 50.4%
+2026-03-30 18:39:20 | DEBUG    | strc_tracker              | STRC: $99.96 | Vol: 2,098,609 (209.8M) | Ratio: 0.85x
+2026-03-30 18:39:20 | DEBUG    | freshness_tracker         | Freshness: strc_yfinance ✅ $99.96 | 209.8M vol | 0.85x
+2026-03-30 18:39:20 | INFO     | main                      | Pattern Match: 13/100 (1/8 patterns)
+2026-03-30 18:39:20 | INFO     | main                      |   ✅ Fear-Based Accumulation: Fear & Greed at 8 (extreme fear zone)
+2026-03-30 18:39:20 | DEBUG    | main                      | Scan #1 | [5/11] Correlation Engine completed in 0.3s
+2026-03-30 18:39:20 | INFO     | main                      | Scan #1 | [6/11] Daily email briefing...
+2026-03-30 18:39:20 | INFO     | main                      | No subscribers in DB — using fallback list (1 recipients)
+2026-03-30 18:39:20 | INFO     | email_briefing            | Generating executive briefing v5.0 (personalized CEO intelligence)...
+2026-03-30 18:39:20 | DEBUG    | freshness_tracker         | Freshness: btc_yfinance ✅ BTC $66,695
+2026-03-30 18:39:20 | DEBUG    | freshness_tracker         | Provenance: btc_price → Yahoo Finance (live)
+2026-03-30 18:39:21 | DEBUG    | freshness_tracker         | Freshness: mstr_yfinance ✅ MSTR $121.44
+2026-03-30 18:39:21 | DEBUG    | freshness_tracker         | Provenance: mstr_price → Yahoo Finance (live)
+2026-03-30 18:39:21 | DEBUG    | strc_tracker              | STRC: $99.96 | Vol: 2,098,609 (209.8M) | Ratio: 0.85x
+2026-03-30 18:39:21 | DEBUG    | freshness_tracker         | Freshness: strc_yfinance ✅ $99.96 | 209.8M vol | 0.85x
+2026-03-30 18:39:21 | DEBUG    | treasury_leaderboard      | Trying CoinGecko public companies API...
+2026-03-30 18:39:21 | INFO     | treasury_leaderboard      | CoinGecko LIVE: 148 companies fetched
+2026-03-30 18:39:21 | DEBUG    | freshness_tracker         | Freshness: coingecko ✅ 148 companies fetched
+2026-03-30 18:39:21 | DEBUG    | freshness_tracker         | Provenance: leaderboard_corporate → CoinGecko API (live)
+2026-03-30 18:39:21 | DEBUG    | treasury_leaderboard      | Trying BitcoinTreasuries.net sovereign API...
+2026-03-30 18:39:22 | WARNING  | treasury_leaderboard      | BitcoinTreasuries.net sovereign API failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/countries (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001382CEA3DD0>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-30 18:39:22 | DEBUG    | treasury_leaderboard      | Trying CoinGecko government holdings...
+2026-03-30 18:39:22 | DEBUG    | treasury_leaderboard      | Scanning news for sovereign BTC updates...
+2026-03-30 18:39:25 | INFO     | treasury_leaderboard      | Found 1 sovereign updates from news
+2026-03-30 18:39:25 | DEBUG    | freshness_tracker         | Provenance: leaderboard_sovereign → Google News (auto-detected) (live)
+2026-03-30 18:39:26 | INFO     | purchase_tracker          | Scanning news for recent BTC purchases...
+2026-03-30 18:39:34 | INFO     | purchase_tracker          | Found 5 purchase(s) in news
+2026-03-30 18:39:34 | DEBUG    | freshness_tracker         | Freshness: google_news_purchases ✅ 5 purchases found
+2026-03-30 18:39:34 | DEBUG    | purchase_tracker          |   Strategy: 1,000 BTC (~$72M) on 2026-03-30
+2026-03-30 18:39:34 | DEBUG    | purchase_tracker          |   El Salvador Government: 7,600 BTC (~$547M) on 2026-03-30
+2026-03-30 18:39:34 | DEBUG    | purchase_tracker          |   Strategy: 22,222 BTC (~$1,600M) on 2026-03-25
+2026-03-30 18:39:34 | DEBUG    | purchase_tracker          |   Strategy: 1,031 BTC (~$74M) on 2026-03-23
+2026-03-30 18:39:34 | DEBUG    | purchase_tracker          |   BlackRock: 8,333 BTC (~$600M) on 2026-03-16
+2026-03-30 18:39:35 | DEBUG    | purchase_tracker          | Could not auto-save news purchase: {'message': 'duplicate key value violates unique constraint "confirmed_purchases_purchase_id_key"', 'code': '23505', 'hint': None, 'details': 'Key (purchase_id)=(news_MSTR_2026-03-30) already exists.'}
+2026-03-30 18:39:36 | DEBUG    | purchase_tracker          | Could not auto-save news purchase: {'message': 'duplicate key value violates unique constraint "confirmed_purchases_purchase_id_key"', 'code': '23505', 'hint': None, 'details': 'Key (purchase_id)=(news_SV-GOV_2026-03-30) already exists.'}
+2026-03-30 18:39:36 | DEBUG    | purchase_tracker          | Could not auto-save news purchase: {'message': 'duplicate key value violates unique constraint "confirmed_purchases_purchase_id_key"', 'code': '23505', 'hint': None, 'details': 'Key (purchase_id)=(news_MSTR_2026-03-25) already exists.'}
+2026-03-30 18:39:36 | DEBUG    | purchase_tracker          | Could not auto-save news purchase: {'message': 'duplicate key value violates unique constraint "confirmed_purchases_purchase_id_key"', 'code': '23505', 'hint': None, 'details': 'Key (purchase_id)=(news_MSTR_2026-03-23) already exists.'}
+2026-03-30 18:39:36 | DEBUG    | purchase_tracker          | Could not auto-save news purchase: {'message': 'duplicate key value violates unique constraint "confirmed_purchases_purchase_id_key"', 'code': '23505', 'hint': None, 'details': 'Key (purchase_id)=(news_BLK_2026-03-16) already exists.'}
+2026-03-30 18:39:36 | INFO     | purchase_tracker          | Scanning news for recent BTC purchases...
+2026-03-30 18:39:38 | INFO     | purchase_tracker          | Found 5 purchase(s) in news
+2026-03-30 18:39:38 | DEBUG    | freshness_tracker         | Freshness: google_news_purchases ✅ 5 purchases found
+2026-03-30 18:39:38 | DEBUG    | purchase_tracker          |   Strategy: 1,000 BTC (~$72M) on 2026-03-30
+2026-03-30 18:39:38 | DEBUG    | purchase_tracker          |   El Salvador Government: 7,600 BTC (~$547M) on 2026-03-30
+2026-03-30 18:39:38 | DEBUG    | purchase_tracker          |   Strategy: 22,222 BTC (~$1,600M) on 2026-03-25
+2026-03-30 18:39:38 | DEBUG    | purchase_tracker          |   Strategy: 1,031 BTC (~$74M) on 2026-03-23
+2026-03-30 18:39:38 | DEBUG    | purchase_tracker          |   BlackRock: 8,333 BTC (~$600M) on 2026-03-16
+2026-03-30 18:39:38 | DEBUG    | purchase_tracker          | Could not auto-save news purchase: {'message': 'duplicate key value violates unique constraint "confirmed_purchases_purchase_id_key"', 'code': '23505', 'hint': None, 'details': 'Key (purchase_id)=(news_MSTR_2026-03-30) already exists.'}
+2026-03-30 18:39:38 | DEBUG    | purchase_tracker          | Could not auto-save news purchase: {'message': 'duplicate key value violates unique constraint "confirmed_purchases_purchase_id_key"', 'code': '23505', 'hint': None, 'details': 'Key (purchase_id)=(news_SV-GOV_2026-03-30) already exists.'}
+2026-03-30 18:39:38 | DEBUG    | purchase_tracker          | Could not auto-save news purchase: {'message': 'duplicate key value violates unique constraint "confirmed_purchases_purchase_id_key"', 'code': '23505', 'hint': None, 'details': 'Key (purchase_id)=(news_MSTR_2026-03-25) already exists.'}
+2026-03-30 18:39:38 | DEBUG    | purchase_tracker          | Could not auto-save news purchase: {'message': 'duplicate key value violates unique constraint "confirmed_purchases_purchase_id_key"', 'code': '23505', 'hint': None, 'details': 'Key (purchase_id)=(news_MSTR_2026-03-23) already exists.'}
+2026-03-30 18:39:39 | DEBUG    | purchase_tracker          | Could not auto-save news purchase: {'message': 'duplicate key value violates unique constraint "confirmed_purchases_purchase_id_key"', 'code': '23505', 'hint': None, 'details': 'Key (purchase_id)=(news_BLK_2026-03-16) already exists.'}
+2026-03-30 18:39:39 | DEBUG    | correlation_engine        | Correlation: 0/100 | 0/4 streams | ⚪ NONE
+2026-03-30 18:39:39 | DEBUG    | freshness_tracker         | Freshness: fear_greed ✅ Value: 8 (Extreme Fear)
+2026-03-30 18:39:39 | INFO     | market_intelligence       | Risk dashboard: HIGH | F&G: 8 | Vol: 50.4%
+2026-03-30 18:39:39 | INFO     | email_briefing            | Pattern match for email: 23/100 (2 patterns)
+2026-03-30 18:39:39 | INFO     | market_intelligence       | Action signal: 🟡 WAIT (score: 18)
+2026-03-30 18:39:41 | WARNING  | narrative_engine          | Claude API call failed: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CZa9Vnb3QsJPUCwkNTex2'}
+2026-03-30 18:39:41 | DEBUG    | narrative_engine          | Using fallback summary (LLM unavailable)
+2026-03-30 18:39:41 | WARNING  | narrative_engine          | Claude API call failed: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CZa9VoKCgrMbaHs2td6ob'}
+2026-03-30 18:39:41 | INFO     | email_briefing            | LLM narratives: daily, pattern (526 chars)
+2026-03-30 18:39:41 | INFO     | email_briefing            | Briefing: BTC $66,695 | Action: 🟡 WAIT | Risk: HIGH
+2026-03-30 18:39:41 | INFO     | email_briefing            | Briefing: 149 companies | 100 reg items | 0.0% hit rate
+2026-03-30 18:39:41 | INFO     | email_briefing            | Email sent to contact@quantedgeriskadvisory.com from briefing@quantedgeriskadvisory.com: ce051820-a2da-4d3e-a5e1-3ede5b80fa61
+2026-03-30 18:39:41 | INFO     | main                      | Briefing sent to contact@quantedgeriskadvisory.com
+2026-03-30 18:39:41 | DEBUG    | main                      | Scan #1 | [6/11] Daily email briefing completed in 21.2s
+2026-03-30 18:39:41 | INFO     | main                      | Scan #1 | [7/11] Daily leaderboard...
+2026-03-30 18:39:41 | INFO     | main                      | Sending daily leaderboard to Telegram...
+2026-03-30 18:39:41 | DEBUG    | treasury_leaderboard      | Using cached leaderboard data (less than 1 hour old)
+2026-03-30 18:39:41 | DEBUG    | treasury_leaderboard      | Trying BitcoinTreasuries.net sovereign API...
+2026-03-30 18:39:41 | WARNING  | treasury_leaderboard      | BitcoinTreasuries.net sovereign API failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/countries (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001382E4CEA80>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-30 18:39:41 | DEBUG    | treasury_leaderboard      | Trying CoinGecko government holdings...
+2026-03-30 18:39:41 | DEBUG    | treasury_leaderboard      | Scanning news for sovereign BTC updates...
+2026-03-30 18:39:42 | INFO     | treasury_leaderboard      | Found 1 sovereign updates from news
+2026-03-30 18:39:42 | DEBUG    | freshness_tracker         | Provenance: leaderboard_sovereign → Google News (auto-detected) (live)
+2026-03-30 18:39:43 | INFO     | main                      | Leaderboard sent: 149 entities, 1,179,591 BTC
+2026-03-30 18:39:43 | DEBUG    | main                      | Scan #1 | [7/11] Daily leaderboard completed in 1.3s
+2026-03-30 18:39:43 | INFO     | main                      | Scan #1 | [8/11] Purchase detection...
+2026-03-30 18:39:43 | INFO     | purchase_tracker          | Detecting new purchases via snapshot comparison...
+2026-03-30 18:39:43 | DEBUG    | treasury_leaderboard      | Using cached leaderboard data (less than 1 hour old)
+2026-03-30 18:39:43 | DEBUG    | treasury_leaderboard      | Trying BitcoinTreasuries.net sovereign API...
+2026-03-30 18:39:43 | WARNING  | treasury_leaderboard      | BitcoinTreasuries.net sovereign API failed: HTTPSConnectionPool(host='api.bitcointreasuries.net', port=443): Max retries exceeded with url: /views/countries (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x000001382E4CD9D0>: Failed to resolve 'api.bitcointreasuries.net' ([Errno 11001] getaddrinfo failed)"))
+2026-03-30 18:39:43 | DEBUG    | treasury_leaderboard      | Trying CoinGecko government holdings...
+2026-03-30 18:39:43 | DEBUG    | treasury_leaderboard      | Scanning news for sovereign BTC updates...
+2026-03-30 18:39:43 | INFO     | treasury_leaderboard      | Found 1 sovereign updates from news
+2026-03-30 18:39:43 | DEBUG    | freshness_tracker         | Provenance: leaderboard_sovereign → Google News (auto-detected) (live)
+2026-03-30 18:39:43 | INFO     | purchase_tracker          | Snapshot saved: 2026-03-30 | 149 entities | 1,179,591 BTC
+2026-03-30 18:39:43 | WARNING  | purchase_tracker          | Suspicious increase for Metaplanet (3350.T): 3,050 → 35,102 BTC (+32,052). Likely a data source change, not a real purchase. Skipping.
+2026-03-30 18:39:43 | DEBUG    | purchase_tracker          | Skipping government entity SV-GOV from purchase detection
+2026-03-30 18:39:43 | INFO     | purchase_tracker          | 101 purchase(s) detected!
+2026-03-30 18:39:43 | INFO     | purchase_tracker          |   Strategy: +762,099 BTC (~$54,871M)
+2026-03-30 18:39:43 | INFO     | purchase_tracker          |   XXI: +43,514 BTC (~$3,133M)
+2026-03-30 18:39:43 | INFO     | purchase_tracker          |   MARA Holdings: +38,689 BTC (~$2,786M)
+2026-03-30 18:39:43 | INFO     | purchase_tracker          |   Bitcoin Standard Treasury Company: +30,021 BTC (~$2,162M)
+2026-03-30 18:39:43 | INFO     | purchase_tracker          |   Bullish: +24,400 BTC (~$1,757M)
+2026-03-30 18:39:55 | INFO     | main                      | 101 purchase(s) detected and logged
+2026-03-30 18:39:55 | WARNING  | narrative_engine          | Claude API call failed: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CZa9WqkprdM2HkmrcSQo3'}
+2026-03-30 18:39:55 | INFO     | main                      | LLM Purchase Analysis: Strategy acquired 762,099 BTC for $54,871M....
+2026-03-30 18:39:55 | WARNING  | narrative_engine          | Claude API call failed: Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011CZa9Wr3gTYR19DJfp4V2e'}
+2026-03-30 18:39:55 | INFO     | main                      | LLM Purchase Analysis: XXI acquired 43,514 BTC for $3,133M....
+2026-03-30 18:39:55 | DEBUG    | main                      | Scan #1 | [8/11] Purchase detection completed in 12.4s
+2026-03-30 18:39:55 | INFO     | main                      | Scan #1 | [9/11] Regulatory scan...
+2026-03-30 18:39:55 | INFO     | regulatory_scanner        | Running regulatory & statements auto-scan...
+2026-03-30 18:39:55 | INFO     | regulatory_scanner        | Scanning for regulatory news...
+2026-03-30 18:40:01 | INFO     | regulatory_scanner        | Found 29 regulatory news items
+2026-03-30 18:40:01 | DEBUG    | freshness_tracker         | Freshness: google_news_reg ✅ 29 items found
+2026-03-30 18:40:01 | DEBUG    | freshness_tracker         | Provenance: regulatory → Google News RSS (auto-scan) (live)
+2026-03-30 18:40:05 | INFO     | regulatory_scanner        | 2 new regulatory item(s) saved to database
+2026-03-30 18:40:05 | INFO     | regulatory_scanner        | Scanning for notable statements...
+2026-03-30 18:40:15 | INFO     | regulatory_scanner        | Found 22 notable statements
+2026-03-30 18:40:15 | DEBUG    | freshness_tracker         | Freshness: google_news_stmt ✅ 22 statements found
+2026-03-30 18:40:15 | DEBUG    | freshness_tracker         | Provenance: statements → Google News RSS (auto-scan) (live)
+2026-03-30 18:40:17 | INFO     | regulatory_scanner        | 1 new statement(s) saved to database
+2026-03-30 18:40:17 | INFO     | regulatory_scanner        | DB totals: 100 regulatory items (100 auto) | 100 statements (94 auto)
+2026-03-30 18:40:17 | DEBUG    | main                      | Scan #1 | [9/11] Regulatory scan completed in 22.3s
+2026-03-30 18:40:17 | INFO     | main                      | Scan #1 | [10/11] Dashboard ping...
+2026-03-30 18:40:19 | DEBUG    | main                      | Dashboard ping: 200
+2026-03-30 18:40:19 | DEBUG    | main                      | Scan #1 | [10/11] Dashboard ping completed in 1.5s
+2026-03-30 18:40:19 | INFO     | main                      | [11/11] Scan #1 complete
+2026-03-30 18:40:19 | DEBUG    | freshness_tracker         | Freshness snapshot saved to Supabase
+2026-03-30 18:40:19 | INFO     | main                      | System Health: 🟢 HEALTHY — All 10 sources live
+2026-03-30 18:40:19 | INFO     | feedback_loop             | Feedback loop: starting learning cycle...
+2026-03-30 18:40:19 | INFO     | feedback_loop             | Feedback loop: no verified predictions to learn from yet
+2026-03-30 18:40:20 | INFO     | price_predictor           | Price predictor: starting analysis...
+2026-03-30 18:40:20 | DEBUG    | price_predictor           | Price prediction insights saved to DB
+2026-03-30 18:40:20 | INFO     | price_predictor           | Price predictor: analyzed 50 predictions across 10 price points
+2026-03-30 18:40:20 | INFO     | price_predictor           | Price predictor: When our system scores 60+, BTC moves an average of -3.1% in the following 72 hours (0.0% positive, n=4).
+2026-03-30 18:40:20 | INFO     | treasury_sync             | Treasury Sync v5.2: starting full entity sync...
+2026-03-30 18:40:20 | INFO     | treasury_sync             | --- Layer 1: CoinGecko (PRIMARY) ---
+2026-03-30 18:40:20 | INFO     | treasury_sync             |   CoinGecko               -> 148 fetched, 147 unique
+2026-03-30 18:40:20 | INFO     | treasury_sync             | --- Layer 2: BitcoinTreasuries.net (SUPPLEMENT) ---
+2026-03-30 18:40:22 | INFO     | treasury_sync             |   Private Companies         ->   26 scraped,   23 new,    3 merged
+2026-03-30 18:40:23 | INFO     | treasury_sync             |   Government Entities       ->   12 scraped,   12 new,    0 merged
+2026-03-30 18:40:23 | INFO     | treasury_sync             |   ETFs and Exchanges        ->   47 scraped,   47 new,    0 merged
+2026-03-30 18:40:24 | INFO     | treasury_sync             |   DeFi and Other            ->   17 scraped,   15 new,    2 merged
+2026-03-30 18:40:26 | INFO     | treasury_sync             |   Public Companies          ->  268 scraped,  139 new,  129 merged
+2026-03-30 18:40:54 | INFO     | treasury_sync             | Treasury Sync COMPLETE: 383 unique entities, 2,153,700 BTC
+2026-03-30 18:40:54 | INFO     | treasury_sync             |   Breakdown: 286 public_company, 47 etf, 23 private_company, 15 defi, 12 government
+2026-03-30 18:40:54 | INFO     | velocity_tracker          | Velocity Tracker: starting...
+2026-03-30 18:41:18 | INFO     | velocity_tracker          | Velocity Tracker: 383 snapshots recorded for 2026-03-30
+2026-03-30 18:41:18 | INFO     | velocity_tracker          | Velocity Tracker: 2 NEW ENTRANTS detected!
+2026-03-30 18:41:18 | INFO     | velocity_tracker          |   🆕 ð¸ð» (Â¿7,605): 507 BTC
+2026-03-30 18:41:18 | INFO     | velocity_tracker          |   🆕 ðºð¸ (Â¿7,000): 466 BTC
+2026-03-30 18:41:22 | INFO     | gov_entities              |   Gov scrape: fetched 16 BTC amounts from website
+2026-03-30 18:41:22 | INFO     | gov_entities              |   Gov fix: 'ðºð¸' → 'United States' (328,372 BTC)
+2026-03-30 18:41:22 | INFO     | gov_entities              |   Gov fix: 'ð¨ð³' → 'China' (190,000 BTC)
+2026-03-30 18:41:22 | INFO     | gov_entities              |   Gov fix: 'ð¬ð§' → 'United Kingdom' (61,245 BTC)
+2026-03-30 18:41:22 | INFO     | gov_entities              |   Gov fix: 'ðºð¦' → 'Ukraine' (46,351 BTC)
+2026-03-30 18:41:22 | INFO     | gov_entities              |   Gov fix: 'ð¸ð»' → 'El Salvador' (7,605 BTC)
+2026-03-30 18:41:22 | INFO     | gov_entities              |   Gov fix: 'ð¦ðª' → 'Bhutan' (6,420 BTC)
+2026-03-30 18:41:23 | INFO     | gov_entities              |   Gov fix: 'ð§ð¹' → 'Finland' (4,973 BTC)
+2026-03-30 18:41:23 | INFO     | gov_entities              |   Gov fix: 'ð°ð¿' → 'Georgia' (3,544 BTC)
+2026-03-30 18:41:23 | INFO     | gov_entities              |   Gov fix: 'ð°ðµ' → 'Venezuela' (803 BTC)
+2026-03-30 18:41:23 | INFO     | gov_entities              |   Gov fix: 'ð»ðª' → 'Liechtenstein' (240 BTC)
+2026-03-30 18:41:23 | INFO     | gov_entities              |   Gov fix: 'ð¹ð¼' → 'North Korea (DPRK)' (210 BTC)
+2026-03-30 18:41:23 | INFO     | gov_entities              |   Gov fix: 'ð«ð®' → 'Switzerland' (90 BTC)
+2026-03-30 18:41:23 | INFO     | gov_entities              | Gov fix: 12 government entities updated
+2026-03-30 18:41:23 | INFO     | entity_classifier         |   Entity fix: deleted aggregate row 'Total:'
+2026-03-30 18:41:24 | INFO     | entity_classifier         |   Entity fix: 'Vaultz Capital' → defi (keyword match)
+2026-03-30 18:41:24 | INFO     | entity_classifier         | Entity fix: 2 entities corrected
+2026-03-30 18:41:25 | INFO     | entity_name_fixer         |   Name fix: scraped 44 ETFs from website
+2026-03-30 18:41:26 | DEBUG    | main                      | Name fix: name 'target_name' is not defined
+2026-03-30 18:41:26 | INFO     | shares_updater            | Shares updater: starting (all public companies)...
+2026-03-30 18:41:26 | INFO     | shares_updater            |   Found 285 public companies to check
+2026-03-30 18:44:04 | INFO     | shares_updater            | Shares updater: 139 updated, 17 errors, 129 skipped
+2026-03-30 18:44:05 | INFO     | main                      | Tweets: 0 | Signals: 0 | Correlation: 20/100 (1/4)
+2026-03-30 18:44:05 | INFO     | main                      | Next scan in 60 minutes. Press Ctrl+C to stop.
+2026-03-30 18:45:01 | INFO     | main                      | Stopped by user. Goodbye!
+2026-03-30 18:49:36 | INFO     | entity_name_fixer         |   Name fix: scraped 44 ETFs from website
+2026-03-30 18:56:35 | INFO     | entity_name_fixer         |   Name fix: scraped 44 ETFs from website
+2026-03-30 18:56:36 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'iShares Bitcoin Trust' (786,329 BTC)
+2026-03-30 18:56:37 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Fidelity Wise Origin Bitcoin Fund' (187,813 BTC)
+2026-03-30 18:56:37 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Grayscale Bitcoin Trust' (156,278 BTC)
+2026-03-30 18:56:37 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Grayscale Bitcoin Mini Trust' (51,473 BTC)
+2026-03-30 18:56:37 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'ARK 21Shares Bitcoin' (45,245 BTC)
+2026-03-30 18:56:37 | INFO     | entity_name_fixer         |   Name fix: 'ð¬ð®' → 'Xapo' (38,931 BTC)
+2026-03-30 18:56:37 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Bitwise Bitcoin' (38,920 BTC)
+2026-03-30 18:56:37 | INFO     | entity_name_fixer         |   Name fix: 'ð¯ðµ' → 'Mt. Gox' (34,504 BTC)
+2026-03-30 18:56:37 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'River' (25,180 BTC)
+2026-03-30 18:56:37 | INFO     | entity_name_fixer         |   Name fix: 'ð¯ðª' → 'CoinShares Physical Bitcoin ETPBITC' (20,297 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ð¸ðª' → 'CoinShares Bitcoin Tracker One XBT ProviderBITCOIN-XBT' (20,085 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'Purpose Bitcoin ETFBTCC' (19,769 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ð¬ð§' → 'WisdomTree Physical Bitcoin' (17,449 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'VanEck Bitcoin Trust' (17,019 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ð¸ð¨' → 'Bit' (15,432 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'Fidelity Advantage Bitcoin' (12,680 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð­' → 'iShares Bitcoin ETPIB1T' (12,163 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ð©ðª' → 'Bitwise Physical Bitcoin ETCBTCE' (11,427 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'CI Galaxy Bitcoin ETFBTCX-B' (11,272 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ð±ð®' → 'VanEck Bitcoin' (8,549 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Bitwise 10 Crypto Index Fund' (8,530 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð­' → 'CoinShares Valkyrie Bitcoin Fund' (8,525 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Grayscale Digital Large Cap Fund' (5,937 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Hashdex Nasdaq Crypto Index Fundo De IndiceHASH11' (5,715 BTC)
+2026-03-30 18:56:38 | INFO     | entity_name_fixer         |   Name fix: 'ð§ð·' → 'Franklin Bitcoin' (5,584 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'CI Galaxy Bitcoin ETF (USD)BTCX-U' (5,373 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Invesco Galaxy Bitcoin' (5,155 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'WisdomTree Bitcoin Fund' (4,999 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Invesco Physical Bitcoin ETNBTIC' (4,990 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Harvest Bitcoin Spot ETF3439' (3,746 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ð¯ðª' → 'ChinaAMC Bitcoin ETF3042' (3,640 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'Bosera HashKey Bitcoin ETF3008' (2,558 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'Evolve Bitcoin' (2,481 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ð­ð°' → 'Osprey Bitcoin TrustO' (2,399 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Hashdex Nasdaq Bitcoin ETFBITH11' (1,912 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ð­ð°' → 'Global X 21Shares Bitcoin' (1,725 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ð§ð·' → 'ETF QR AssetQBTC11' (1,545 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ð¦ðº' → 'Monochrome Bitcoin' (1,487 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ð§ð·' → 'Bitwise Core Bitcoin ETCBTC1' (1,240 BTC)
+2026-03-30 18:56:39 | INFO     | entity_name_fixer         |   Name fix: 'ð¦ðº' → 'DDA Physical Bitcoin ETPXBTI' (1,218 BTC)
+2026-03-30 18:56:40 | INFO     | entity_name_fixer         |   Name fix: 'ð­ð°' → 'Incrementum Digital & Physical Gold Fund0P0001DZL0' (995 BTC)
+2026-03-30 18:56:40 | INFO     | entity_name_fixer         |   Name fix: 'ð©ðª' → 'Hashdex Bitcoin' (530 BTC)
+2026-03-30 18:56:40 | INFO     | entity_name_fixer         |   Name fix: 'ð©ðª' → 'BiPS Asset Management LtdBi' (214 BTC)
+2026-03-30 18:56:40 | INFO     | entity_name_fixer         |   Name fix: 'ð±ð®' → 'Jacobi FT Wilshire Bitcoin ETFBCOIN' (197 BTC)
+2026-03-30 18:56:40 | INFO     | entity_name_fixer         |   Name fix: 44 ETFs updated
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: scraped 72 Private Companies from website
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Block.one' (164,000 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ð»ð¬' → 'Tether Holdings Limited' (96,184 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Stone Ridge Holdings Group' (10,000 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'SpaceX' (8,285 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð­' → 'The Tezos Foundation' (2,903 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Ionic Digital Inc.' (2,662 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Zap Solutions, Inc (Strike)' (1,500 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'GIGA Inc.' (1,252 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ð«ð·' → 'Melanion Digital' (342 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Steak 'n Shake' (162 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ð§ð²' → 'Meanwhile Incorporated' (123 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ð©ðª' → 'Evertz Pharma' (100 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ð¦ð·' → 'Roxom Global' (98 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ð¬ð§' → 'Real Bedford FC Ltd' (83 BTC)
+2026-03-30 18:56:41 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Circle Internet Group, Inc.' (73 BTC)
+2026-03-30 18:56:42 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð­' → 'Disher Music Gear' (30 BTC)
+2026-03-30 18:56:42 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'SR DURDEN' (28 BTC)
+2026-03-30 18:56:42 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'ssias' (18 BTC)
+2026-03-30 18:56:42 | INFO     | entity_name_fixer         |   Name fix: 'ð²ð½' → 'Altgeld Bitcoin Reserve (ABR)' (16 BTC)
+2026-03-30 18:56:42 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð­' → 'ABR WEALTH FUND' (15 BTC)
+2026-03-30 18:56:42 | INFO     | entity_name_fixer         |   Name fix: 'ð»ð¬' → 'King Tours' (12 BTC)
+2026-03-30 18:56:42 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'IRC Legal' (10 BTC)
+2026-03-30 18:56:42 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'RCD Physical Therapy' (8 BTC)
+2026-03-30 18:56:42 | INFO     | entity_name_fixer         |   Name fix: 23 Private Companies updated
+2026-03-30 18:56:43 | INFO     | entity_name_fixer         |   Name fix: scraped 16 DeFi from website
+2026-03-30 18:56:43 | DEBUG    | entity_name_fixer         |   Name fix: no garbled DeFi found
+2026-03-30 18:56:43 | INFO     | entity_name_fixer         | Name fix total: 67 entities updated
