@@ -51,6 +51,7 @@ from telegram_alerts import alerts as telegram_alerts
 from gov_entities import fix_government_entities
 from shares_updater import update_shares
 from entity_classifier import fix_entity_types
+from entity_name_fixer import fix_entity_names
 #from velocity_tracker import velocity
 #velocity.run()
 
@@ -533,6 +534,12 @@ def main():
             fix_entity_types()
         except Exception as e:
             logger.debug(f"Entity fix: {e}")
+
+        # Fix garbled ETF/private company names
+        try:
+            fix_entity_names()
+        except Exception as e:
+            logger.debug(f"Name fix: {e}")
 
         # Auto-update shares outstanding from Yahoo Finance
         try:

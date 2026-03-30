@@ -4835,3 +4835,106 @@
 2026-03-30 17:00:04 | INFO     | gov_entities              |   Gov fix: 'ð¹ð¼' → 'North Korea (DPRK)' (210 BTC)
 2026-03-30 17:00:04 | INFO     | gov_entities              |   Gov fix: 'ð«ð®' → 'Switzerland' (90 BTC)
 2026-03-30 17:00:04 | INFO     | gov_entities              | Gov fix: 12 government entities updated
+2026-03-30 17:41:07 | INFO     | main                      | Treasury Sync v5.2 — full sync...
+2026-03-30 17:41:07 | INFO     | main                      | Treasury Sync v5.2: starting full entity sync...
+2026-03-30 17:41:07 | INFO     | main                      | --- Layer 1: CoinGecko (PRIMARY) ---
+2026-03-30 17:41:07 | INFO     | main                      |   CoinGecko               -> 148 fetched, 147 unique
+2026-03-30 17:41:07 | INFO     | main                      | --- Layer 2: BitcoinTreasuries.net (SUPPLEMENT) ---
+2026-03-30 17:41:08 | INFO     | main                      |   Private Companies         ->   26 scraped,   23 new,    3 merged
+2026-03-30 17:41:09 | INFO     | main                      |   Government Entities       ->   12 scraped,   12 new,    0 merged
+2026-03-30 17:41:10 | INFO     | main                      |   ETFs and Exchanges        ->   47 scraped,   47 new,    0 merged
+2026-03-30 17:41:11 | INFO     | main                      |   DeFi and Other            ->   17 scraped,   15 new,    2 merged
+2026-03-30 17:41:13 | INFO     | main                      |   Public Companies          ->  268 scraped,  139 new,  129 merged
+2026-03-30 17:41:40 | INFO     | main                      | Treasury Sync COMPLETE: 383 unique entities, 2,154,275 BTC
+2026-03-30 17:41:40 | INFO     | main                      |   Breakdown: 286 public_company, 47 etf, 23 private_company, 15 defi, 12 government
+2026-03-30 17:42:01 | INFO     | gov_entities              |   Gov scrape: fetched 16 BTC amounts from website
+2026-03-30 17:42:03 | INFO     | gov_entities              |   Gov fix: 'ðºð¸' → 'United States' (328,372 BTC)
+2026-03-30 17:42:04 | INFO     | gov_entities              |   Gov fix: 'ð¨ð³' → 'China' (190,000 BTC)
+2026-03-30 17:42:04 | INFO     | gov_entities              |   Gov fix: 'ð¬ð§' → 'United Kingdom' (61,245 BTC)
+2026-03-30 17:42:04 | INFO     | gov_entities              |   Gov fix: 'ðºð¦' → 'Ukraine' (46,351 BTC)
+2026-03-30 17:42:04 | INFO     | gov_entities              |   Gov fix: 'ð¸ð»' → 'El Salvador' (7,605 BTC)
+2026-03-30 17:42:04 | INFO     | gov_entities              |   Gov fix: 'ð¦ðª' → 'Bhutan' (6,420 BTC)
+2026-03-30 17:42:05 | INFO     | gov_entities              |   Gov fix: 'ð§ð¹' → 'Finland' (4,973 BTC)
+2026-03-30 17:42:05 | INFO     | gov_entities              |   Gov fix: 'ð°ð¿' → 'Georgia' (3,544 BTC)
+2026-03-30 17:42:05 | INFO     | gov_entities              |   Gov fix: 'ð°ðµ' → 'Venezuela' (803 BTC)
+2026-03-30 17:42:05 | INFO     | gov_entities              |   Gov fix: 'ð»ðª' → 'Liechtenstein' (240 BTC)
+2026-03-30 17:42:05 | INFO     | gov_entities              |   Gov fix: 'ð¹ð¼' → 'North Korea (DPRK)' (210 BTC)
+2026-03-30 17:42:05 | INFO     | gov_entities              |   Gov fix: 'ð«ð®' → 'Switzerland' (90 BTC)
+2026-03-30 17:42:05 | INFO     | gov_entities              | Gov fix: 12 government entities updated
+2026-03-30 17:42:29 | INFO     | entity_classifier         |   Entity fix: deleted aggregate row 'Total:'
+2026-03-30 17:42:31 | INFO     | entity_classifier         |   Entity fix: 'Vaultz Capital' → defi (keyword match)
+2026-03-30 17:42:31 | INFO     | entity_classifier         | Entity fix: 2 entities corrected
+2026-03-30 17:49:23 | INFO     | entity_name_fixer         |   Name fix: scraped 44 ETFs from website
+2026-03-30 17:49:24 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'iShares Bitcoin Trust' (786,329 BTC)
+2026-03-30 17:49:24 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Fidelity Wise Origin Bitcoin Fund' (187,813 BTC)
+2026-03-30 17:49:24 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Grayscale Bitcoin Trust' (156,278 BTC)
+2026-03-30 17:49:24 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Grayscale Bitcoin Mini Trust' (51,473 BTC)
+2026-03-30 17:49:25 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'ARK 21Shares Bitcoin' (45,245 BTC)
+2026-03-30 17:49:25 | INFO     | entity_name_fixer         |   Name fix: 'ð¬ð®' → 'Xapo' (38,931 BTC)
+2026-03-30 17:49:25 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Bitwise Bitcoin' (38,920 BTC)
+2026-03-30 17:49:25 | INFO     | entity_name_fixer         |   Name fix: 'ð¯ðµ' → 'Mt. Gox' (34,504 BTC)
+2026-03-30 17:49:25 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'River' (25,180 BTC)
+2026-03-30 17:49:25 | INFO     | entity_name_fixer         |   Name fix: 'ð¯ðª' → 'CoinShares Physical Bitcoin ETPBITC' (20,297 BTC)
+2026-03-30 17:49:26 | INFO     | entity_name_fixer         |   Name fix: 'ð¸ðª' → 'CoinShares Bitcoin Tracker One XBT ProviderBITCOIN-XBT' (20,085 BTC)
+2026-03-30 17:49:26 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'Purpose Bitcoin ETFBTCC' (19,769 BTC)
+2026-03-30 17:49:26 | INFO     | entity_name_fixer         |   Name fix: 'ð¬ð§' → 'WisdomTree Physical Bitcoin' (17,449 BTC)
+2026-03-30 17:49:27 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'VanEck Bitcoin Trust' (17,019 BTC)
+2026-03-30 17:49:27 | INFO     | entity_name_fixer         |   Name fix: 'ð¸ð¨' → 'Bit' (15,432 BTC)
+2026-03-30 17:49:27 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'Fidelity Advantage Bitcoin' (12,680 BTC)
+2026-03-30 17:49:27 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð­' → 'iShares Bitcoin ETPIB1T' (12,163 BTC)
+2026-03-30 17:49:27 | INFO     | entity_name_fixer         |   Name fix: 'ð©ðª' → 'Bitwise Physical Bitcoin ETCBTCE' (11,427 BTC)
+2026-03-30 17:49:27 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'CI Galaxy Bitcoin ETFBTCX-B' (11,272 BTC)
+2026-03-30 17:49:27 | INFO     | entity_name_fixer         |   Name fix: 'ð±ð®' → 'VanEck Bitcoin' (8,549 BTC)
+2026-03-30 17:49:28 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Bitwise 10 Crypto Index Fund' (8,530 BTC)
+2026-03-30 17:49:28 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð­' → 'CoinShares Valkyrie Bitcoin Fund' (8,525 BTC)
+2026-03-30 17:49:28 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Grayscale Digital Large Cap Fund' (5,937 BTC)
+2026-03-30 17:49:28 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Hashdex Nasdaq Crypto Index Fundo De IndiceHASH11' (5,715 BTC)
+2026-03-30 17:49:28 | INFO     | entity_name_fixer         |   Name fix: 'ð§ð·' → 'Franklin Bitcoin' (5,584 BTC)
+2026-03-30 17:49:28 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'CI Galaxy Bitcoin ETF (USD)BTCX-U' (5,373 BTC)
+2026-03-30 17:49:28 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Invesco Galaxy Bitcoin' (5,155 BTC)
+2026-03-30 17:49:28 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'WisdomTree Bitcoin Fund' (4,999 BTC)
+2026-03-30 17:49:28 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Invesco Physical Bitcoin ETNBTIC' (4,990 BTC)
+2026-03-30 17:49:28 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Harvest Bitcoin Spot ETF3439' (3,746 BTC)
+2026-03-30 17:49:28 | INFO     | entity_name_fixer         |   Name fix: 'ð¯ðª' → 'ChinaAMC Bitcoin ETF3042' (3,640 BTC)
+2026-03-30 17:49:28 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'Bosera HashKey Bitcoin ETF3008' (2,558 BTC)
+2026-03-30 17:49:29 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð¦' → 'Evolve Bitcoin' (2,481 BTC)
+2026-03-30 17:49:29 | INFO     | entity_name_fixer         |   Name fix: 'ð­ð°' → 'Osprey Bitcoin TrustO' (2,399 BTC)
+2026-03-30 17:49:29 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Hashdex Nasdaq Bitcoin ETFBITH11' (1,912 BTC)
+2026-03-30 17:49:29 | INFO     | entity_name_fixer         |   Name fix: 'ð­ð°' → 'Global X 21Shares Bitcoin' (1,725 BTC)
+2026-03-30 17:49:29 | INFO     | entity_name_fixer         |   Name fix: 'ð§ð·' → 'ETF QR AssetQBTC11' (1,545 BTC)
+2026-03-30 17:49:29 | INFO     | entity_name_fixer         |   Name fix: 'ð¦ðº' → 'Monochrome Bitcoin' (1,487 BTC)
+2026-03-30 17:49:29 | INFO     | entity_name_fixer         |   Name fix: 'ð§ð·' → 'Bitwise Core Bitcoin ETCBTC1' (1,240 BTC)
+2026-03-30 17:49:29 | INFO     | entity_name_fixer         |   Name fix: 'ð¦ðº' → 'DDA Physical Bitcoin ETPXBTI' (1,218 BTC)
+2026-03-30 17:49:29 | INFO     | entity_name_fixer         |   Name fix: 'ð­ð°' → 'Incrementum Digital & Physical Gold Fund0P0001DZL0' (995 BTC)
+2026-03-30 17:49:29 | INFO     | entity_name_fixer         |   Name fix: 'ð©ðª' → 'Hashdex Bitcoin' (530 BTC)
+2026-03-30 17:49:29 | INFO     | entity_name_fixer         |   Name fix: 'ð©ðª' → 'BiPS Asset Management LtdBi' (214 BTC)
+2026-03-30 17:49:29 | INFO     | entity_name_fixer         |   Name fix: 'ð±ð®' → 'Jacobi FT Wilshire Bitcoin ETFBCOIN' (197 BTC)
+2026-03-30 17:49:29 | INFO     | entity_name_fixer         |   Name fix: 44 ETFs updated
+2026-03-30 17:49:30 | INFO     | entity_name_fixer         |   Name fix: scraped 72 Private Companies from website
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Block.one' (164,000 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ð»ð¬' → 'Tether Holdings Limited' (96,184 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Stone Ridge Holdings Group' (10,000 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'SpaceXð¥¬ ð' (8,285 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð­' → 'The Tezos Foundation' (2,903 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Ionic Digital Inc.' (2,662 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Zap Solutions, Inc (Strike)' (1,500 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'GIGA Inc.' (1,252 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ð«ð·' → 'Melanion Digital' (342 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Steak 'n Shake' (162 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ð§ð²' → 'Meanwhile Incorporated' (123 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ð©ðª' → 'Evertz Pharma' (100 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ð¦ð·' → 'Roxom Global' (98 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ð¬ð§' → 'Real Bedford FC Ltd' (83 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'Circle Internet Group, Inc.' (73 BTC)
+2026-03-30 17:49:31 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð­' → 'Disher Music Gear' (30 BTC)
+2026-03-30 17:49:32 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'SR DURDEN' (28 BTC)
+2026-03-30 17:49:32 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'ssias' (18 BTC)
+2026-03-30 17:49:32 | INFO     | entity_name_fixer         |   Name fix: 'ð²ð½' → 'Altgeld Bitcoin Reserve (ABR)' (16 BTC)
+2026-03-30 17:49:32 | INFO     | entity_name_fixer         |   Name fix: 'ð¨ð­' → 'ABR WEALTH FUND' (15 BTC)
+2026-03-30 17:49:32 | INFO     | entity_name_fixer         |   Name fix: 'ð»ð¬' → 'King Tours' (12 BTC)
+2026-03-30 17:49:32 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'IRC Legal' (10 BTC)
+2026-03-30 17:49:32 | INFO     | entity_name_fixer         |   Name fix: 'ðºð¸' → 'RCD Physical Therapy' (8 BTC)
+2026-03-30 17:49:32 | INFO     | entity_name_fixer         |   Name fix: 23 Private Companies updated
+2026-03-30 17:49:33 | INFO     | entity_name_fixer         |   Name fix: scraped 16 DeFi from website
+2026-03-30 17:49:33 | DEBUG    | entity_name_fixer         |   Name fix: no garbled DeFi found
+2026-03-30 17:49:33 | INFO     | entity_name_fixer         | Name fix total: 67 entities updated
