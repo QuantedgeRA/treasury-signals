@@ -1,15 +1,18 @@
 """
-gov_entities.py — Government/Sovereign Entity Name Mapping
------------------------------------------------------------
-Post-processing for treasury_sync.py to fix garbled government names
-from BitcoinTreasuries.net scraping (emoji flags → proper country names).
-
-Usage:
-    from gov_entities import fix_government_entities
-    fix_government_entities(supabase)  # Call after treasury_sync.run()
+gov_entities.py — Fix government entity names AND BTC holdings after sync
+--------------------------------------------------------------------------
+The main scraper puts correct BTC amounts in the TICKER field (e.g. ₿328,372)
+and wrong amounts in btc_holdings. This script:
+1. Extracts the real BTC from the garbled ticker field
+2. Assigns proper country names and tickers by rank
+3. Also scrapes BitcoinTreasuries.net for supplemental data
+4. Ensures entity_type = 'government'
 """
 
 import os
+import re
+import requests
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from supabase import create_client
 from logger import get_logger
@@ -18,38 +21,95 @@ logger = get_logger(__name__)
 
 load_dotenv()
 
-# Known government BTC holders — maps approximate BTC holdings to proper names
-# These are updated manually when new governments are confirmed
-GOVERNMENT_ENTITIES = {
-    # country_name, ticker, approximate BTC (used for matching)
-    'United States': {'ticker': 'US.GOV', 'min_btc': 15000, 'max_btc': 500000},
-    'China': {'ticker': 'CN.GOV', 'min_btc': 10000, 'max_btc': 250000},
-    'United Kingdom': {'ticker': 'GB.GOV', 'min_btc': 3000, 'max_btc': 100000},
-    'Ukraine': {'ticker': 'UA.GOV', 'min_btc': 2000, 'max_btc': 60000},
-    'El Salvador': {'ticker': 'SV.GOV', 'min_btc': 300, 'max_btc': 10000},
-    'Bhutan': {'ticker': 'BT.GOV', 'min_btc': 200, 'max_btc': 15000},
-    'Finland': {'ticker': 'FI.GOV', 'min_btc': 100, 'max_btc': 8000},
-    'Georgia': {'ticker': 'GE.GOV', 'min_btc': 100, 'max_btc': 6000},
-    'Venezuela': {'ticker': 'VE.GOV', 'min_btc': 20, 'max_btc': 2000},
-    'Liechtenstein': {'ticker': 'LI.GOV', 'min_btc': 5, 'max_btc': 500},
-    'North Korea (DPRK)': {'ticker': 'KP.GOV', 'min_btc': 5, 'max_btc': 500},
-    'Switzerland': {'ticker': 'CH.GOV', 'min_btc': 1, 'max_btc': 200},
-}
+# Government entities ordered by expected BTC holdings (largest first)
+GOVERNMENT_NAMES = [
+    {'name': 'United States', 'ticker': 'US.GOV'},
+    {'name': 'China', 'ticker': 'CN.GOV'},
+    {'name': 'United Kingdom', 'ticker': 'GB.GOV'},
+    {'name': 'Ukraine', 'ticker': 'UA.GOV'},
+    {'name': 'El Salvador', 'ticker': 'SV.GOV'},
+    {'name': 'Bhutan', 'ticker': 'BT.GOV'},
+    {'name': 'Finland', 'ticker': 'FI.GOV'},
+    {'name': 'Georgia', 'ticker': 'GE.GOV'},
+    {'name': 'Venezuela', 'ticker': 'VE.GOV'},
+    {'name': 'Liechtenstein', 'ticker': 'LI.GOV'},
+    {'name': 'North Korea (DPRK)', 'ticker': 'KP.GOV'},
+    {'name': 'Switzerland', 'ticker': 'CH.GOV'},
+    {'name': 'UAE', 'ticker': 'AE.GOV'},
+    {'name': 'Kazakhstan', 'ticker': 'KZ.GOV'},
+    {'name': 'Taiwan', 'ticker': 'TW.GOV'},
+]
+
+
+def _extract_btc_from_ticker(ticker_str):
+    """Extract BTC amount from garbled ticker like '₿328,372' or 'Â¿328,372'."""
+    if not ticker_str:
+        return 0
+    # Remove ₿, Â, ¿ and other non-numeric chars, keep digits and commas
+    clean = ticker_str.replace('\u20bf', '').replace('₿', '')
+    clean = clean.replace('Â', '').replace('¿', '').replace('Â¿', '')
+    clean = clean.replace(',', '').strip()
+    clean = re.sub(r'[^\d.]', '', clean)
+    try:
+        return int(float(clean)) if clean else 0
+    except:
+        return 0
+
+
+def _scrape_government_btc():
+    """Fetch LIVE government BTC holdings from BitcoinTreasuries.net."""
+    url = "https://bitcointreasuries.net/governments"
+    try:
+        resp = requests.get(url, timeout=30, headers={
+            'User-Agent': 'Mozilla/5.0 (compatible; TreasuryBot/1.0)'
+        })
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, 'html.parser')
+
+        # Collect all BTC amounts found on the page
+        btc_amounts = []
+        rows = soup.select('table tr')
+        for row in rows:
+            cells = row.find_all('td')
+            if len(cells) < 2:
+                continue
+            texts = [td.get_text(strip=True) for td in cells]
+            # Find the largest number in this row (likely BTC amount)
+            max_btc = 0
+            for t in texts:
+                clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
+                clean = re.sub(r'[^\d.]', '', clean)
+                try:
+                    val = int(float(clean)) if clean else 0
+                    if val > max_btc and val < 50_000_000:  # sanity check
+                        max_btc = val
+                except:
+                    pass
+            if max_btc > 0:
+                btc_amounts.append(max_btc)
+
+        # Sort descending — should match our GOVERNMENT_NAMES order
+        btc_amounts.sort(reverse=True)
+        logger.info(f"  Gov scrape: fetched {len(btc_amounts)} BTC amounts from website")
+        return btc_amounts
+
+    except Exception as e:
+        logger.warning(f"  Gov scrape failed: {e}")
+        return []
 
 
 def fix_government_entities(supabase_client=None):
-    """
-    Fix government entity names after treasury sync.
-    Replaces garbled emoji names with proper country names.
-    Also ensures entity_type = 'government' for all government rows.
-    """
+    """Fix government entity names, tickers, AND BTC holdings."""
     if supabase_client is None:
         SUPABASE_URL = os.getenv("SUPABASE_URL")
         SUPABASE_KEY = os.getenv("SUPABASE_KEY")
         supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+    # Step 1: Try to get live BTC amounts from website
+    live_btc_amounts = _scrape_government_btc()
+
     try:
-        # Get all government entities
+        # Step 2: Get all government entities from database
         result = supabase_client.table("treasury_companies").select(
             "id, company, ticker, btc_holdings, entity_type, is_government"
         ).eq("is_government", True).execute()
@@ -59,65 +119,54 @@ def fix_government_entities(supabase_client=None):
             logger.debug("Gov fix: no government entities found")
             return 0
 
-        # Sort by btc_holdings descending to match by rank
-        gov_rows.sort(key=lambda x: -(x.get("btc_holdings", 0) or 0))
+        # Step 3: For each row, try to extract REAL BTC from the ticker field
+        # The main scraper puts BTC amounts like "₿328,372" in the ticker
+        for row in gov_rows:
+            ticker_btc = _extract_btc_from_ticker(row.get("ticker", ""))
+            if ticker_btc > 0:
+                row["_real_btc"] = ticker_btc
+            else:
+                row["_real_btc"] = row.get("btc_holdings", 0) or 0
 
-        # Also sort our known list by approximate BTC descending
-        known_sorted = sorted(
-            GOVERNMENT_ENTITIES.items(),
-            key=lambda x: -x[1]['max_btc']
-        )
+        # Sort by the REAL BTC amount (largest first)
+        gov_rows.sort(key=lambda x: -x["_real_btc"])
 
         fixed = 0
-        for row in gov_rows:
-            row_btc = row.get("btc_holdings", 0) or 0
+
+        # Step 4: Assign names by rank position
+        for i, row in enumerate(gov_rows):
+            if i >= len(GOVERNMENT_NAMES):
+                break
+
+            gov = GOVERNMENT_NAMES[i]
             row_id = row["id"]
             current_name = row.get("company", "")
-            current_ticker = row.get("ticker", "")
 
-            # Check if already properly named
-            if current_name in GOVERNMENT_ENTITIES:
-                # Just ensure entity_type is correct
-                if row.get("entity_type") != "government":
-                    supabase_client.table("treasury_companies").update({
-                        "entity_type": "government"
-                    }).eq("id", row_id).execute()
-                    fixed += 1
-                continue
+            # Determine best BTC amount:
+            # Priority: 1) extracted from ticker field (most reliable), 2) live website, 3) existing db value
+            if row["_real_btc"] > 0:
+                best_btc = row["_real_btc"]
+            elif i < len(live_btc_amounts) and live_btc_amounts[i] > 0:
+                best_btc = row["_real_btc"]
+            else:
+                best_btc = row.get("btc_holdings", 0)
 
-            # Try to match by BTC range
-            matched = False
-            for country_name, info in known_sorted:
-                # Check if this country's ticker is already assigned to another row
-                already_used = any(
-                    r.get("company") == country_name
-                    for r in gov_rows if r["id"] != row_id
-                )
-                if already_used:
-                    continue
+            # Update
+            needs_update = (
+                current_name != gov['name'] or
+                row.get("btc_holdings", 0) != best_btc or
+                row.get("entity_type") != "government"
+            )
 
-                if info['min_btc'] <= row_btc <= info['max_btc']:
-                    supabase_client.table("treasury_companies").update({
-                        "company": country_name,
-                        "ticker": info['ticker'],
-                        "entity_type": "government",
-                    }).eq("id", row_id).execute()
-                    logger.info(f"  Gov fix: '{current_name}' → '{country_name}' ({row_btc} BTC)")
-                    fixed += 1
-                    matched = True
-                    # Update local reference
-                    row["company"] = country_name
-                    break
-
-            if not matched:
-                # Ensure entity_type is at least correct
-                if row.get("entity_type") != "government":
-                    supabase_client.table("treasury_companies").update({
-                        "entity_type": "government"
-                    }).eq("id", row_id).execute()
-                    fixed += 1
-                if current_name and not current_name[0].isalpha():
-                    logger.warning(f"  Gov fix: unmatched entity '{current_name}' with {row_btc} BTC")
+            if needs_update:
+                supabase_client.table("treasury_companies").update({
+                    "company": gov['name'],
+                    "ticker": gov['ticker'],
+                    "entity_type": "government",
+                    "btc_holdings": best_btc,
+                }).eq("id", row_id).execute()
+                logger.info(f"  Gov fix: '{current_name}' → '{gov['name']}' ({best_btc:,} BTC)")
+                fixed += 1
 
         if fixed > 0:
             logger.info(f"Gov fix: {fixed} government entities updated")

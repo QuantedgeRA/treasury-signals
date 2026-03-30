@@ -38,6 +38,10 @@ TICKER_OVERRIDES = {
 
 def get_yf_ticker(db_ticker):
     """Convert database ticker to Yahoo Finance ticker format."""
+    # Strip .US suffix — Yahoo Finance doesn't use it
+    if db_ticker.endswith('.US'):
+        return db_ticker[:-3]
+    
     # Check overrides first
     if db_ticker in TICKER_OVERRIDES:
         return TICKER_OVERRIDES[db_ticker]

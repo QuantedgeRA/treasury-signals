@@ -509,6 +509,7 @@ class TreasurySync:
                     "country": (entity.get("country") or "")[:100],
                     "sector": (entity.get("sector") or "")[:100],
                     "is_government": entity.get("is_government", False),
+                    "entity_type": entity.get("entity_type", "public_company"),
                     "data_source": entity.get("data_source", "sync"),
                     "last_updated": datetime.now().isoformat(),
                 }).execute()

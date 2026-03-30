@@ -4687,3 +4687,151 @@
 2026-03-30 10:58:49 | INFO     | shares_updater            | Shares updater: starting (all public companies)...
 2026-03-30 10:58:49 | INFO     | shares_updater            |   Found 304 public companies to check
 2026-03-30 11:00:02 | INFO     | shares_updater            | Shares updater: 76 updated, 28 errors, 200 skipped
+2026-03-30 13:05:51 | INFO     | main                      | Treasury Sync v5.2 — full sync...
+2026-03-30 13:05:51 | INFO     | main                      | Treasury Sync v5.2: starting full entity sync...
+2026-03-30 13:05:51 | INFO     | main                      | --- Layer 1: CoinGecko (PRIMARY) ---
+2026-03-30 13:05:51 | INFO     | main                      |   CoinGecko               -> 148 fetched, 147 unique
+2026-03-30 13:05:51 | INFO     | main                      | --- Layer 2: BitcoinTreasuries.net (SUPPLEMENT) ---
+2026-03-30 13:05:52 | INFO     | main                      |   Private Companies         ->   26 scraped,   23 new,    3 merged
+2026-03-30 13:05:54 | INFO     | main                      |   Government Entities       ->   12 scraped,   12 new,    0 merged
+2026-03-30 13:05:54 | INFO     | main                      |   ETFs and Exchanges        ->   47 scraped,   47 new,    0 merged
+2026-03-30 13:05:55 | INFO     | main                      |   DeFi and Other            ->   17 scraped,   15 new,    2 merged
+2026-03-30 13:05:57 | INFO     | main                      |   Public Companies          ->  268 scraped,  139 new,  129 merged
+2026-03-30 13:06:24 | INFO     | main                      | Treasury Sync COMPLETE: 383 unique entities, 2,154,176 BTC
+2026-03-30 13:06:24 | INFO     | main                      |   Breakdown: 286 public_company, 47 etf, 23 private_company, 15 defi, 12 government
+2026-03-30 13:08:01 | DEBUG    | gov_entities              |   Gov scrape: unmatched 'â¿190,000' with 190000 BTC
+2026-03-30 13:08:01 | DEBUG    | gov_entities              |   Gov scrape: unmatched '$43,377M' with 649853 BTC
+2026-03-30 13:08:01 | INFO     | gov_entities              |   Gov scrape: fetched 7 governments from BitcoinTreasuries.net
+2026-03-30 13:08:02 | INFO     | gov_entities              |   Gov fix: 'ðºð¸' → 'United Kingdom' (46351 BTC)
+2026-03-30 13:08:02 | INFO     | gov_entities              |   Gov fix: 'ð¨ð³' → 'El Salvador' (7605 BTC)
+2026-03-30 13:08:02 | INFO     | gov_entities              |   Gov fix: 'ð¬ð§' → 'UAE' (6420 BTC)
+2026-03-30 13:08:02 | INFO     | gov_entities              |   Gov fix: 'ðºð¦' → 'Kazakhstan' (3544 BTC)
+2026-03-30 13:08:02 | INFO     | gov_entities              |   Gov fix: 'ð¸ð»' → 'Venezuela' (240 BTC)
+2026-03-30 13:08:03 | INFO     | gov_entities              |   Gov fix: 'ð¦ðª' → 'North Korea (DPRK)' (803 BTC)
+2026-03-30 13:08:03 | INFO     | gov_entities              |   Gov fix (rank): 'ð§ð¹' → 'United States' (328372 BTC)
+2026-03-30 13:08:03 | INFO     | gov_entities              |   Gov fix (rank): 'ð°ð¿' → 'China' (237 BTC)
+2026-03-30 13:08:03 | INFO     | gov_entities              |   Gov fix (rank): 'ð°ðµ' → 'Ukraine' (54 BTC)
+2026-03-30 13:08:03 | INFO     | gov_entities              |   Gov fix (rank): 'ð»ðª' → 'Bhutan' (16 BTC)
+2026-03-30 13:08:03 | INFO     | gov_entities              |   Gov fix (rank): 'ð¹ð¼' → 'Finland' (14 BTC)
+2026-03-30 13:08:03 | INFO     | gov_entities              |   Gov fix (rank): 'ð«ð®' → 'Georgia' (6 BTC)
+2026-03-30 13:08:03 | INFO     | gov_entities              | Gov fix: 12 government entities updated
+2026-03-30 13:08:56 | INFO     | entity_classifier         |   Entity fix: deleted aggregate row 'Total:'
+2026-03-30 13:08:57 | INFO     | entity_classifier         |   Entity fix: 'Vaultz Capital' → defi (keyword match)
+2026-03-30 13:08:57 | INFO     | entity_classifier         | Entity fix: 2 entities corrected
+2026-03-30 13:10:06 | INFO     | shares_updater            | Shares updater: starting (all public companies)...
+2026-03-30 13:10:06 | INFO     | shares_updater            |   Found 285 public companies to check
+2026-03-30 13:11:57 | INFO     | shares_updater            | Shares updater: 81 updated, 75 errors, 129 skipped
+2026-03-30 13:21:58 | INFO     | shares_updater            | Shares updater: starting (all public companies)...
+2026-03-30 13:21:59 | INFO     | shares_updater            |   Found 285 public companies to check
+2026-03-30 13:23:41 | INFO     | shares_updater            | Shares updater: 143 updated, 13 errors, 129 skipped
+2026-03-30 13:26:36 | INFO     | shares_updater            | Shares updater: starting (all public companies)...
+2026-03-30 13:26:36 | INFO     | shares_updater            |   Found 285 public companies to check
+2026-03-30 13:28:19 | INFO     | shares_updater            | Shares updater: 143 updated, 13 errors, 129 skipped
+2026-03-30 13:32:59 | INFO     | main                      | Treasury Sync v5.2 — full sync...
+2026-03-30 13:32:59 | INFO     | main                      | Treasury Sync v5.2: starting full entity sync...
+2026-03-30 13:32:59 | INFO     | main                      | --- Layer 1: CoinGecko (PRIMARY) ---
+2026-03-30 13:32:59 | INFO     | main                      |   CoinGecko               -> 148 fetched, 147 unique
+2026-03-30 13:32:59 | INFO     | main                      | --- Layer 2: BitcoinTreasuries.net (SUPPLEMENT) ---
+2026-03-30 13:33:00 | INFO     | main                      |   Private Companies         ->   26 scraped,   23 new,    3 merged
+2026-03-30 13:33:01 | INFO     | main                      |   Government Entities       ->   12 scraped,   12 new,    0 merged
+2026-03-30 13:33:02 | INFO     | main                      |   ETFs and Exchanges        ->   47 scraped,   47 new,    0 merged
+2026-03-30 13:33:03 | INFO     | main                      |   DeFi and Other            ->   17 scraped,   15 new,    2 merged
+2026-03-30 13:33:04 | INFO     | main                      |   Public Companies          ->  268 scraped,  139 new,  129 merged
+2026-03-30 13:33:30 | INFO     | main                      | Treasury Sync COMPLETE: 383 unique entities, 2,153,556 BTC
+2026-03-30 13:33:30 | INFO     | main                      |   Breakdown: 286 public_company, 47 etf, 23 private_company, 15 defi, 12 government
+2026-03-30 13:34:19 | DEBUG    | gov_entities              |   Gov scrape: unmatched 'â¿190,000' with 190000 BTC
+2026-03-30 13:34:19 | DEBUG    | gov_entities              |   Gov scrape: unmatched '$43,334M' with 649853 BTC
+2026-03-30 13:34:19 | INFO     | gov_entities              |   Gov scrape: fetched 7 governments from BitcoinTreasuries.net
+2026-03-30 13:34:21 | INFO     | gov_entities              |   Gov fix: 'ðºð¸' → 'United States' (328372 BTC)
+2026-03-30 13:34:21 | INFO     | gov_entities              |   Gov fix: 'ð¨ð³' → 'United Kingdom' (46351 BTC)
+2026-03-30 13:34:21 | INFO     | gov_entities              |   Gov fix: 'ð¬ð§' → 'El Salvador' (7605 BTC)
+2026-03-30 13:34:21 | INFO     | gov_entities              |   Gov fix: 'ðºð¦' → 'Venezuela' (240 BTC)
+2026-03-30 13:34:21 | INFO     | gov_entities              |   Gov fix: 'ð¸ð»' → 'North Korea (DPRK)' (803 BTC)
+2026-03-30 13:34:22 | INFO     | gov_entities              |   Gov fix: 'ð¦ðª' → 'UAE' (6420 BTC)
+2026-03-30 13:34:22 | INFO     | gov_entities              |   Gov fix: 'ð§ð¹' → 'Kazakhstan' (3544 BTC)
+2026-03-30 13:34:22 | INFO     | gov_entities              |   Gov fix (rank): 'ð°ð¿' → 'China' (236 BTC)
+2026-03-30 13:34:22 | INFO     | gov_entities              |   Gov fix (rank): 'ð°ðµ' → 'Ukraine' (53 BTC)
+2026-03-30 13:34:22 | INFO     | gov_entities              |   Gov fix (rank): 'ð»ðª' → 'Bhutan' (16 BTC)
+2026-03-30 13:34:22 | INFO     | gov_entities              |   Gov fix (rank): 'ð¹ð¼' → 'Finland' (14 BTC)
+2026-03-30 13:34:22 | INFO     | gov_entities              |   Gov fix (rank): 'ð«ð®' → 'Georgia' (6 BTC)
+2026-03-30 13:34:22 | INFO     | gov_entities              | Gov fix: 12 government entities updated
+2026-03-30 13:42:07 | INFO     | main                      | Treasury Sync v5.2 — full sync...
+2026-03-30 13:42:07 | INFO     | main                      | Treasury Sync v5.2: starting full entity sync...
+2026-03-30 13:42:07 | INFO     | main                      | --- Layer 1: CoinGecko (PRIMARY) ---
+2026-03-30 13:42:08 | INFO     | main                      |   CoinGecko               -> 148 fetched, 147 unique
+2026-03-30 13:42:08 | INFO     | main                      | --- Layer 2: BitcoinTreasuries.net (SUPPLEMENT) ---
+2026-03-30 13:42:09 | INFO     | main                      |   Private Companies         ->   26 scraped,   23 new,    3 merged
+2026-03-30 13:42:09 | INFO     | main                      |   Government Entities       ->   12 scraped,   12 new,    0 merged
+2026-03-30 13:42:10 | INFO     | main                      |   ETFs and Exchanges        ->   47 scraped,   47 new,    0 merged
+2026-03-30 13:42:11 | INFO     | main                      |   DeFi and Other            ->   17 scraped,   15 new,    2 merged
+2026-03-30 13:42:13 | INFO     | main                      |   Public Companies          ->  268 scraped,  139 new,  129 merged
+2026-03-30 13:42:41 | INFO     | main                      | Treasury Sync COMPLETE: 383 unique entities, 2,153,799 BTC
+2026-03-30 13:42:41 | INFO     | main                      |   Breakdown: 286 public_company, 47 etf, 23 private_company, 15 defi, 12 government
+2026-03-30 13:43:28 | DEBUG    | gov_entities              |   Gov scrape: unmatched 'â¿190,000' with 190000 BTC
+2026-03-30 13:43:28 | DEBUG    | gov_entities              |   Gov scrape: unmatched '$43,319M' with 649853 BTC
+2026-03-30 13:43:28 | INFO     | gov_entities              |   Gov scrape: fetched 7 governments from BitcoinTreasuries.net
+2026-03-30 13:43:29 | INFO     | gov_entities              |   Gov fix: 'ðºð¸' → 'United States' (328372 BTC)
+2026-03-30 13:43:29 | INFO     | gov_entities              |   Gov fix: 'ð¨ð³' → 'China' (12665 BTC)
+2026-03-30 13:43:29 | INFO     | gov_entities              |   Gov fix: 'ð¬ð§' → 'United Kingdom' (46351 BTC)
+2026-03-30 13:43:29 | INFO     | gov_entities              |   Gov fix: 'ðºð¦' → 'Ukraine' (3090 BTC)
+2026-03-30 13:43:29 | INFO     | gov_entities              |   Gov fix: 'ð¸ð»' → 'El Salvador' (7605 BTC)
+2026-03-30 13:43:30 | INFO     | gov_entities              |   Gov fix: 'ð¦ðª' → 'Bhutan' (428 BTC)
+2026-03-30 13:43:30 | INFO     | gov_entities              |   Gov fix: 'ð§ð¹' → 'Finland' (331 BTC)
+2026-03-30 13:43:30 | INFO     | gov_entities              |   Gov fix: 'ð°ð¿' → 'Georgia' (236 BTC)
+2026-03-30 13:43:30 | INFO     | gov_entities              |   Gov fix: 'ð°ðµ' → 'Venezuela' (240 BTC)
+2026-03-30 13:43:30 | INFO     | gov_entities              |   Gov fix: 'ð»ðª' → 'Liechtenstein' (16 BTC)
+2026-03-30 13:43:30 | INFO     | gov_entities              |   Gov fix: 'ð¹ð¼' → 'North Korea (DPRK)' (803 BTC)
+2026-03-30 13:43:30 | INFO     | gov_entities              |   Gov fix: 'ð«ð®' → 'Switzerland' (6 BTC)
+2026-03-30 13:43:30 | INFO     | gov_entities              | Gov fix: 12 government entities updated
+2026-03-30 16:53:40 | INFO     | main                      | Treasury Sync v5.2 — full sync...
+2026-03-30 16:53:40 | INFO     | main                      | Treasury Sync v5.2: starting full entity sync...
+2026-03-30 16:53:40 | INFO     | main                      | --- Layer 1: CoinGecko (PRIMARY) ---
+2026-03-30 16:53:40 | INFO     | main                      |   CoinGecko               -> 148 fetched, 147 unique
+2026-03-30 16:53:40 | INFO     | main                      | --- Layer 2: BitcoinTreasuries.net (SUPPLEMENT) ---
+2026-03-30 16:53:41 | INFO     | main                      |   Private Companies         ->   26 scraped,   23 new,    3 merged
+2026-03-30 16:53:42 | INFO     | main                      |   Government Entities       ->   12 scraped,   12 new,    0 merged
+2026-03-30 16:53:43 | INFO     | main                      |   ETFs and Exchanges        ->   47 scraped,   47 new,    0 merged
+2026-03-30 16:53:44 | INFO     | main                      |   DeFi and Other            ->   17 scraped,   15 new,    2 merged
+2026-03-30 16:53:46 | INFO     | main                      |   Public Companies          ->  268 scraped,  139 new,  129 merged
+2026-03-30 16:54:14 | INFO     | main                      | Treasury Sync COMPLETE: 383 unique entities, 2,154,481 BTC
+2026-03-30 16:54:14 | INFO     | main                      |   Breakdown: 286 public_company, 47 etf, 23 private_company, 15 defi, 12 government
+2026-03-30 16:54:36 | INFO     | gov_entities              |   Gov scrape: fetched 16 BTC amounts from website
+2026-03-30 16:54:36 | INFO     | gov_entities              |   Gov fix: 'ðºð¸' → 'United States' (649,853 BTC)
+2026-03-30 16:54:36 | INFO     | gov_entities              |   Gov fix: 'ð¨ð³' → 'China' (328,372 BTC)
+2026-03-30 16:54:37 | INFO     | gov_entities              |   Gov fix: 'ð¬ð§' → 'United Kingdom' (190,000 BTC)
+2026-03-30 16:54:37 | INFO     | gov_entities              |   Gov fix: 'ðºð¦' → 'Ukraine' (61,245 BTC)
+2026-03-30 16:54:37 | INFO     | gov_entities              |   Gov fix: 'ð¸ð»' → 'El Salvador' (46,351 BTC)
+2026-03-30 16:54:37 | INFO     | gov_entities              |   Gov fix: 'ð¦ðª' → 'Bhutan' (7,605 BTC)
+2026-03-30 16:54:37 | INFO     | gov_entities              |   Gov fix: 'ð§ð¹' → 'Finland' (6,420 BTC)
+2026-03-30 16:54:37 | INFO     | gov_entities              |   Gov fix: 'ð°ð¿' → 'Georgia' (4,973 BTC)
+2026-03-30 16:54:37 | INFO     | gov_entities              |   Gov fix: 'ð°ðµ' → 'Venezuela' (3,544 BTC)
+2026-03-30 16:54:37 | INFO     | gov_entities              |   Gov fix: 'ð»ðª' → 'Liechtenstein' (803 BTC)
+2026-03-30 16:54:37 | INFO     | gov_entities              |   Gov fix: 'ð¹ð¼' → 'North Korea (DPRK)' (240 BTC)
+2026-03-30 16:54:37 | INFO     | gov_entities              |   Gov fix: 'ð«ð®' → 'Switzerland' (210 BTC)
+2026-03-30 16:54:37 | INFO     | gov_entities              | Gov fix: 12 government entities updated
+2026-03-30 16:58:56 | INFO     | main                      | Treasury Sync v5.2 — full sync...
+2026-03-30 16:58:56 | INFO     | main                      | Treasury Sync v5.2: starting full entity sync...
+2026-03-30 16:58:56 | INFO     | main                      | --- Layer 1: CoinGecko (PRIMARY) ---
+2026-03-30 16:58:56 | INFO     | main                      |   CoinGecko               -> 148 fetched, 147 unique
+2026-03-30 16:58:56 | INFO     | main                      | --- Layer 2: BitcoinTreasuries.net (SUPPLEMENT) ---
+2026-03-30 16:58:57 | INFO     | main                      |   Private Companies         ->   26 scraped,   23 new,    3 merged
+2026-03-30 16:58:58 | INFO     | main                      |   Government Entities       ->   12 scraped,   12 new,    0 merged
+2026-03-30 16:58:59 | INFO     | main                      |   ETFs and Exchanges        ->   47 scraped,   47 new,    0 merged
+2026-03-30 16:59:00 | INFO     | main                      |   DeFi and Other            ->   17 scraped,   15 new,    2 merged
+2026-03-30 16:59:02 | INFO     | main                      |   Public Companies          ->  268 scraped,  139 new,  129 merged
+2026-03-30 16:59:29 | INFO     | main                      | Treasury Sync COMPLETE: 383 unique entities, 2,154,081 BTC
+2026-03-30 16:59:29 | INFO     | main                      |   Breakdown: 286 public_company, 47 etf, 23 private_company, 15 defi, 12 government
+2026-03-30 17:00:02 | INFO     | gov_entities              |   Gov scrape: fetched 16 BTC amounts from website
+2026-03-30 17:00:03 | INFO     | gov_entities              |   Gov fix: 'ðºð¸' → 'United States' (328,372 BTC)
+2026-03-30 17:00:03 | INFO     | gov_entities              |   Gov fix: 'ð¨ð³' → 'China' (190,000 BTC)
+2026-03-30 17:00:04 | INFO     | gov_entities              |   Gov fix: 'ð¬ð§' → 'United Kingdom' (61,245 BTC)
+2026-03-30 17:00:04 | INFO     | gov_entities              |   Gov fix: 'ðºð¦' → 'Ukraine' (46,351 BTC)
+2026-03-30 17:00:04 | INFO     | gov_entities              |   Gov fix: 'ð¸ð»' → 'El Salvador' (7,605 BTC)
+2026-03-30 17:00:04 | INFO     | gov_entities              |   Gov fix: 'ð¦ðª' → 'Bhutan' (6,420 BTC)
+2026-03-30 17:00:04 | INFO     | gov_entities              |   Gov fix: 'ð§ð¹' → 'Finland' (4,973 BTC)
+2026-03-30 17:00:04 | INFO     | gov_entities              |   Gov fix: 'ð°ð¿' → 'Georgia' (3,544 BTC)
+2026-03-30 17:00:04 | INFO     | gov_entities              |   Gov fix: 'ð°ðµ' → 'Venezuela' (803 BTC)
+2026-03-30 17:00:04 | INFO     | gov_entities              |   Gov fix: 'ð»ðª' → 'Liechtenstein' (240 BTC)
+2026-03-30 17:00:04 | INFO     | gov_entities              |   Gov fix: 'ð¹ð¼' → 'North Korea (DPRK)' (210 BTC)
+2026-03-30 17:00:04 | INFO     | gov_entities              |   Gov fix: 'ð«ð®' → 'Switzerland' (90 BTC)
+2026-03-30 17:00:04 | INFO     | gov_entities              | Gov fix: 12 government entities updated
