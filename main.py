@@ -48,6 +48,8 @@ from treasury_sync import sync as treasury_sync
 from competitor_alerts import check_competitor_purchase
 from pro_briefing import send_pro_briefings
 from telegram_alerts import alerts as telegram_alerts
+from gov_entities import fix_government_entities
+from shares_updater import update_shares
 #from velocity_tracker import velocity
 #velocity.run()
 
@@ -518,6 +520,18 @@ def main():
             velocity.run()
         except Exception as e:
             logger.debug(f"Velocity tracker: {e}")
+
+        # Fix government entity names after sync
+        try:
+            fix_government_entities()
+        except Exception as e:
+            logger.debug(f"Gov fix: {e}")
+
+        # Auto-update shares outstanding from Yahoo Finance
+        try:
+            update_shares()
+        except Exception as e:
+            logger.debug(f"Shares update: {e}")
 
         # Watchlist alerts (Phase 8)
         try:
