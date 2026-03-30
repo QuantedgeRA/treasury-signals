@@ -50,6 +50,7 @@ from pro_briefing import send_pro_briefings
 from telegram_alerts import alerts as telegram_alerts
 from gov_entities import fix_government_entities
 from shares_updater import update_shares
+from entity_classifier import fix_entity_types
 #from velocity_tracker import velocity
 #velocity.run()
 
@@ -526,6 +527,12 @@ def main():
             fix_government_entities()
         except Exception as e:
             logger.debug(f"Gov fix: {e}")
+
+        # Fix DeFi/ETF entity types after sync
+        try:
+            fix_entity_types()
+        except Exception as e:
+            logger.debug(f"Entity fix: {e}")
 
         # Auto-update shares outstanding from Yahoo Finance
         try:
