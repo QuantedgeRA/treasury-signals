@@ -4678,3 +4678,12 @@
 2026-03-30 07:20:19 | INFO     | gov_entities              |   Gov fix: 'ð¹ð¼' → 'North Korea (DPRK)' (14 BTC)
 2026-03-30 07:20:19 | INFO     | gov_entities              |   Gov fix: 'ð«ð®' → 'Switzerland' (6 BTC)
 2026-03-30 07:20:19 | INFO     | gov_entities              | Gov fix: 12 government entities updated
+2026-03-30 10:05:50 | INFO     | shares_updater            | Shares updater: starting...
+2026-03-30 10:05:58 | DEBUG    | shares_updater            |   No shares data for SMLR
+2026-03-30 10:06:01 | INFO     | shares_updater            | Shares updater: 21 updated, 1 errors
+2026-03-30 10:52:30 | INFO     | shares_updater            | Shares updater: starting (all public companies)...
+2026-03-30 10:52:31 | INFO     | shares_updater            |   Found 304 public companies to check
+2026-03-30 10:56:24 | INFO     | shares_updater            | Shares updater: 76 updated, 228 errors, 0 skipped
+2026-03-30 10:58:49 | INFO     | shares_updater            | Shares updater: starting (all public companies)...
+2026-03-30 10:58:49 | INFO     | shares_updater            |   Found 304 public companies to check
+2026-03-30 11:00:02 | INFO     | shares_updater            | Shares updater: 76 updated, 28 errors, 200 skipped
