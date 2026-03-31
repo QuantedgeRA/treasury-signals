@@ -59,7 +59,7 @@ from defi_tracker import update_defi_holdings
 from whale_monitor import check_whale_transactions
 from filing_parser import parse_and_update
 from sync_protector import snapshot_primary_data, protect_primary_data
-from bms_scraper import sync_bms_data
+#from bms_scraper import sync_bms_data
 #from velocity_tracker import velocity
 #velocity.run()
 
@@ -601,13 +601,6 @@ def main():
                 update_defi_holdings()
             except Exception as e:
                 logger.debug(f"DeFi tracker: {e}")
-
-        # BitcoinMiningStock.io: Verified public company data (every 6th cycle = ~6 hours)
-        if scan_count % 6 == 0:
-            try:
-                sync_bms_data()
-            except Exception as e:
-                logger.debug(f"BMS scraper: {e}")
 
         scan_count += 1
 
