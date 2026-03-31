@@ -5761,3 +5761,6 @@
 2026-03-31 12:25:00 | INFO     | whale_monitor             |   Whale: 601 BTC — Unknown → Unknown
 2026-03-31 12:25:01 | INFO     | whale_monitor             |   Whale: 1,305 BTC — Unknown → Unknown
 2026-03-31 12:25:01 | INFO     | whale_monitor             | Whale monitor: 4 new transactions, 2 alerts
+2026-03-31 13:33:34 | INFO     | sync_protector            | Sync protector: snapshot of 323 primary-source entities saved
+2026-03-31 13:35:59 | INFO     | filing_parser             | Filing parser: processing recent filings with AI...
+2026-03-31 13:35:59 | DEBUG    | filing_parser             |   Parser: fetch error: {'message': 'column edgar_filings.source does not exist', 'code': '42703', 'hint': None, 'details': None}

@@ -57,6 +57,8 @@ from global_filing_scanner import scan_all_filings
 from etf_holdings_scraper import update_etf_holdings
 from defi_tracker import update_defi_holdings
 from whale_monitor import check_whale_transactions
+from filing_parser import parse_and_update
+from sync_protector import snapshot_primary_data, protect_primary_data
 #from velocity_tracker import velocity
 #velocity.run()
 
@@ -516,11 +518,23 @@ def main():
         except Exception as e:
             logger.debug(f"Price predictor: {e}")
 
-        # Sync ALL entities from BitcoinTreasuries.net to Supabase
+        # SNAPSHOT primary source data before aggregator sync
+        try:
+            snapshot_primary_data()
+        except Exception as e:
+            logger.debug(f"Sync snapshot: {e}")
+
+        # Sync entities from CoinGecko + BitcoinTreasuries.net (aggregator)
         try:
             treasury_sync.run()
         except Exception as e:
             logger.debug(f"Treasury sync: {e}")
+
+        # PROTECT: restore primary source data that aggregator may have overwritten
+        try:
+            protect_primary_data()
+        except Exception as e:
+            logger.debug(f"Sync protector: {e}")
 
         # Record daily snapshots + detect new entrants
         try:
@@ -560,6 +574,12 @@ def main():
             scan_all_filings(days_back=1)
         except Exception as e:
             logger.debug(f"Global filing scanner: {e}")
+
+        # AI filing parser: extract structured BTC data from detected filings
+        try:
+            parse_and_update(max_filings=15)
+        except Exception as e:
+            logger.debug(f"Filing parser: {e}")
 
         # Whale monitor: Large BTC transactions on-chain
         try:
