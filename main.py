@@ -52,6 +52,11 @@ from gov_entities import fix_government_entities
 from shares_updater import update_shares
 from entity_classifier import fix_entity_types
 from entity_name_fixer import fix_entity_names
+#from edgar_realtime import check_edgar_filings
+from global_filing_scanner import scan_all_filings
+from etf_holdings_scraper import update_etf_holdings
+from defi_tracker import update_defi_holdings
+from whale_monitor import check_whale_transactions
 #from velocity_tracker import velocity
 #velocity.run()
 
@@ -401,6 +406,7 @@ def main():
     logger.info(f"Daily Leaderboard: ACTIVE")
 
     scan_number = 0
+    scan_count = 0
     while True:
         scan_number += 1
         logger.info(f"{'='*50} SCAN #{scan_number} {'='*50}")
@@ -546,6 +552,36 @@ def main():
             update_shares()
         except Exception as e:
             logger.debug(f"Shares update: {e}")
+
+        # ═══ PRIMARY SOURCE DATA COLLECTION ═══
+
+        # Global filing scanner: SEC EDGAR + SEDAR + TDnet + DART + RNS + HKEX + ASX + more
+        try:
+            scan_all_filings(days_back=1)
+        except Exception as e:
+            logger.debug(f"Global filing scanner: {e}")
+
+        # Whale monitor: Large BTC transactions on-chain
+        try:
+            check_whale_transactions()
+        except Exception as e:
+            logger.debug(f"Whale monitor: {e}")
+
+        # ETF holdings: Direct from issuer websites (every 6th cycle = ~6 hours)
+        if scan_count % 6 == 0:
+            try:
+                update_etf_holdings()
+            except Exception as e:
+                logger.debug(f"ETF scraper: {e}")
+
+        # DeFi holdings: DeFi Llama on-chain data (every 6th cycle = ~6 hours)
+        if scan_count % 6 == 0:
+            try:
+                update_defi_holdings()
+            except Exception as e:
+                logger.debug(f"DeFi tracker: {e}")
+
+        scan_count += 1
 
         # Watchlist alerts (Phase 8)
         try:
