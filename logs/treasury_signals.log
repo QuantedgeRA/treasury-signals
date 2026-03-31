@@ -5764,3 +5764,14 @@
 2026-03-31 13:33:34 | INFO     | sync_protector            | Sync protector: snapshot of 323 primary-source entities saved
 2026-03-31 13:35:59 | INFO     | filing_parser             | Filing parser: processing recent filings with AI...
 2026-03-31 13:35:59 | DEBUG    | filing_parser             |   Parser: fetch error: {'message': 'column edgar_filings.source does not exist', 'code': '42703', 'hint': None, 'details': None}
+2026-03-31 16:36:20 | INFO     | bms_scraper               | BMS scraper: fetching verified treasury data...
+2026-03-31 16:36:31 | INFO     | bms_scraper               |   BMS: scraped 10 entities from bitcoin-treasuries
+2026-03-31 16:36:34 | INFO     | bms_scraper               |   BMS: scraped 10 entities from miner-treasuries
+2026-03-31 16:36:34 | INFO     | bms_scraper               |   BMS: 17 unique entities after dedup
+2026-03-31 16:36:36 | INFO     | bms_scraper               |   BMS: MARA Holdings, Inc. — 38,689 → 386,891 BTC [bms_verified > aggregator]
+2026-03-31 16:36:36 | INFO     | bms_scraper               |   BMS: NEW — Galaxy DigitalGLXY () — 25,723 BTC
+2026-03-31 16:36:36 | DEBUG    | bms_scraper               |   BMS insert error: {'message': 'duplicate key value violates unique constraint "treasury_companies_ticker_key"', 'code': '23505', 'hint': None, 'details': 'Key (ticker)=() already exists.'}
+2026-03-31 16:36:36 | INFO     | bms_scraper               |   BMS: Core Scientific — 2,537 → 25,371 BTC [bms_verified > aggregator]
+2026-03-31 16:36:36 | DEBUG    | bms_scraper               |   BMS insert error: {'message': 'duplicate key value violates unique constraint "treasury_companies_ticker_key"', 'code': '23505', 'hint': None, 'details': 'Key (ticker)=() already exists.'}
+2026-03-31 16:36:36 | DEBUG    | bms_scraper               |   BMS insert error: {'message': 'duplicate key value violates unique constraint "treasury_companies_ticker_key"', 'code': '23505', 'hint': None, 'details': 'Key (ticker)=() already exists.'}
+2026-03-31 16:36:36 | INFO     | bms_scraper               | BMS scraper: 2 updated, 11 validated, 1 new entities
