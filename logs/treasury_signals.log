@@ -5775,3 +5775,7 @@
 2026-03-31 16:36:36 | DEBUG    | bms_scraper               |   BMS insert error: {'message': 'duplicate key value violates unique constraint "treasury_companies_ticker_key"', 'code': '23505', 'hint': None, 'details': 'Key (ticker)=() already exists.'}
 2026-03-31 16:36:36 | DEBUG    | bms_scraper               |   BMS insert error: {'message': 'duplicate key value violates unique constraint "treasury_companies_ticker_key"', 'code': '23505', 'hint': None, 'details': 'Key (ticker)=() already exists.'}
 2026-03-31 16:36:36 | INFO     | bms_scraper               | BMS scraper: 2 updated, 11 validated, 1 new entities
+2026-03-31 16:48:16 | INFO     | bms_scraper               | BMS scraper: fetching verified treasury data...
+2026-03-31 16:48:28 | DEBUG    | bms_scraper               |   BMS: could not find BTC column. Headers: ['#', 'company', 'bitcointreasury', '1m %', '6m %', 'yoy %', 'value', 'sats/share', 'mnav', '%mcap', 'source']
+2026-03-31 16:48:31 | DEBUG    | bms_scraper               |   BMS: could not find BTC column. Headers: ['#', 'company', 'bitcointreasury', '1m %', '6m %', 'yoy %', 'value', 'sats/share', 'mnav', '%mcap', 'source']
+2026-03-31 16:48:31 | WARNING  | bms_scraper               | BMS scraper: no data scraped
