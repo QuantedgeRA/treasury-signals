@@ -5371,3 +5371,26 @@
 2026-03-31 11:21:33 | DEBUG    | global_filing_scanner     |   Germany: error
 2026-03-31 11:21:33 | DEBUG    | global_filing_scanner     |   El Salvador: error
 2026-03-31 11:21:33 | DEBUG    | global_filing_scanner     |   Global News: error
+2026-03-31 11:24:16 | INFO     | global_filing_scanner     | Global Filing Scanner: scanning 11 sources...
+2026-03-31 11:24:16 | INFO     | global_filing_scanner     |   📄 USA (SEC EDGAR)...
+2026-03-31 11:24:19 | INFO     | global_filing_scanner     |   📄 Canada (SEDAR+)...
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |     SEDAR+ error: Expecting value: line 1 column 1 (char 0)
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   Japan adapter error: scan_japan_tdnet() takes 0 positional arguments but 1 was given
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   South Korea adapter error: scan_korea_dart() takes 0 positional arguments but 1 was given
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   UK adapter error: scan_uk_rns() takes 0 positional arguments but 1 was given
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   Hong Kong adapter error: scan_hk_hkex() takes 0 positional arguments but 1 was given
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   Australia adapter error: scan_australia_asx() takes 0 positional arguments but 1 was given
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   Norway adapter error: scan_norway_oslo() takes 0 positional arguments but 1 was given
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   Germany adapter error: scan_germany_bundesanzeiger() takes 0 positional arguments but 1 was given
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   El Salvador adapter error: scan_el_salvador() takes 0 positional arguments but 1 was given
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   Global News adapter error: scan_google_news() takes 0 positional arguments but 1 was given
+2026-03-31 11:24:20 | INFO     | global_filing_scanner     | Global Filing Scanner: 0 new filings, 0 alerts (4.1s)
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   Japan: error
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   South Korea: error
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   UK: error
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   Hong Kong: error
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   Australia: error
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   Norway: error
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   Germany: error
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   El Salvador: error
+2026-03-31 11:24:20 | DEBUG    | global_filing_scanner     |   Global News: error
