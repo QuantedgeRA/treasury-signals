@@ -349,7 +349,7 @@ class TreasurySync:
                     "avg_purchase_price": avg, "total_cost_usd": cost,
                     "country": item.get("country", ""), "sector": "Technology",
                     "is_government": False, "entity_type": "public_company",
-                    "data_source": "coingecko",
+                    "data_source": "aggregator",
                 })
             except Exception:
                 continue
@@ -439,7 +439,7 @@ class TreasurySync:
             "country": self._get_country(name, is_gov),
             "sector": _guess_sector(name, page["category"]),
             "is_government": is_gov, "entity_type": page["category"],
-            "data_source": f"bt_{page['category']}",
+            "data_source": "aggregator",
         }
 
     def _parse_b(self, texts, page):
@@ -460,7 +460,7 @@ class TreasurySync:
             "avg_purchase_price": 0, "total_cost_usd": 0, "country": "",
             "sector": _guess_sector(name, page["category"]),
             "is_government": False, "entity_type": page["category"],
-            "data_source": f"bt_{page['category']}",
+            "data_source": "aggregator",
         }
 
     def _extract_btc(self, text):
@@ -510,7 +510,7 @@ class TreasurySync:
                     "sector": (entity.get("sector") or "")[:100],
                     "is_government": entity.get("is_government", False),
                     "entity_type": entity.get("entity_type", "public_company"),
-                    "data_source": entity.get("data_source", "sync"),
+                    "data_source": entity.get("data_source", "aggregator"),
                     "last_updated": datetime.now().isoformat(),
                 }).execute()
                 count += 1
