@@ -59,6 +59,8 @@ from defi_tracker import update_defi_holdings
 from whale_monitor import check_whale_transactions
 from filing_parser import parse_and_update
 from sync_protector import snapshot_primary_data, protect_primary_data
+from ticker_validator import validate_all_tickers
+#from ticker_validator import validate_all_tickers
 #from bms_scraper import sync_bms_data
 #from velocity_tracker import velocity
 #velocity.run()
@@ -567,6 +569,13 @@ def main():
             update_shares()
         except Exception as e:
             logger.debug(f"Shares update: {e}")
+
+        # Validate and auto-correct tickers (once per day)
+        if scan_number == 1 or (scan_number % 24 == 0):
+            try:
+                validate_all_tickers()
+            except Exception as e:
+                logger.debug(f"Ticker validator: {e}")
 
         # ═══ PRIMARY SOURCE DATA COLLECTION ═══
 
