@@ -33,20 +33,20 @@ def _get_market_data():
         # Companies
         comp_res = supabase.table("treasury_companies").select(
             "company, ticker, btc_holdings, entity_type, is_government, sector, data_source, source_updated_at"
-        ).gt("btc_holdings", 0).order("btc_holdings", desc=True).execute()
+        ).gt("btc_holdings", 0).order("btc_holdings", ascending=False).execute()
         companies = comp_res.data or []
 
         # BTC price from latest snapshot
         snap_res = supabase.table("leaderboard_snapshots").select(
             "btc_price, snapshot_date"
-        ).order("snapshot_date", desc=True).limit(1).execute()
+        ).order("snapshot_date", ascending=False).limit(1).execute()
         btc_price = float(snap_res.data[0]["btc_price"]) if snap_res.data else 0
 
         # Recent purchases (last 48h)
         cutoff = (datetime.now() - timedelta(hours=48)).isoformat()
         purch_res = supabase.table("confirmed_purchases").select("*").gte(
             "filing_date", cutoff[:10]
-        ).order("filing_date", desc=True).limit(10).execute()
+        ).order("filing_date", ascending=False).limit(10).execute()
         purchases = purch_res.data or []
 
         # Recent signals (last 24h, score >= 60)
@@ -54,14 +54,14 @@ def _get_market_data():
         sig_res = supabase.table("tweets").select(
             "author_username, company, confidence_score, tweet_text, created_at"
         ).gte("created_at", sig_cutoff).gte("confidence_score", 60).order(
-            "confidence_score", desc=True
+            "confidence_score", ascending=False
         ).limit(5).execute()
         signals = sig_res.data or []
 
         # Narrative
         nar_res = supabase.table("narratives").select("content").eq(
             "narrative_type", "daily"
-        ).order("generated_at", desc=True).limit(1).execute()
+        ).order("generated_at", ascending=False).limit(1).execute()
         narrative = nar_res.data[0]["content"] if nar_res.data else ""
 
         # Velocity data (new entrants last 7 days)
