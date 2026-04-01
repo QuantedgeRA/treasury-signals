@@ -1,394 +1,422 @@
 """
-pro_briefing.py — Personalized Executive Briefing (Pro Only)
--------------------------------------------------------------
-Generates and sends personalized daily briefings to Pro subscribers.
-
-Includes 5 personalized sections:
-  1. Purchase signals detected
-  2. Competitor watchlist activity
-  3. New entrants detected
-  4. Your rank changed
-  5. Daily market summary with your position
+pro_briefing.py — Bloomberg-Quality Daily Email Briefing
+=========================================================
+Sends personalized daily intelligence to Pro subscribers.
+Styled to match the TSI steel blue brand (#0EA5E9).
 
 Usage:
     from pro_briefing import send_pro_briefings
-    send_pro_briefings()  # Call after scan cycle completes
+    send_pro_briefings()  # Called daily at 7am ET from main.py
 """
 
 import os
 import json
-import requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from supabase import create_client
 from logger import get_logger
 
 logger = get_logger(__name__)
-
 load_dotenv()
+
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
-EMAIL_FROM = os.getenv("EMAIL_FROM_ADDRESS", "briefing@quantedgeriskadvisory.com")
-EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "Treasury Signal Intelligence")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://app.quantedgeriskadvisory.com")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-def get_pro_subscribers():
-    """Get all Pro subscribers with email briefing enabled."""
+def _get_market_data():
+    """Fetch all data needed for the briefing."""
     try:
-        result = supabase.table("subscribers").select(
-            "email, name, company_name, ticker, btc_holdings, watchlist_json, shares_outstanding"
-        ).eq("plan", "pro").eq("email_briefing", True).eq("is_active", True).execute()
-        return result.data or []
-    except Exception as e:
-        logger.error(f"Failed to fetch Pro subscribers: {e}")
-        return []
+        # Companies
+        comp_res = supabase.table("treasury_companies").select(
+            "company, ticker, btc_holdings, entity_type, is_government, sector, data_source, source_updated_at"
+        ).gt("btc_holdings", 0).order("btc_holdings", desc=True).execute()
+        companies = comp_res.data or []
 
-
-def get_signals_24h():
-    """Get purchase signals from last 24 hours."""
-    try:
-        cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
-        result = supabase.table("signals").select("*").gte(
-            "created_at", cutoff
-        ).order("confidence_score", desc=True).limit(20).execute()
-        return result.data or []
-    except Exception:
-        return []
-
-
-def get_leaderboard():
-    """Get current leaderboard sorted by holdings."""
-    try:
-        result = supabase.table("treasury_companies").select(
-            "ticker, company, btc_holdings"
-        ).eq("is_government", False).gt("btc_holdings", 0).order(
-            "btc_holdings", desc=True
-        ).execute()
-        return result.data or []
-    except Exception:
-        return []
-
-
-def get_new_entrants_24h():
-    """Get new entrants from the last 24 hours."""
-    try:
-        cutoff = (datetime.utcnow() - timedelta(hours=24)).strftime("%Y-%m-%d")
-        result = supabase.table("new_entrants").select("*").gte(
-            "first_seen", cutoff
-        ).execute()
-        return result.data or []
-    except Exception:
-        return []
-
-
-def get_btc_price():
-    """Get latest BTC price from leaderboard snapshots."""
-    try:
-        result = supabase.table("leaderboard_snapshots").select(
-            "btc_price"
+        # BTC price from latest snapshot
+        snap_res = supabase.table("leaderboard_snapshots").select(
+            "btc_price, snapshot_date"
         ).order("snapshot_date", desc=True).limit(1).execute()
-        if result.data and result.data[0].get("btc_price"):
-            return float(result.data[0]["btc_price"])
-    except Exception:
-        pass
-    return 0
+        btc_price = float(snap_res.data[0]["btc_price"]) if snap_res.data else 0
+
+        # Recent purchases (last 48h)
+        cutoff = (datetime.now() - timedelta(hours=48)).isoformat()
+        purch_res = supabase.table("confirmed_purchases").select("*").gte(
+            "filing_date", cutoff[:10]
+        ).order("filing_date", desc=True).limit(10).execute()
+        purchases = purch_res.data or []
+
+        # Recent signals (last 24h, score >= 60)
+        sig_cutoff = (datetime.now() - timedelta(hours=24)).isoformat()
+        sig_res = supabase.table("tweets").select(
+            "author_username, company, confidence_score, tweet_text, created_at"
+        ).gte("created_at", sig_cutoff).gte("confidence_score", 60).order(
+            "confidence_score", desc=True
+        ).limit(5).execute()
+        signals = sig_res.data or []
+
+        # Narrative
+        nar_res = supabase.table("narratives").select("content").eq(
+            "narrative_type", "daily"
+        ).order("generated_at", desc=True).limit(1).execute()
+        narrative = nar_res.data[0]["content"] if nar_res.data else ""
+
+        # Velocity data (new entrants last 7 days)
+        vel_cutoff = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        # Check if velocity snapshots exist for new entrant detection
+        new_entrants = []
+
+        return {
+            "companies": companies,
+            "btc_price": btc_price,
+            "purchases": purchases,
+            "signals": signals,
+            "narrative": narrative,
+            "new_entrants": new_entrants,
+        }
+    except Exception as e:
+        logger.debug(f"Market data fetch error: {e}")
+        return None
 
 
-def find_subscriber_rank(leaderboard, ticker):
-    """Find subscriber's rank on the leaderboard."""
-    if not ticker:
-        return 0, 0
-    for i, c in enumerate(leaderboard):
-        if c.get("ticker") == ticker:
-            return i + 1, c.get("btc_holdings", 0)
-    return 0, 0
+def _get_subscriber_position(subscriber, companies, btc_price):
+    """Calculate subscriber's position metrics."""
+    ticker = (subscriber.get("ticker") or "").upper().strip()
+    btc = float(subscriber.get("btc_holdings") or 0)
+    cost = float(subscriber.get("total_invested_usd") or 0)
+    avg_price = float(subscriber.get("avg_purchase_price") or 0)
+
+    # Find in leaderboard
+    corporate = [c for c in companies if not c.get("is_government")]
+    rank = 0
+    for i, c in enumerate(corporate):
+        if c.get("ticker", "").upper() == ticker:
+            rank = i + 1
+            btc = max(btc, float(c.get("btc_holdings") or 0))
+            break
+
+    value = btc * btc_price
+    pnl_pct = ((btc_price - avg_price) / avg_price * 100) if avg_price > 0 else 0
+    total_btc = sum(float(c.get("btc_holdings") or 0) for c in corporate)
+    market_share = (btc / total_btc * 100) if total_btc > 0 else 0
+
+    # Gap to next rank
+    gap_above = 0
+    if rank > 1:
+        above = corporate[rank - 2]
+        gap_above = float(above.get("btc_holdings") or 0) - btc
+
+    return {
+        "rank": rank,
+        "btc": btc,
+        "value": value,
+        "pnl_pct": pnl_pct,
+        "market_share": market_share,
+        "gap_above": gap_above,
+        "total_entities": len(companies),
+        "total_corporate": len(corporate),
+    }
 
 
-def get_watchlist_activity(watchlist_tickers, signals):
-    """Find signals related to watchlist companies."""
-    if not watchlist_tickers:
-        return []
-    activity = []
-    for sig in signals:
-        sig_ticker = sig.get("ticker", "")
-        sig_company = (sig.get("company", "") or "").lower()
-        for wt in watchlist_tickers:
-            if wt.upper() == sig_ticker.upper() or wt.lower() in sig_company:
-                activity.append(sig)
-                break
-    return activity
-
-
-def build_personalized_briefing(subscriber, signals, leaderboard, new_entrants, btc_price):
-    """Build HTML email for one Pro subscriber."""
+def _build_email_html(subscriber, market, position):
+    """Build the Bloomberg-quality HTML email."""
     name = subscriber.get("name", "").split(" ")[0] or "there"
-    company = subscriber.get("company_name", "")
-    ticker = subscriber.get("ticker", "")
-    holdings = subscriber.get("btc_holdings", 0) or 0
-    shares = subscriber.get("shares_outstanding", 0) or 0
+    company = subscriber.get("company_name") or ""
+    ticker = subscriber.get("ticker") or ""
+    user_type = subscriber.get("user_type") or "entity"
+    btc_price = market["btc_price"]
+    today = datetime.now().strftime("%A, %B %d, %Y")
+    purchases = market["purchases"]
+    signals = market["signals"]
+    narrative = market["narrative"]
 
-    # Parse watchlist
-    wl_raw = subscriber.get("watchlist_json", "[]")
-    watchlist = json.loads(wl_raw) if isinstance(wl_raw, str) else (wl_raw or [])
+    # Format helpers
+    def fmt_btc(v):
+        return f"{v:,.0f}" if v >= 1 else f"{v:.4f}"
 
-    # Calculate personalized data
-    rank, _ = find_subscriber_rank(leaderboard, ticker)
-    total_entities = len(leaderboard)
-    btc_yield = (holdings / shares) if shares > 0 else 0
-    btc_value = holdings * btc_price if btc_price else 0
-    pct_21m = (holdings / 21_000_000 * 100) if holdings > 0 else 0
+    def fmt_usd(v):
+        if v >= 1e9:
+            return f"${v/1e9:.1f}B"
+        if v >= 1e6:
+            return f"${v/1e6:.1f}M"
+        return f"${v:,.0f}"
 
-    # Watchlist activity
-    watchlist_activity = get_watchlist_activity(watchlist, signals)
+    # Position section (entity users only)
+    position_html = ""
+    if user_type == "entity" and position["rank"] > 0:
+        pnl_color = "#10B981" if position["pnl_pct"] >= 0 else "#EF4444"
+        pnl_sign = "+" if position["pnl_pct"] >= 0 else ""
+        position_html = f"""
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+          <tr>
+            <td style="background:#0a0e17;border:1px solid rgba(14,165,233,0.15);border-radius:12px;padding:20px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="color:rgba(255,255,255,0.25);font-size:10px;text-transform:uppercase;letter-spacing:0.1em;font-weight:600;padding-bottom:12px;">Your Position — {company}</td></tr>
+                <tr>
+                  <td>
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td width="25%" style="text-align:center;padding:8px 0;">
+                          <div style="color:rgba(255,255,255,0.2);font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">Rank</div>
+                          <div style="color:#0EA5E9;font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;">#{position['rank']}</div>
+                          <div style="color:rgba(255,255,255,0.15);font-size:10px;">of {position['total_corporate']}</div>
+                        </td>
+                        <td width="25%" style="text-align:center;padding:8px 0;">
+                          <div style="color:rgba(255,255,255,0.2);font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">Holdings</div>
+                          <div style="color:white;font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;">{fmt_btc(position['btc'])}</div>
+                          <div style="color:rgba(255,255,255,0.15);font-size:10px;">BTC</div>
+                        </td>
+                        <td width="25%" style="text-align:center;padding:8px 0;">
+                          <div style="color:rgba(255,255,255,0.2);font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">Value</div>
+                          <div style="color:white;font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;">{fmt_usd(position['value'])}</div>
+                        </td>
+                        <td width="25%" style="text-align:center;padding:8px 0;">
+                          <div style="color:rgba(255,255,255,0.2);font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">P&L</div>
+                          <div style="color:{pnl_color};font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;">{pnl_sign}{position['pnl_pct']:.1f}%</div>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                {"<tr><td style='padding-top:12px;border-top:1px solid rgba(255,255,255,0.04);'><span style='color:rgba(255,255,255,0.2);font-size:11px;'>Gap to #" + str(position['rank']-1) + ": </span><span style='color:#0EA5E9;font-family:monospace;font-size:11px;font-weight:600;'>" + fmt_btc(position['gap_above']) + " BTC (" + fmt_usd(position['gap_above'] * btc_price) + ")</span></td></tr>" if position['gap_above'] > 0 and position['rank'] > 1 else ""}
+              </table>
+            </td>
+          </tr>
+        </table>"""
 
-    # High-confidence signals
-    high_signals = [s for s in signals if (s.get("confidence_score", 0) or 0) >= 60]
+    # Purchases section
+    purchases_html = ""
+    if purchases:
+        rows = ""
+        for p in purchases[:5]:
+            amt = float(p.get("btc_amount") or 0)
+            usd = float(p.get("usd_amount") or 0)
+            rows += f"""
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+              <td style="padding:10px 0;color:white;font-size:13px;">{(p.get('company') or '').replace(' (MicroStrategy)', '')[:25]}</td>
+              <td style="padding:10px 0;color:white;font-family:'JetBrains Mono',monospace;font-size:13px;text-align:right;">{amt:,.0f} BTC</td>
+              <td style="padding:10px 0;color:rgba(255,255,255,0.25);font-family:'JetBrains Mono',monospace;font-size:11px;text-align:right;">{fmt_usd(usd) if usd > 0 else '—'}</td>
+              <td style="padding:10px 0;color:rgba(255,255,255,0.15);font-size:11px;text-align:right;">{p.get('filing_date', '')[:10]}</td>
+            </tr>"""
 
-    # Gap analysis
-    gap_above = ""
-    if rank > 1 and rank <= len(leaderboard):
-        above = leaderboard[rank - 2]
-        gap = (above.get("btc_holdings", 0) or 0) - holdings
-        if gap > 0:
-            gap_above = f"{gap:,} BTC behind #{rank - 1} ({above.get('company', 'N/A')})"
+        purchases_html = f"""
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+          <tr><td style="color:rgba(255,255,255,0.25);font-size:10px;text-transform:uppercase;letter-spacing:0.1em;font-weight:600;padding-bottom:8px;">Recent Confirmed Purchases</td></tr>
+          <tr><td>
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:4px 16px;">
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+                <td style="padding:8px 0;color:rgba(255,255,255,0.15);font-size:9px;text-transform:uppercase;letter-spacing:0.1em;">Company</td>
+                <td style="padding:8px 0;color:rgba(255,255,255,0.15);font-size:9px;text-transform:uppercase;letter-spacing:0.1em;text-align:right;">Amount</td>
+                <td style="padding:8px 0;color:rgba(255,255,255,0.15);font-size:9px;text-transform:uppercase;letter-spacing:0.1em;text-align:right;">USD</td>
+                <td style="padding:8px 0;color:rgba(255,255,255,0.15);font-size:9px;text-transform:uppercase;letter-spacing:0.1em;text-align:right;">Date</td>
+              </tr>
+              {rows}
+            </table>
+          </td></tr>
+        </table>"""
 
-    date_str = datetime.now().strftime("%B %d, %Y")
-    greeting = "Good morning" if datetime.now().hour < 12 else "Good afternoon"
+    # Signals section
+    signals_html = ""
+    if signals:
+        sig_rows = ""
+        for s in signals[:4]:
+            score = s.get("confidence_score") or 0
+            score_color = "#0EA5E9" if score >= 70 else "rgba(255,255,255,0.3)"
+            sig_rows += f"""
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+              <td style="padding:8px 0;"><span style="background:{'rgba(14,165,233,0.1)' if score >= 70 else 'rgba(255,255,255,0.03)'};color:{score_color};font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;">{score}</span></td>
+              <td style="padding:8px 0;color:white;font-size:12px;">@{s.get('author_username', '?')}</td>
+              <td style="padding:8px 0;color:rgba(255,255,255,0.25);font-size:11px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{(s.get('tweet_text') or '')[:80]}</td>
+            </tr>"""
 
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-    <body style="margin:0;padding:0;background:#04070d;font-family:'Helvetica Neue',Arial,sans-serif;">
-    <div style="max-width:640px;margin:0 auto;padding:32px 20px;">
+        signals_html = f"""
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+          <tr><td style="color:rgba(255,255,255,0.25);font-size:10px;text-transform:uppercase;letter-spacing:0.1em;font-weight:600;padding-bottom:8px;">Active Signals (24h)</td></tr>
+          <tr><td>
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:4px 16px;">
+              {sig_rows}
+            </table>
+          </td></tr>
+        </table>"""
 
-    <!-- Header -->
-    <div style="text-align:center;margin-bottom:32px;">
-      <div style="display:inline-block;background:linear-gradient(135deg,#E67E22,#d35400);width:48px;height:48px;border-radius:14px;line-height:48px;font-size:24px;color:white;font-weight:bold;">⬡</div>
-      <h1 style="color:#ffffff;font-size:22px;margin:12px 0 4px 0;">Daily Intelligence Briefing</h1>
-      <p style="color:#666;font-size:13px;margin:0;">{date_str} · Pro Subscriber</p>
-    </div>
+    # Narrative
+    narrative_html = ""
+    if narrative:
+        narrative_html = f"""
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+          <tr><td style="color:rgba(255,255,255,0.25);font-size:10px;text-transform:uppercase;letter-spacing:0.1em;font-weight:600;padding-bottom:8px;">AI Market Intelligence</td></tr>
+          <tr><td style="background:rgba(14,165,233,0.04);border:1px solid rgba(14,165,233,0.1);border-radius:10px;padding:16px;">
+            <p style="color:rgba(255,255,255,0.45);font-size:13px;line-height:1.7;margin:0;">{narrative[:500]}</p>
+            <p style="color:rgba(255,255,255,0.1);font-size:10px;margin:8px 0 0;"><span style="display:inline-block;width:6px;height:6px;background:#0EA5E9;border-radius:50%;margin-right:4px;"></span> AI-generated from multi-signal correlation</p>
+          </td></tr>
+        </table>"""
 
-    <!-- Greeting -->
-    <div style="background:#111827;border:1px solid #1e2a3a;border-radius:12px;padding:20px;margin-bottom:16px;">
-      <p style="color:#e0e0e0;font-size:15px;margin:0;">{greeting}, {name}.</p>
-      <p style="color:#888;font-size:13px;margin:8px 0 0 0;">Here's your personalized treasury intelligence for <strong style="color:#E67E22;">{company or 'your company'}</strong>.</p>
-    </div>
+    # Full email
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{{margin:0;padding:0;background:#04070d;font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;-webkit-text-size-adjust:100%;}}table{{border-collapse:collapse;}}td{{vertical-align:top;}}</style>
+</head><body style="background:#04070d;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#04070d;">
+<tr><td align="center" style="padding:0 16px;">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
 
-    <!-- Section 5: Your Position Summary -->
-    <div style="background:#111827;border:1px solid #1e2a3a;border-radius:12px;padding:20px;margin-bottom:16px;">
-      <h2 style="color:#E67E22;font-size:14px;text-transform:uppercase;letter-spacing:2px;margin:0 0 16px 0;">📊 Your Position</h2>
-      <table style="width:100%;border-collapse:collapse;">
-        <tr>
-          <td style="padding:8px 0;color:#888;font-size:13px;border-bottom:1px solid #1e2a3a;">Leaderboard Rank</td>
-          <td style="padding:8px 0;color:#fff;font-size:15px;font-weight:700;text-align:right;border-bottom:1px solid #1e2a3a;">{'#' + str(rank) if rank > 0 else 'Not ranked'} <span style="color:#555;font-size:11px;">of {total_entities}</span></td>
-        </tr>
-        <tr>
-          <td style="padding:8px 0;color:#888;font-size:13px;border-bottom:1px solid #1e2a3a;">BTC Holdings</td>
-          <td style="padding:8px 0;color:#fff;font-size:15px;font-weight:700;text-align:right;border-bottom:1px solid #1e2a3a;">{holdings:,} BTC</td>
-        </tr>
-        <tr>
-          <td style="padding:8px 0;color:#888;font-size:13px;border-bottom:1px solid #1e2a3a;">Portfolio Value</td>
-          <td style="padding:8px 0;color:#fff;font-size:15px;font-weight:700;text-align:right;border-bottom:1px solid #1e2a3a;">${btc_value:,.0f}</td>
-        </tr>
-        {'<tr><td style="padding:8px 0;color:#888;font-size:13px;border-bottom:1px solid #1e2a3a;">BTC/Share (Yield)</td><td style="padding:8px 0;color:#E67E22;font-size:15px;font-weight:700;text-align:right;border-bottom:1px solid #1e2a3a;">' + f'{btc_yield:.6f}' + '</td></tr>' if btc_yield > 0 else ''}
-        <tr>
-          <td style="padding:8px 0;color:#888;font-size:13px;">% of 21M Supply</td>
-          <td style="padding:8px 0;color:#fff;font-size:15px;font-weight:700;text-align:right;">{pct_21m:.4f}%</td>
-        </tr>
-      </table>
-      {'<p style="color:#E67E22;font-size:12px;margin:12px 0 0 0;">⬆ Gap to next rank: ' + gap_above + '</p>' if gap_above else ''}
-    </div>
+  <!-- Header -->
+  <tr><td style="padding:32px 0 24px;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td>
+          <table cellpadding="0" cellspacing="0"><tr>
+            <td style="background:linear-gradient(135deg,#0EA5E9,#0284C7);border-radius:8px;width:32px;height:32px;text-align:center;vertical-align:middle;">
+              <span style="color:white;font-weight:700;font-size:14px;">TSI</span>
+            </td>
+            <td style="padding-left:10px;">
+              <span style="color:white;font-weight:700;font-size:14px;">Treasury Signal Intelligence</span>
+            </td>
+          </tr></table>
+        </td>
+        <td style="text-align:right;">
+          <span style="color:rgba(255,255,255,0.15);font-size:11px;">{today}</span>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
 
-    <!-- Section 1: Purchase Signals -->
-    <div style="background:#111827;border:1px solid #1e2a3a;border-radius:12px;padding:20px;margin-bottom:16px;">
-      <h2 style="color:#E67E22;font-size:14px;text-transform:uppercase;letter-spacing:2px;margin:0 0 16px 0;">🔮 Purchase Signals ({len(high_signals)} high-confidence)</h2>
-    """
+  <!-- Divider -->
+  <tr><td style="height:1px;background:rgba(255,255,255,0.04);"></td></tr>
 
-    if high_signals:
-        for sig in high_signals[:5]:
-            score = sig.get("confidence_score", 0) or 0
-            color = "#10B981" if score >= 80 else "#E67E22" if score >= 60 else "#888"
-            html += f"""
-      <div style="border-bottom:1px solid #1e2a3a;padding:10px 0;">
-        <div style="display:flex;justify-content:space-between;">
-          <span style="color:#e0e0e0;font-size:13px;">{(sig.get('tweet_text', '') or '')[:100]}</span>
-        </div>
-        <div style="margin-top:4px;">
-          <span style="color:{color};font-size:12px;font-weight:700;">{score}% confidence</span>
-          <span style="color:#555;font-size:11px;margin-left:8px;">@{sig.get('author_username', 'unknown')}</span>
-        </div>
-      </div>"""
-    else:
-        html += '<p style="color:#555;font-size:13px;margin:0;">No high-confidence signals in the last 24 hours. All quiet.</p>'
+  <!-- BTC Price Bar -->
+  <tr><td style="padding:16px 0 24px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:12px 20px;">
+      <tr>
+        <td><span style="color:rgba(255,255,255,0.2);font-size:10px;text-transform:uppercase;letter-spacing:0.1em;">Bitcoin</span></td>
+        <td style="text-align:right;">
+          <span style="color:white;font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;">${btc_price:,.0f}</span>
+          <span style="display:inline-block;width:6px;height:6px;background:#10B981;border-radius:50%;margin-left:6px;"></span>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2" style="padding-top:8px;">
+          <span style="color:rgba(255,255,255,0.15);font-size:11px;">{position['total_entities']} entities tracked · {position['total_corporate']} corporate · 17 regulators scanned</span>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
 
-    html += "</div>"
+  <!-- Greeting -->
+  <tr><td style="padding-bottom:24px;">
+    <h1 style="color:white;font-size:20px;font-weight:700;margin:0 0 4px;">Good morning, {name}</h1>
+    <p style="color:rgba(255,255,255,0.25);font-size:13px;margin:0;">Here's your personalized Bitcoin treasury intelligence for today.</p>
+  </td></tr>
 
-    # Section 2: Watchlist Activity
-    html += f"""
-    <div style="background:#111827;border:1px solid #1e2a3a;border-radius:12px;padding:20px;margin-bottom:16px;">
-      <h2 style="color:#3B82F6;font-size:14px;text-transform:uppercase;letter-spacing:2px;margin:0 0 16px 0;">👁️ Watchlist Activity ({len(watchlist_activity)} alerts)</h2>
-    """
+  {position_html}
+  {narrative_html}
+  {purchases_html}
+  {signals_html}
 
-    if watchlist_activity:
-        for wa in watchlist_activity[:5]:
-            html += f"""
-      <div style="border-bottom:1px solid #1e2a3a;padding:8px 0;">
-        <span style="color:#3B82F6;font-size:12px;font-weight:700;">{wa.get('ticker', '')}</span>
-        <span style="color:#e0e0e0;font-size:12px;margin-left:8px;">{(wa.get('tweet_text', '') or '')[:80]}</span>
-        <span style="color:#555;font-size:11px;display:block;margin-top:2px;">{wa.get('confidence_score', 0)}% confidence</span>
-      </div>"""
-    elif watchlist:
-        html += f'<p style="color:#555;font-size:13px;margin:0;">No activity detected for your {len(watchlist)} watchlisted companies in the last 24 hours.</p>'
-    else:
-        html += '<p style="color:#555;font-size:13px;margin:0;">No watchlist set. <a href="' + DASHBOARD_URL + '/company" style="color:#E67E22;">Add companies to track →</a></p>'
+  <!-- CTA -->
+  <tr><td style="padding:8px 0 32px;text-align:center;">
+    <a href="{DASHBOARD_URL}/dashboard" style="display:inline-block;background:linear-gradient(135deg,#0EA5E9,#0284C7);color:white;font-weight:600;padding:12px 32px;border-radius:10px;text-decoration:none;font-size:14px;">Open Dashboard</a>
+  </td></tr>
 
-    html += "</div>"
+  <!-- Divider -->
+  <tr><td style="height:1px;background:rgba(255,255,255,0.04);"></td></tr>
 
-    # Section 3: New Entrants
-    html += f"""
-    <div style="background:#111827;border:1px solid #1e2a3a;border-radius:12px;padding:20px;margin-bottom:16px;">
-      <h2 style="color:#10B981;font-size:14px;text-transform:uppercase;letter-spacing:2px;margin:0 0 16px 0;">🆕 New Treasury Entrants ({len(new_entrants)})</h2>
-    """
+  <!-- Footer -->
+  <tr><td style="padding:24px 0;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td><span style="color:rgba(255,255,255,0.1);font-size:10px;">Treasury Signal Intelligence by QuantEdge Risk Advisory</span></td>
+        <td style="text-align:right;"><span style="color:rgba(255,255,255,0.1);font-size:10px;">Data sourced from SEC EDGAR, 17+ regulators, blockchain</span></td>
+      </tr>
+      <tr>
+        <td colspan="2" style="padding-top:8px;">
+          <span style="color:rgba(255,255,255,0.08);font-size:10px;">You're receiving this because you're a Pro subscriber. <a href="{DASHBOARD_URL}/company" style="color:rgba(14,165,233,0.3);text-decoration:none;">Manage preferences</a></span>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
 
-    if new_entrants:
-        for ne in new_entrants[:5]:
-            html += f"""
-      <div style="border-bottom:1px solid #1e2a3a;padding:8px 0;">
-        <span style="color:#10B981;font-size:13px;font-weight:700;">{ne.get('company', ne.get('ticker', ''))}</span>
-        <span style="color:#e0e0e0;font-size:12px;margin-left:8px;">{ne.get('ticker', '')} · {(ne.get('btc_holdings', 0) or 0):,} BTC</span>
-        <span style="color:#555;font-size:11px;display:block;margin-top:2px;">First seen: {ne.get('first_seen', 'today')}</span>
-      </div>"""
-        if len(new_entrants) > 5:
-            html += f'<p style="color:#555;font-size:12px;margin:8px 0 0 0;">+ {len(new_entrants) - 5} more new entrants</p>'
-    else:
-        html += '<p style="color:#555;font-size:13px;margin:0;">No new entrants detected in the last 24 hours.</p>'
-
-    html += "</div>"
-
-    # Section 4: Market Summary
-    html += f"""
-    <div style="background:#111827;border:1px solid #1e2a3a;border-radius:12px;padding:20px;margin-bottom:16px;">
-      <h2 style="color:#F59E0B;font-size:14px;text-transform:uppercase;letter-spacing:2px;margin:0 0 16px 0;">📈 Market Summary</h2>
-      <table style="width:100%;border-collapse:collapse;">
-        <tr>
-          <td style="padding:6px 0;color:#888;font-size:13px;">BTC Price</td>
-          <td style="padding:6px 0;color:#fff;font-size:14px;font-weight:700;text-align:right;">${btc_price:,.0f}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:#888;font-size:13px;">Total Entities Tracked</td>
-          <td style="padding:6px 0;color:#fff;font-size:14px;font-weight:700;text-align:right;">{total_entities}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:#888;font-size:13px;">Signals (24h)</td>
-          <td style="padding:6px 0;color:#fff;font-size:14px;font-weight:700;text-align:right;">{len(signals)} total, {len(high_signals)} high-confidence</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:#888;font-size:13px;">New Entrants (24h)</td>
-          <td style="padding:6px 0;color:#fff;font-size:14px;font-weight:700;text-align:right;">{len(new_entrants)}</td>
-        </tr>
-      </table>
-    </div>
-    """
-
-    # CTA + Footer
-    html += f"""
-    <div style="text-align:center;margin:24px 0;">
-      <a href="{DASHBOARD_URL}/dashboard" style="display:inline-block;background:linear-gradient(135deg,#E67E22,#d35400);color:white;font-weight:600;padding:12px 32px;border-radius:12px;text-decoration:none;font-size:14px;">Open Your Dashboard →</a>
-    </div>
-
-    <div style="text-align:center;margin-top:32px;padding-top:20px;border-top:1px solid #1e2a3a;">
-      <p style="color:#444;font-size:11px;margin:0;">{EMAIL_FROM_NAME} · QuantEdge Risk Advisory</p>
-      <p style="color:#333;font-size:10px;margin:4px 0 0 0;">You're receiving this because you're a Pro subscriber with email briefings enabled.</p>
-      <p style="color:#333;font-size:10px;margin:4px 0 0 0;">Manage your preferences at <a href="{DASHBOARD_URL}/company" style="color:#E67E22;">your account settings</a>.</p>
-    </div>
-
-    </div>
-    </body>
-    </html>
-    """
+</table>
+</td></tr></table>
+</body></html>"""
 
     return html
 
 
-def send_email(to_email, subject, html):
-    """Send email via Resend."""
-    if not RESEND_API_KEY:
-        logger.error("RESEND_API_KEY not configured")
-        return False
-
-    try:
-        res = requests.post("https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
-            json={
-                "from": f"{EMAIL_FROM_NAME} <{EMAIL_FROM}>",
-                "to": [to_email],
-                "subject": subject,
-                "html": html,
-            }, timeout=15)
-
-        if res.ok:
-            return True
-        else:
-            logger.error(f"Resend error for {to_email}: {res.status_code} {res.text[:100]}")
-            return False
-    except Exception as e:
-        logger.error(f"Email send error for {to_email}: {e}")
-        return False
-
-
 def send_pro_briefings():
-    """Send personalized briefings to all Pro subscribers. Call after scan cycle."""
-    logger.info("Pro Briefing: starting...")
+    """Send personalized daily briefing to all Pro subscribers with email_briefing enabled."""
+    logger.info("Pro briefing: generating daily intelligence...")
 
-    subscribers = get_pro_subscribers()
+    # Fetch market data
+    market = _get_market_data()
+    if not market:
+        logger.warning("Pro briefing: could not fetch market data")
+        return
+
+    # Fetch Pro subscribers with briefing enabled
+    try:
+        res = supabase.table("subscribers").select("*").eq("plan", "pro").eq(
+            "email_briefing", True
+        ).eq("is_active", True).execute()
+        subscribers = res.data or []
+    except Exception as e:
+        logger.debug(f"Pro briefing: subscriber fetch error: {e}")
+        return
+
     if not subscribers:
-        logger.info("Pro Briefing: no eligible subscribers (plan=pro, email_briefing=true)")
-        return {"sent": 0, "failed": 0}
-
-    # Fetch shared data once
-    signals = get_signals_24h()
-    leaderboard = get_leaderboard()
-    new_entrants = get_new_entrants_24h()
-    btc_price = get_btc_price()
-
-    logger.info(f"Pro Briefing: {len(subscribers)} subscriber(s), {len(signals)} signals, {len(new_entrants)} new entrants")
+        logger.info("Pro briefing: no subscribers with email_briefing enabled")
+        return
 
     sent = 0
-    failed = 0
-    date_str = datetime.now().strftime("%b %d, %Y")
-
     for sub in subscribers:
         try:
-            html = build_personalized_briefing(sub, signals, leaderboard, new_entrants, btc_price)
-            subject = f"🔶 Your Daily Intelligence — {date_str}"
+            position = _get_subscriber_position(sub, market["companies"], market["btc_price"])
+            html = _build_email_html(sub, market, position)
 
-            # Add personalized subject if they have rank
-            ticker = sub.get("ticker", "")
-            if ticker:
-                rank, _ = find_subscriber_rank(leaderboard, ticker)
-                if rank > 0:
-                    subject = f"🔶 #{rank} — Your Daily Intelligence — {date_str}"
-
-            if send_email(sub["email"], subject, html):
+            # Send via Resend
+            import requests
+            resp = requests.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {RESEND_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "from": "Treasury Signal Intelligence <briefing@quantedgeriskadvisory.com>",
+                    "to": [sub["email"]],
+                    "subject": f"TSI Daily Brief — BTC ${market['btc_price']:,.0f} | {len(market['purchases'])} purchases | {len(market['signals'])} signals",
+                    "html": html,
+                },
+                timeout=15,
+            )
+            if resp.status_code in (200, 201):
                 sent += 1
-                logger.info(f"  ✅ Sent to {sub.get('name', sub['email'])}")
+                logger.debug(f"  Briefing sent to {sub['email']}")
             else:
-                failed += 1
-                logger.error(f"  ❌ Failed for {sub.get('name', sub['email'])}")
+                logger.debug(f"  Briefing failed for {sub['email']}: {resp.status_code} {resp.text[:100]}")
         except Exception as e:
-            failed += 1
-            logger.error(f"  ❌ Error for {sub.get('name', sub['email'])}: {e}")
+            logger.debug(f"  Briefing error for {sub.get('email', '?')}: {e}")
 
-    logger.info(f"Pro Briefing: {sent} sent, {failed} failed")
-    return {"sent": sent, "failed": failed}
+    logger.info(f"Pro briefing: {sent}/{len(subscribers)} emails sent")
+    return {"sent": sent, "total": len(subscribers)}
 
 
 if __name__ == "__main__":
-    logger.info("Pro Briefing — manual run...")
-    result = send_pro_briefings()
-    print(f"\nSent: {result['sent']}, Failed: {result['failed']}")
+    # Test: generate HTML for first Pro subscriber and save to file
+    market = _get_market_data()
+    if market:
+        res = supabase.table("subscribers").select("*").eq("plan", "pro").limit(1).execute()
+        if res.data:
+            sub = res.data[0]
+            pos = _get_subscriber_position(sub, market["companies"], market["btc_price"])
+            html = _build_email_html(sub, market, pos)
+            with open("test_briefing.html", "w") as f:
+                f.write(html)
+            print(f"Test briefing saved to test_briefing.html ({len(html)} bytes)")
+        else:
+            print("No Pro subscribers found")
+    else:
+        print("Could not fetch market data")
