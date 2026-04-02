@@ -596,12 +596,23 @@ def main():
             fix_entity_names()
         except Exception as e:
             logger.debug(f"Name fix: {e}")
-
+        
+        '''
         # Auto-update shares outstanding from Yahoo Finance
         try:
             update_shares()
         except Exception as e:
             logger.debug(f"Shares update: {e}")
+        '''
+
+        # Auto-update shares outstanding from Yahoo Finance (6am only — shares rarely change)
+        if datetime.now().hour < 9:
+            try:
+                update_shares()
+            except Exception as e:
+                logger.debug(f"Shares update: {e}")
+        else:
+            logger.debug("Shares update: skipped (runs at 6am scan only)")
 
         # Validate and auto-correct tickers (once per day)
         if scan_number == 1 or (scan_number % 24 == 0):
@@ -696,7 +707,7 @@ def main():
             logger.info("Stopped by user. Goodbye!")
             break
         '''
-        
+
         # Scheduled scan times: 6am, 12pm, 6pm ET
         SCAN_HOURS = [6, 12, 18]
         now = datetime.now()
