@@ -66,6 +66,7 @@ from global_filing_scanner import scan_all_filings
 from etf_holdings_scraper import update_etf_holdings
 from defi_tracker import update_defi_holdings
 from whale_monitor import check_whale_transactions
+from exchange_flow_tracker import get_exchange_flow_report, format_flow_telegram
 from filing_parser import parse_and_update
 from sync_protector import snapshot_primary_data, protect_primary_data
 from ticker_validator import validate_all_tickers
@@ -396,6 +397,7 @@ def main():
     logger.info(f"Daily Leaderboard: ACTIVE")
     logger.info(f"EDGAR Realtime Bridge: ACTIVE (purchases → confirmed_purchases)")
     logger.info(f"Purchase Reconciler: ACTIVE (dedup + source hierarchy + pending verification)")
+    logger.info(f"Exchange Flow Tracker: {'ACTIVE (CryptoQuant)' if os.getenv('CRYPTOQUANT_API_KEY') else 'LIMITED (add CRYPTOQUANT_API_KEY for full data)'}")
     logger.info(f"Scan schedule: 6am (full), 12pm (detection), 6pm (detection)")
 
     scan_number = 0
@@ -699,6 +701,35 @@ def main():
                         )
         except Exception as e:
             logger.debug(f"Whale monitor: {e}")
+
+        # Exchange flow tracker: BTC exchange inflows/outflows/reserves
+        try:
+            # Get current BTC price for USD calculations
+            try:
+                btc = yf.Ticker("BTC-USD")
+                hist = btc.history(period="2d")
+                current_btc_price = float(hist["Close"].iloc[-1]) if not hist.empty else 67000
+            except:
+                current_btc_price = 67000
+
+            flow_report = get_exchange_flow_report(btc_price=current_btc_price)
+            if flow_report and flow_report.get("has_exchange_data"):
+                signal = flow_report.get("signal", "NEUTRAL")
+                netflow = flow_report.get("netflow_btc", 0)
+                logger.info(f"Exchange Flow: {signal} | Net: {netflow:+,.0f} BTC | Reserve trend: {flow_report.get('reserve_trend', 'unknown')}")
+
+                # Send to Telegram (only significant signals — not NEUTRAL)
+                if signal in ("STRONG_ACCUMULATION", "STRONG_DISTRIBUTION", "ACCUMULATION", "DISTRIBUTION"):
+                    tg_msg = format_flow_telegram(flow_report)
+                    if tg_msg:
+                        send_to_paid(tg_msg)
+                        logger.info(f"Exchange flow alert sent to PAID channel ({signal})")
+            elif flow_report and flow_report.get("has_network_data"):
+                logger.info(f"Exchange Flow: No exchange data (add CRYPTOQUANT_API_KEY) | Network: {flow_report.get('network_transactions_24h', 0):,} txns")
+            else:
+                logger.debug("Exchange Flow: No data available")
+        except Exception as e:
+            logger.debug(f"Exchange flow tracker: {e}")
 
         # ETF holdings: Direct from issuer websites (morning only)
         if morning:
