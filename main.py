@@ -26,7 +26,7 @@ from database import save_tweet, get_new_tweets, mark_processed
 from classifier import classify_tweet, get_signal_label, get_dimension_breakdown
 from telegram_bot import send_alert, send_scan_summary, send_strc_alert, send_edgar_alert, send_to_paid, send_to_free
 from strc_tracker import get_strc_volume_data, analyze_strc_signal, format_strc_alert
-from edgar_monitor import scan_edgar_filings, format_edgar_alert, TREASURY_COMPANIES
+#from edgar_monitor import scan_edgar_filings, format_edgar_alert, TREASURY_COMPANIES
 from correlation_engine import CorrelationEngine
 from pattern_analyzer import pattern_engine
 from feedback_loop import feedback_engine
@@ -221,7 +221,7 @@ def check_strc_volume():
         logger.warning("STRC: Could not fetch data")
         return None, None
 
-
+'''
 def check_edgar_filings():
     global alerted_filings, sent_edgar_ids
     noteworthy = scan_edgar_filings(days_back=3)
@@ -250,7 +250,7 @@ def check_edgar_filings():
                 logger.debug(f"Already alerted: {filing['company']} 8-K from {filing['date']}")
     logger.info(f"EDGAR: {len(noteworthy)} noteworthy filing(s), {new_filings} new alert(s)")
     return noteworthy
-
+'''
 
 def check_correlation():
     global last_correlation_alert_score, sent_correlation_score
@@ -404,7 +404,7 @@ def main():
 
     accounts = load_accounts()
     logger.info(f"Monitoring {len(accounts)} X accounts")
-    logger.info(f"Monitoring {len(TREASURY_COMPANIES)} companies on SEC EDGAR")
+    logger.info(f"EDGAR Realtime: monitoring ALL bitcoin-related 8-K filings")
     logger.info(f"STRC volume tracking: ACTIVE")
     logger.info(f"Correlation Engine: ACTIVE")
     logger.info(f"Auto-Prediction Logging: ACTIVE")
@@ -429,10 +429,8 @@ def main():
             check_strc_volume()
 
         with ScanContext(logger, scan_number, "[4/11] SEC EDGAR 8-K filings"):
-            check_edgar_filings()
-            # Real-time EDGAR scanner with bridge to confirmed_purchases
-            # This queries SEC EDGAR full-text search and writes purchase-type
-            # filings directly to confirmed_purchases for instant dashboard display
+            # Real-time EDGAR scanner — searches ALL 8-K filings for bitcoin keywords,
+            # extracts BTC/USD amounts, bridges to confirmed_purchases, sends Telegram alerts
             try:
                 check_edgar_realtime(days_back=1)
             except Exception as e:
