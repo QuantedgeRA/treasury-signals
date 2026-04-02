@@ -1,11 +1,17 @@
 """
-purchase_tracker.py — v3.0
+purchase_tracker.py — v3.1
 ---------------------------
 Comprehensive BTC Purchase Tracker
 
 Tracks purchases from ALL entity types:
 - Treasury companies, Governments, Banks, Asset managers,
   Hedge funds, ETF providers, Pension funds, Sovereign wealth funds
+
+v3.1 changes:
+- 30K BTC absolute cap on single-scan purchases (safety net)
+- Suffix-stripping duplicate detection: RIOT.US and RIOT are recognized
+  as the same entity, preventing false purchases from ticker format mismatches
+  between CoinGecko (.US absent) and BitcoinTreasuries.net (.US present)
 """
 
 import os
@@ -99,6 +105,53 @@ PURCHASE_KEYWORDS = [
     "increased holdings", "bought more", "added to", "snaps up",
     "acquires", "scoops up", "loads up", "stacks",
 ]
+
+
+# ============================================
+# TICKER NORMALIZATION
+# ============================================
+# Common suffixes added by different data sources:
+#   CoinGecko:              RIOT, MSTR, COIN
+#   BitcoinTreasuries.net:  RIOT.US, MSTR.US, COIN.US
+#   Yahoo Finance:          RIOT, MSTR, 3350.T
+#   London Stock Exchange:  ARGO.L
+#   Toronto Exchange:       HUT.TO
+#
+# When comparing snapshots across sources, these must be
+# treated as the same entity.
+TICKER_SUFFIXES = [".US", ".L", ".TO", ".AX", ".DE", ".PA", ".SW", ".HK", ".KS", ".SS", ".SZ", ".SA", ".V", ".ST", ".CO", ".MI", ".BR", ".MC", ".OL", ".HE", ".IS"]
+
+
+def _normalize_ticker(ticker):
+    """
+    Strip exchange suffixes to get the base ticker.
+    MSTR.US → MSTR, RIOT.US → RIOT, HUT.TO → HUT
+    Preserves Japanese tickers like 3350.T (Tokyo) since .T is not in suffix list.
+    """
+    upper = ticker.upper()
+    for suffix in TICKER_SUFFIXES:
+        if upper.endswith(suffix):
+            return upper[:-len(suffix)]
+    return upper
+
+
+def _build_normalized_lookup(holdings):
+    """
+    Build a lookup dict that maps normalized tickers to their snapshot data.
+    If RIOT and RIOT.US both exist, the one with more BTC wins.
+    Returns: {normalized_ticker: {"btc": int, "name": str, "original_ticker": str}}
+    """
+    lookup = {}
+    for ticker, data in holdings.items():
+        norm = _normalize_ticker(ticker)
+        if norm not in lookup or data["btc"] > lookup[norm]["btc"]:
+            lookup[norm] = {
+                "btc": data["btc"],
+                "name": data["name"],
+                "country": data.get("country", ""),
+                "original_ticker": ticker,
+            }
+    return lookup
 
 
 def scan_news_for_purchases():
@@ -278,9 +331,7 @@ def get_previous_snapshot():
 
 
 # Maximum credible BTC increase in a single scan cycle (60 minutes).
-# Strategy's largest single real purchase was ~55,500 BTC over multiple days.
-# In one scan-to-scan comparison, no company buys 30,000 BTC.
-# Anything above this cap is almost certainly a data source mismatch.
+# Safety net — the real protection is suffix-stripping duplicate detection.
 MAX_SINGLE_SCAN_PURCHASE_BTC = 30000
 
 
@@ -288,10 +339,12 @@ def detect_new_purchases(btc_price=None):
     """
     Detect new purchases by comparing today's vs previous snapshot.
     
-    Important: Government/sovereign entities are EXCLUDED from snapshot
-    comparison because their holdings data comes from inconsistent
-    sources (live API vs fallback) which creates false positives.
-    Government purchases are detected via news scan instead.
+    Uses normalized ticker matching to prevent false positives from
+    different data sources using different ticker formats (e.g.,
+    CoinGecko uses "RIOT" while BitcoinTreasuries.net uses "RIOT.US").
+    
+    Government/sovereign entities are EXCLUDED because their holdings
+    data comes from inconsistent sources which creates false positives.
     """
     logger.info("Detecting new purchases via snapshot comparison...")
     current_holdings = save_leaderboard_snapshot(btc_price)
@@ -313,6 +366,10 @@ def detect_new_purchases(btc_price=None):
     GOVERNMENT_TICKERS = {t for t in current_holdings if t.endswith("-GOV")}
     GOVERNMENT_TICKERS.update(t for t in prev_holdings if t.endswith("-GOV"))
 
+    # Build normalized lookup for previous snapshot so we can match
+    # RIOT.US (current) to RIOT (previous) as the same entity
+    prev_normalized = _build_normalized_lookup(prev_holdings)
+
     for ticker, current in current_holdings.items():
         current_btc = current["btc"]
         company_name = current["name"]
@@ -322,24 +379,29 @@ def detect_new_purchases(btc_price=None):
             logger.debug(f"Skipping government entity {ticker} from purchase detection")
             continue
 
+        # Normalize the current ticker for comparison
+        norm_ticker = _normalize_ticker(ticker)
+
+        # First: check exact ticker match in previous snapshot
+        # Second: check normalized ticker match (handles RIOT vs RIOT.US)
         if ticker in prev_holdings:
+            # Exact match — compare holdings directly
             prev_btc = prev_holdings[ticker]["btc"]
             increase = current_btc - prev_btc
 
-            # Reject increases above the absolute cap — these are data source changes
+            # Reject increases above the absolute cap
             if increase >= MAX_SINGLE_SCAN_PURCHASE_BTC:
                 logger.warning(
                     f"Rejected: {company_name} ({ticker}): "
                     f"{prev_btc:,} → {current_btc:,} BTC (+{increase:,}). "
-                    f"Exceeds {MAX_SINGLE_SCAN_PURCHASE_BTC:,} BTC single-scan cap. "
-                    f"Likely data source change, not a real purchase."
+                    f"Exceeds {MAX_SINGLE_SCAN_PURCHASE_BTC:,} BTC single-scan cap."
                 )
-            # Reject increases that are >10x previous holdings (data glitch)
+            # Reject increases >10x previous holdings (data glitch)
             elif increase > 50 and prev_btc > 0 and increase >= prev_btc * 10:
                 logger.warning(
                     f"Suspicious increase for {company_name} ({ticker}): "
                     f"{prev_btc:,} → {current_btc:,} BTC (+{increase:,}). "
-                    f"Likely a data source change, not a real purchase. Skipping."
+                    f"Likely a data source change. Skipping."
                 )
             # Valid purchase detected
             elif increase > 50:
@@ -352,10 +414,51 @@ def detect_new_purchases(btc_price=None):
                     "notes": f"Holdings: {prev_btc:,} → {current_btc:,} BTC since {prev_date}",
                     "detected": True,
                 })
+
+        elif norm_ticker in prev_normalized:
+            # No exact match, but normalized match found
+            # e.g., current has RIOT.US, previous has RIOT → same entity
+            prev_data = prev_normalized[norm_ticker]
+            prev_btc = prev_data["btc"]
+            increase = current_btc - prev_btc
+
+            logger.debug(
+                f"Matched {ticker} → {prev_data['original_ticker']} via normalization "
+                f"({prev_btc:,} → {current_btc:,} BTC)"
+            )
+
+            # Reject increases above the absolute cap
+            if increase >= MAX_SINGLE_SCAN_PURCHASE_BTC:
+                logger.warning(
+                    f"Rejected (normalized match): {company_name} ({ticker}↔{prev_data['original_ticker']}): "
+                    f"{prev_btc:,} → {current_btc:,} BTC (+{increase:,}). "
+                    f"Exceeds {MAX_SINGLE_SCAN_PURCHASE_BTC:,} BTC cap."
+                )
+            # Reject increases >10x previous holdings
+            elif increase > 50 and prev_btc > 0 and increase >= prev_btc * 10:
+                logger.warning(
+                    f"Suspicious (normalized match): {company_name} ({ticker}↔{prev_data['original_ticker']}): "
+                    f"{prev_btc:,} → {current_btc:,} BTC (+{increase:,}). Skipping."
+                )
+            # Valid purchase detected via normalized match
+            elif increase > 50:
+                detected.append({
+                    "company": company_name, "ticker": ticker, "btc_amount": increase,
+                    "usd_amount": round(increase * current_btc_price),
+                    "price_per_btc": round(current_btc_price),
+                    "filing_date": datetime.now().strftime("%Y-%m-%d"),
+                    "source": "Auto-Detected (Snapshot Comparison)",
+                    "notes": f"Holdings: {prev_btc:,} → {current_btc:,} BTC since {prev_date} (ticker: {prev_data['original_ticker']}→{ticker})",
+                    "detected": True,
+                })
+            # If increase <= 50 or negative, it's just the same entity with no meaningful change
+
         else:
-            # New entity appeared — only flag if it's a corporate entity with real holdings
-            # Also apply the absolute cap to new entrants
-            if current_btc > 100 and current_btc < MAX_SINGLE_SCAN_PURCHASE_BTC and ticker not in GOVERNMENT_TICKERS:
+            # Truly new entity — not found in previous snapshot even after normalization
+            if ticker in GOVERNMENT_TICKERS:
+                continue
+
+            if current_btc > 100 and current_btc < MAX_SINGLE_SCAN_PURCHASE_BTC:
                 detected.append({
                     "company": company_name, "ticker": ticker, "btc_amount": current_btc,
                     "usd_amount": round(current_btc * current_btc_price),
@@ -368,8 +471,7 @@ def detect_new_purchases(btc_price=None):
             elif current_btc >= MAX_SINGLE_SCAN_PURCHASE_BTC:
                 logger.warning(
                     f"Rejected new entrant: {company_name} ({ticker}) with {current_btc:,} BTC. "
-                    f"Exceeds {MAX_SINGLE_SCAN_PURCHASE_BTC:,} BTC cap — likely pre-existing entity "
-                    f"appearing due to data source change."
+                    f"Exceeds {MAX_SINGLE_SCAN_PURCHASE_BTC:,} BTC cap — likely pre-existing entity."
                 )
 
     detected.sort(key=lambda x: x["btc_amount"], reverse=True)
@@ -540,7 +642,7 @@ BTC Purchase Tracker™
 
 
 if __name__ == "__main__":
-    logger.info("BTC Purchase Tracker v3.0 — testing...")
+    logger.info("BTC Purchase Tracker v3.1 — testing...")
     purchases = get_recent_purchases(10)
     stats = get_purchase_stats()
     logger.info(f"Total: {stats['total_purchases']} purchases | {stats['total_btc']:,} BTC | ${stats['total_usd']/1_000_000_000:.1f}B")
