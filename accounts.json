@@ -1,29 +1,457 @@
 {
+    "_version": "3.0",
+    "_description": "Verified X/Twitter accounts for Treasury Signal Intelligence. Each mapped to company/ticker for Correlation Engine v2.",
+    "_updated": "2026-04-02",
+    "_total_accounts": 64,
+    "_instructions": "To add more: search the company on x.com, verify the handle is real (blue checkmark, correct bio), add entry with correct ticker matching treasury_companies table.",
     "accounts": [
-        {"username": "saylor", "company": "Strategy (MSTR)", "priority": "high", "rank": 1},
-        {"username": "Strategy", "company": "Strategy (MSTR)", "priority": "high", "rank": 1},
-        {"username": "MARAHoldings", "company": "MARA Holdings", "priority": "high", "rank": 2},
-        {"username": "fgthiel", "company": "MARA Holdings - CEO", "priority": "high", "rank": 2},
-        {"username": "TwentyOneCap", "company": "Twenty One Capital (XXI)", "priority": "high", "rank": 3},
-        {"username": "Metaplanet", "company": "Metaplanet Inc.", "priority": "high", "rank": 4},
-        {"username": "gerovich", "company": "Metaplanet - CEO", "priority": "high", "rank": 4},
-        {"username": "RiotPlatforms", "company": "Riot Platforms (RIOT)", "priority": "medium", "rank": 7},
-        {"username": "coinbase", "company": "Coinbase Global (COIN)", "priority": "medium", "rank": 8},
-        {"username": "Hut8Corp", "company": "Hut 8 Mining (HUT)", "priority": "medium", "rank": 9},
-        {"username": "CleanSpark_Inc", "company": "CleanSpark (CLSK)", "priority": "medium", "rank": 10},
-        {"username": "VivekGRamaswamy", "company": "Strive (ASST)", "priority": "medium", "rank": 11},
-        {"username": "Tesla", "company": "Tesla (TSLA)", "priority": "low", "rank": 12},
-        {"username": "GameStop", "company": "GameStop (GME)", "priority": "low", "rank": 21},
-        {"username": "GalaxyDigitalHQ", "company": "Galaxy Digital (GLXY)", "priority": "medium", "rank": 16},
-        {"username": "CoreScientific", "company": "Core Scientific (CORZ)", "priority": "medium", "rank": 30},
-        {"username": "Bitfarms", "company": "Bitfarms (BITF)", "priority": "low", "rank": 37},
-        {"username": "CanaanInc", "company": "Canaan Inc. (CAN)", "priority": "low", "rank": 38},
-        {"username": "CipherMining", "company": "Cipher Mining (CIFR)", "priority": "low", "rank": 40},
-        {"username": "KULRTech", "company": "KULR Technology (KULR)", "priority": "medium", "rank": 46},
-        {"username": "ExodusMovement", "company": "Exodus Movement (EXOD)", "priority": "low", "rank": 60},
-        {"username": "TeraWulf", "company": "TeraWulf (WULF)", "priority": "low", "rank": 0},
-        {"username": "HIVEDigiTech", "company": "HIVE Digital (HIVE)", "priority": "low", "rank": 33},
-        {"username": "BlockInc", "company": "Block Inc. (XYZ)", "priority": "low", "rank": 14}
-    ],
-    "_instructions": "HOW TO ADD MORE COMPANIES: For each company on BitcoinTreasuries.net that is missing: 1) Go to x.com and search the company name. 2) Check their official website for a Twitter/X link. 3) Verify the account is real. 4) Add a new entry. 5) Run: git add . && git commit -m 'Add accounts' && git push"
+        {
+            "username": "saylor",
+            "company": "Strategy (MSTR)",
+            "ticker": "MSTR",
+            "role": "Executive Chairman",
+            "priority": "high"
+        },
+        {
+            "username": "Strategy",
+            "company": "Strategy (MSTR)",
+            "ticker": "MSTR",
+            "role": "Company Account",
+            "priority": "high"
+        },
+        {
+            "username": "jackmallers",
+            "company": "Twenty One Capital (XXI)",
+            "ticker": "XXI",
+            "role": "CEO - Jack Mallers",
+            "priority": "high"
+        },
+        {
+            "username": "twentyone",
+            "company": "Twenty One Capital (XXI)",
+            "ticker": "XXI",
+            "role": "Company Account",
+            "priority": "high"
+        },
+        {
+            "username": "MARAHoldings",
+            "company": "MARA Holdings",
+            "ticker": "MARA",
+            "role": "Company Account",
+            "priority": "high"
+        },
+        {
+            "username": "fgthiel",
+            "company": "MARA Holdings",
+            "ticker": "MARA",
+            "role": "CEO - Fred Thiel",
+            "priority": "high"
+        },
+        {
+            "username": "Metaplanet",
+            "company": "Metaplanet Inc.",
+            "ticker": "3350.T",
+            "role": "Company Account (EN)",
+            "priority": "high"
+        },
+        {
+            "username": "gerovich",
+            "company": "Metaplanet Inc.",
+            "ticker": "3350.T",
+            "role": "CEO - Simon Gerovich",
+            "priority": "high"
+        },
+        {
+            "username": "VivekGRamaswamy",
+            "company": "Strive Inc.",
+            "ticker": "ASST",
+            "role": "Co-Founder - Vivek Ramaswamy",
+            "priority": "high"
+        },
+        {
+            "username": "BenPhiat",
+            "company": "Strive Inc.",
+            "ticker": "ASST",
+            "role": "CFO - Ben Pham",
+            "priority": "medium"
+        },
+        {
+            "username": "GameStop",
+            "company": "GameStop Corp.",
+            "ticker": "GME",
+            "role": "Company Account",
+            "priority": "high"
+        },
+        {
+            "username": "RiotPlatforms",
+            "company": "Riot Platforms",
+            "ticker": "RIOT",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "coinbase",
+            "company": "Coinbase Global",
+            "ticker": "COIN",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "brian_armstrong",
+            "company": "Coinbase Global",
+            "ticker": "COIN",
+            "role": "CEO - Brian Armstrong",
+            "priority": "medium"
+        },
+        {
+            "username": "Hut8Corp",
+            "company": "Hut 8 Mining Corp",
+            "ticker": "HUT",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "CleanSpark_Inc",
+            "company": "CleanSpark",
+            "ticker": "CLSK",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "Tesla",
+            "company": "Tesla",
+            "ticker": "TSLA",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "elonmusk",
+            "company": "Tesla",
+            "ticker": "TSLA",
+            "role": "CEO - Elon Musk",
+            "priority": "medium"
+        },
+        {
+            "username": "GalaxyDigitalHQ",
+            "company": "Galaxy Digital Holdings",
+            "ticker": "GLXY",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "BlockInc",
+            "company": "Block Inc.",
+            "ticker": "XYZ",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "jack",
+            "company": "Block Inc.",
+            "ticker": "XYZ",
+            "role": "Co-Founder - Jack Dorsey",
+            "priority": "medium"
+        },
+        {
+            "username": "chrispavlovski",
+            "company": "Rumble",
+            "ticker": "RUM",
+            "role": "CEO - Chris Pavlovski",
+            "priority": "medium"
+        },
+        {
+            "username": "adam3us",
+            "company": "Bitcoin Standard Treasury Company",
+            "ticker": "CEPO",
+            "role": "CEO - Adam Back",
+            "priority": "high"
+        },
+        {
+            "username": "BST_btc",
+            "company": "Bitcoin Standard Treasury Company",
+            "ticker": "CEPO",
+            "role": "Company Account",
+            "priority": "high"
+        },
+        {
+            "username": "Blockstream",
+            "company": "Bitcoin Standard Treasury Company",
+            "ticker": "CEPO",
+            "role": "Related - Blockstream",
+            "priority": "medium"
+        },
+        {
+            "username": "CoreScientific",
+            "company": "Core Scientific",
+            "ticker": "CORZ",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "Bitfarms",
+            "company": "Bitfarms Ltd.",
+            "ticker": "BITF",
+            "role": "Company Account",
+            "priority": "low"
+        },
+        {
+            "username": "CanaanInc",
+            "company": "Canaan Inc.",
+            "ticker": "CAN",
+            "role": "Company Account",
+            "priority": "low"
+        },
+        {
+            "username": "CipherMining",
+            "company": "Cipher Mining",
+            "ticker": "CIFR",
+            "role": "Company Account",
+            "priority": "low"
+        },
+        {
+            "username": "KULRTech",
+            "company": "KULR Technology Group",
+            "ticker": "KULR",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "ExodusMovement",
+            "company": "Exodus Movement",
+            "ticker": "EXOD",
+            "role": "Company Account",
+            "priority": "low"
+        },
+        {
+            "username": "TeraWulf",
+            "company": "TeraWulf",
+            "ticker": "WULF",
+            "role": "Company Account",
+            "priority": "low"
+        },
+        {
+            "username": "HIVEDigiTech",
+            "company": "HIVE Digital Technologies",
+            "ticker": "HIVE",
+            "role": "Company Account",
+            "priority": "low"
+        },
+        {
+            "username": "BitFuFu_Group",
+            "company": "BitFuFu Inc.",
+            "ticker": "FUFU",
+            "role": "Company Account",
+            "priority": "low"
+        },
+        {
+            "username": "DeFiTech_",
+            "company": "DeFi Technologies",
+            "ticker": "DEFI",
+            "role": "Company Account",
+            "priority": "low"
+        },
+        {
+            "username": "SOSLimited",
+            "company": "SOS Limited",
+            "ticker": "SOS",
+            "role": "Company Account",
+            "priority": "low"
+        },
+        {
+            "username": "Fold_App",
+            "company": "Fold Holdings",
+            "ticker": "FLD",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "BitcoinDepot",
+            "company": "Bitcoin Depot",
+            "ticker": "BTM",
+            "role": "Company Account",
+            "priority": "low"
+        },
+        {
+            "username": "Tether_to",
+            "company": "Tether Holdings (Private)",
+            "ticker": "USDT",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "realDonaldTrump",
+            "company": "US Government",
+            "ticker": "US-GOV",
+            "role": "President - Donald Trump",
+            "priority": "high"
+        },
+        {
+            "username": "DavidSacks",
+            "company": "US Government",
+            "ticker": "US-GOV",
+            "role": "White House AI & Crypto Czar",
+            "priority": "high"
+        },
+        {
+            "username": "SenLummis",
+            "company": "US Senate",
+            "ticker": "US-GOV",
+            "role": "Senator - Cynthia Lummis (BITCOIN Act)",
+            "priority": "high"
+        },
+        {
+            "username": "SenTedCruz",
+            "company": "US Senate",
+            "ticker": "US-GOV",
+            "role": "Senator - Ted Cruz",
+            "priority": "low"
+        },
+        {
+            "username": "SenWarren",
+            "company": "US Senate",
+            "ticker": "US-GOV",
+            "role": "Senator - Elizabeth Warren",
+            "priority": "low"
+        },
+        {
+            "username": "HesterPeirce",
+            "company": "SEC",
+            "ticker": "SEC",
+            "role": "SEC Commissioner - Hester Peirce",
+            "priority": "medium"
+        },
+        {
+            "username": "SECGov",
+            "company": "SEC",
+            "ticker": "SEC",
+            "role": "Securities & Exchange Commission",
+            "priority": "medium"
+        },
+        {
+            "username": "federalreserve",
+            "company": "Federal Reserve",
+            "ticker": "FED",
+            "role": "Federal Reserve",
+            "priority": "medium"
+        },
+        {
+            "username": "ARKInvest",
+            "company": "ARK Invest",
+            "ticker": "ARKK",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "BlackRock",
+            "company": "BlackRock (iShares IBIT)",
+            "ticker": "BLK",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "Fidelity",
+            "company": "Fidelity Investments (FBTC)",
+            "ticker": "FNF",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "Grayscale",
+            "company": "Grayscale (GBTC)",
+            "ticker": "GBTC",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "BarrySilbert",
+            "company": "Grayscale (DCG)",
+            "ticker": "GBTC",
+            "role": "CEO DCG - Barry Silbert",
+            "priority": "medium"
+        },
+        {
+            "username": "BitwiseInvest",
+            "company": "Bitwise Asset Management",
+            "ticker": "BITW",
+            "role": "Company Account",
+            "priority": "medium"
+        },
+        {
+            "username": "Matt_Hougan",
+            "company": "Bitwise Asset Management",
+            "ticker": "BITW",
+            "role": "CIO - Matt Hougan",
+            "priority": "medium"
+        },
+        {
+            "username": "VanEck_US",
+            "company": "VanEck",
+            "ticker": "HODL",
+            "role": "Company Account",
+            "priority": "low"
+        },
+        {
+            "username": "CoinDesk",
+            "company": "Media - CoinDesk",
+            "ticker": "MEDIA",
+            "role": "Crypto News Wire",
+            "priority": "medium"
+        },
+        {
+            "username": "Cointelegraph",
+            "company": "Media - CoinTelegraph",
+            "ticker": "MEDIA",
+            "role": "Crypto News Wire",
+            "priority": "medium"
+        },
+        {
+            "username": "TheBlock__",
+            "company": "Media - The Block",
+            "ticker": "MEDIA",
+            "role": "Crypto News Wire",
+            "priority": "medium"
+        },
+        {
+            "username": "BitcoinMagazine",
+            "company": "Media - Bitcoin Magazine",
+            "ticker": "MEDIA",
+            "role": "Bitcoin News",
+            "priority": "medium"
+        },
+        {
+            "username": "DocumentingBTC",
+            "company": "Media - Documenting BTC",
+            "ticker": "MEDIA",
+            "role": "BTC Treasury Aggregator",
+            "priority": "medium"
+        },
+        {
+            "username": "TFTC21",
+            "company": "Media - TFTC",
+            "ticker": "MEDIA",
+            "role": "Bitcoin Media / Podcasts",
+            "priority": "low"
+        },
+        {
+            "username": "StrikeApp",
+            "company": "Twenty One Capital (XXI)",
+            "ticker": "XXI",
+            "role": "Strike (Related Product)",
+            "priority": "low"
+        },
+        {
+            "username": "chamath",
+            "company": "Social Capital",
+            "ticker": "SOCIAL",
+            "role": "Investor - Chamath Palihapitiya",
+            "priority": "low"
+        },
+        {
+            "username": "APompliano",
+            "company": "Media - Pomp Investments",
+            "ticker": "MEDIA",
+            "role": "Investor / Media - Anthony Pompliano",
+            "priority": "low"
+        }
+    ]
 }
