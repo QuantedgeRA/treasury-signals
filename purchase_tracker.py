@@ -1,17 +1,20 @@
 """
-purchase_tracker.py — v3.1
+purchase_tracker.py — v3.2
 ---------------------------
 Comprehensive BTC Purchase Tracker
 
-Tracks purchases from ALL entity types:
-- Treasury companies, Governments, Banks, Asset managers,
-  Hedge funds, ETF providers, Pension funds, Sovereign wealth funds
+All purchase detections now go through purchase_reconciler.py which handles:
+- Deduplication (same company, ±3 days, ±20% BTC)
+- Source hierarchy (EDGAR > Global Filing > News > Snapshot)
+- Pending verification for snapshot "new entrants"
+- Confirmation bridge and expiry
 
-v3.1 changes:
-- 30K BTC absolute cap on single-scan purchases (safety net)
-- Suffix-stripping duplicate detection: RIOT.US and RIOT are recognized
-  as the same entity, preventing false purchases from ticker format mismatches
-  between CoinGecko (.US absent) and BitcoinTreasuries.net (.US present)
+v3.2 changes:
+- All writes go through reconcile_and_save() instead of direct DB inserts
+- Snapshot "new entrants" go to pending_purchases (not confirmed)
+- Snapshot "existing entity increases" go through reconciler for dedup
+- News-detected purchases go through reconciler for dedup
+- Ticker normalization for cross-source entity matching
 """
 
 import os
@@ -27,6 +30,7 @@ from treasury_leaderboard import get_leaderboard_with_live_price, fetch_live_lea
 import yfinance as yf
 from logger import get_logger
 from freshness_tracker import freshness
+from purchase_reconciler import reconcile_and_save
 
 logger = get_logger(__name__)
 
@@ -36,7 +40,6 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-# Known historical purchases (for seeding)
 KNOWN_PURCHASES = [
     {"company": "Strategy", "ticker": "MSTR", "btc_amount": 22337, "usd_amount": 1570000000, "price_per_btc": 70194, "filing_date": "2025-03-16", "source": "8-K Filing", "notes": "Saylor's 'Stretch the Orange Dots' signal preceded this purchase."},
     {"company": "Strategy", "ticker": "MSTR", "btc_amount": 20356, "usd_amount": 1990000000, "price_per_btc": 97514, "filing_date": "2025-02-24", "source": "8-K Filing", "notes": "Funded through STRC preferred stock offering."},
@@ -56,7 +59,6 @@ KNOWN_PURCHASES = [
     {"company": "Strategy", "ticker": "MSTR", "btc_amount": 51780, "usd_amount": 4600000000, "price_per_btc": 88627, "filing_date": "2024-11-18", "source": "8-K Filing", "notes": ""},
 ]
 
-# Comprehensive entity map
 ENTITY_MAP = {
     "strategy": ("Strategy", "MSTR"), "microstrategy": ("Strategy", "MSTR"), "mstr": ("Strategy", "MSTR"), "saylor": ("Strategy", "MSTR"),
     "mara": ("MARA Holdings", "MARA"), "marathon": ("MARA Holdings", "MARA"),
@@ -106,28 +108,10 @@ PURCHASE_KEYWORDS = [
     "acquires", "scoops up", "loads up", "stacks",
 ]
 
-
-# ============================================
-# TICKER NORMALIZATION
-# ============================================
-# Common suffixes added by different data sources:
-#   CoinGecko:              RIOT, MSTR, COIN
-#   BitcoinTreasuries.net:  RIOT.US, MSTR.US, COIN.US
-#   Yahoo Finance:          RIOT, MSTR, 3350.T
-#   London Stock Exchange:  ARGO.L
-#   Toronto Exchange:       HUT.TO
-#
-# When comparing snapshots across sources, these must be
-# treated as the same entity.
 TICKER_SUFFIXES = [".US", ".L", ".TO", ".AX", ".DE", ".PA", ".SW", ".HK", ".KS", ".SS", ".SZ", ".SA", ".V", ".ST", ".CO", ".MI", ".BR", ".MC", ".OL", ".HE", ".IS"]
 
 
 def _normalize_ticker(ticker):
-    """
-    Strip exchange suffixes to get the base ticker.
-    MSTR.US → MSTR, RIOT.US → RIOT, HUT.TO → HUT
-    Preserves Japanese tickers like 3350.T (Tokyo) since .T is not in suffix list.
-    """
     upper = ticker.upper()
     for suffix in TICKER_SUFFIXES:
         if upper.endswith(suffix):
@@ -136,28 +120,16 @@ def _normalize_ticker(ticker):
 
 
 def _build_normalized_lookup(holdings):
-    """
-    Build a lookup dict that maps normalized tickers to their snapshot data.
-    If RIOT and RIOT.US both exist, the one with more BTC wins.
-    Returns: {normalized_ticker: {"btc": int, "name": str, "original_ticker": str}}
-    """
     lookup = {}
     for ticker, data in holdings.items():
         norm = _normalize_ticker(ticker)
         if norm not in lookup or data["btc"] > lookup[norm]["btc"]:
-            lookup[norm] = {
-                "btc": data["btc"],
-                "name": data["name"],
-                "country": data.get("country", ""),
-                "original_ticker": ticker,
-            }
+            lookup[norm] = {"btc": data["btc"], "name": data["name"], "country": data.get("country", ""), "original_ticker": ticker}
     return lookup
 
 
 def scan_news_for_purchases():
-    """Scan Google News RSS for recent BTC purchase announcements."""
     logger.info("Scanning news for recent BTC purchases...")
-
     queries = [
         "bitcoin purchase company 2026", "bitcoin treasury buy 2026",
         "corporate bitcoin acquisition 2026", "company buys bitcoin 2026",
@@ -167,7 +139,6 @@ def scan_news_for_purchases():
         "BlackRock bitcoin ETF inflow 2026", "Fidelity bitcoin ETF 2026",
         "bitcoin billion purchase 2026", "bitcoin million acquisition 2026",
     ]
-
     detected = []
     seen_titles = set()
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -178,19 +149,15 @@ def scan_news_for_purchases():
             response = requests.get(url, headers=headers, timeout=10)
             if response.status_code != 200:
                 continue
-
             root = ET.fromstring(response.content)
-
             for item in root.findall(".//item")[:5]:
                 title = item.findtext("title", "")
                 pub_date = item.findtext("pubDate", "")
                 link = item.findtext("link", "")
-
                 title_key = title[:50].lower()
                 if title_key in seen_titles:
                     continue
                 seen_titles.add(title_key)
-
                 try:
                     date_obj = datetime.strptime(pub_date[:25], "%a, %d %b %Y %H:%M:%S")
                     date_str = date_obj.strftime("%Y-%m-%d")
@@ -198,13 +165,10 @@ def scan_news_for_purchases():
                         continue
                 except ValueError:
                     date_str = datetime.now().strftime("%Y-%m-%d")
-
                 title_lower = title.lower()
-
                 has_purchase = any(k in title_lower for k in PURCHASE_KEYWORDS)
                 if not has_purchase:
                     continue
-
                 matched_company = None
                 matched_ticker = None
                 for key, (name, ticker) in ENTITY_MAP.items():
@@ -212,24 +176,20 @@ def scan_news_for_purchases():
                         matched_company = name
                         matched_ticker = ticker
                         break
-
                 if not matched_company:
                     if "bitcoin" in title_lower and any(k in title_lower for k in ["buys", "bought", "purchase", "acquired"]):
                         matched_company = "Unknown Entity"
                         matched_ticker = "UNKNOWN"
                     else:
                         continue
-
                 btc_amount = 0
                 usd_amount = 0
-
                 btc_match = re.search(r'([\d,]+)\s*(?:btc|bitcoin)', title_lower)
                 if btc_match:
                     try:
                         btc_amount = int(btc_match.group(1).replace(",", ""))
                     except ValueError:
                         pass
-
                 usd_match = re.search(r'\$\s*([\d.]+)\s*(b|billion|m|million)', title_lower)
                 if usd_match:
                     try:
@@ -241,12 +201,10 @@ def scan_news_for_purchases():
                             usd_amount = int(amount * 1_000_000)
                     except ValueError:
                         pass
-
                 if usd_amount > 0 and btc_amount == 0:
                     btc_amount = int(usd_amount / 72000)
                 if btc_amount > 0 and usd_amount == 0:
                     usd_amount = btc_amount * 72000
-
                 if btc_amount > 0 or usd_amount > 0:
                     detected.append({
                         "company": matched_company, "ticker": matched_ticker,
@@ -261,7 +219,6 @@ def scan_news_for_purchases():
             logger.debug(f"News query failed for '{query}': {e}")
             continue
 
-    # Deduplicate
     seen = set()
     unique = []
     for d in detected:
@@ -269,43 +226,41 @@ def scan_news_for_purchases():
         if key not in seen:
             seen.add(key)
             unique.append(d)
-
     unique.sort(key=lambda x: x["filing_date"], reverse=True)
 
     if unique:
         logger.info(f"Found {len(unique)} purchase(s) in news")
         freshness.record_success("google_news_purchases", detail=f"{len(unique)} purchases found")
-        for d in unique[:5]:
-            logger.debug(f"  {d['company']}: {d['btc_amount']:,} BTC (~${d['usd_amount']/1_000_000:,.0f}M) on {d['filing_date']}")
     else:
         logger.debug("No new purchases found in news")
         freshness.record_success("google_news_purchases", detail="No new purchases")
 
+    reconciled = 0
+    for p in unique:
+        result = reconcile_and_save(p, source_type="news", is_new_entrant=False)
+        if result["action"] in ("confirmed", "upgraded", "pending_confirmed"):
+            reconciled += 1
+    if reconciled:
+        logger.info(f"News scanner: {reconciled} purchase(s) reconciled")
     return unique
 
 
 def save_leaderboard_snapshot(btc_price=None):
-    """Save today's leaderboard snapshot for comparison."""
     try:
         if not btc_price:
             btc = yf.Ticker("BTC-USD")
             hist = btc.history(period="5d")
             btc_price = float(hist["Close"].iloc[-1]) if not hist.empty else 72000
-
         companies, summary = get_leaderboard_with_live_price(btc_price)
         snapshot_date = datetime.now().strftime("%Y-%m-%d")
-
         holdings = {}
         for c in companies:
             if c["btc_holdings"] > 0:
                 key = c.get("ticker", c["company"][:20])
                 holdings[key] = {"name": c["company"], "btc": c["btc_holdings"], "country": c.get("country", "")}
-
         row = {
-            "snapshot_date": snapshot_date,
-            "btc_price": btc_price,
-            "total_btc": summary["total_btc"],
-            "total_value_b": summary["total_value_b"],
+            "snapshot_date": snapshot_date, "btc_price": btc_price,
+            "total_btc": summary["total_btc"], "total_value_b": summary["total_value_b"],
             "companies_json": json.dumps(holdings),
         }
         supabase.table("leaderboard_snapshots").upsert(row, on_conflict="snapshot_date").execute()
@@ -317,7 +272,6 @@ def save_leaderboard_snapshot(btc_price=None):
 
 
 def get_previous_snapshot():
-    """Get yesterday's snapshot for comparison."""
     try:
         today = datetime.now().strftime("%Y-%m-%d")
         result = supabase.table("leaderboard_snapshots").select("*").lt("snapshot_date", today).order("snapshot_date", desc=True).limit(1).execute()
@@ -330,27 +284,14 @@ def get_previous_snapshot():
         return None
 
 
-# Maximum credible BTC increase in a single scan cycle (60 minutes).
-# Safety net — the real protection is suffix-stripping duplicate detection.
 MAX_SINGLE_SCAN_PURCHASE_BTC = 30000
 
 
 def detect_new_purchases(btc_price=None):
-    """
-    Detect new purchases by comparing today's vs previous snapshot.
-    
-    Uses normalized ticker matching to prevent false positives from
-    different data sources using different ticker formats (e.g.,
-    CoinGecko uses "RIOT" while BitcoinTreasuries.net uses "RIOT.US").
-    
-    Government/sovereign entities are EXCLUDED because their holdings
-    data comes from inconsistent sources which creates false positives.
-    """
     logger.info("Detecting new purchases via snapshot comparison...")
     current_holdings = save_leaderboard_snapshot(btc_price)
     if not current_holdings:
         return []
-
     previous = get_previous_snapshot()
     if not previous:
         logger.info("No previous snapshot — purchases detected starting tomorrow")
@@ -361,122 +302,80 @@ def detect_new_purchases(btc_price=None):
     current_btc_price = btc_price or 72000
     detected = []
 
-    # Tickers to exclude from snapshot comparison (government entities
-    # have unreliable data that fluctuates between live/fallback sources)
     GOVERNMENT_TICKERS = {t for t in current_holdings if t.endswith("-GOV")}
     GOVERNMENT_TICKERS.update(t for t in prev_holdings if t.endswith("-GOV"))
-
-    # Build normalized lookup for previous snapshot so we can match
-    # RIOT.US (current) to RIOT (previous) as the same entity
     prev_normalized = _build_normalized_lookup(prev_holdings)
 
     for ticker, current in current_holdings.items():
         current_btc = current["btc"]
         company_name = current["name"]
-
-        # Skip government entities — their data is inconsistent
         if ticker in GOVERNMENT_TICKERS:
-            logger.debug(f"Skipping government entity {ticker} from purchase detection")
             continue
-
-        # Normalize the current ticker for comparison
         norm_ticker = _normalize_ticker(ticker)
 
-        # First: check exact ticker match in previous snapshot
-        # Second: check normalized ticker match (handles RIOT vs RIOT.US)
+        # ─── Exact ticker match ───
         if ticker in prev_holdings:
-            # Exact match — compare holdings directly
             prev_btc = prev_holdings[ticker]["btc"]
             increase = current_btc - prev_btc
-
-            # Reject increases above the absolute cap
             if increase >= MAX_SINGLE_SCAN_PURCHASE_BTC:
-                logger.warning(
-                    f"Rejected: {company_name} ({ticker}): "
-                    f"{prev_btc:,} → {current_btc:,} BTC (+{increase:,}). "
-                    f"Exceeds {MAX_SINGLE_SCAN_PURCHASE_BTC:,} BTC single-scan cap."
-                )
-            # Reject increases >10x previous holdings (data glitch)
+                logger.warning(f"Rejected: {company_name} ({ticker}): +{increase:,} BTC exceeds cap")
             elif increase > 50 and prev_btc > 0 and increase >= prev_btc * 10:
-                logger.warning(
-                    f"Suspicious increase for {company_name} ({ticker}): "
-                    f"{prev_btc:,} → {current_btc:,} BTC (+{increase:,}). "
-                    f"Likely a data source change. Skipping."
-                )
-            # Valid purchase detected
+                logger.warning(f"Suspicious: {company_name} ({ticker}): +{increase:,} BTC (>10x). Skipping.")
             elif increase > 50:
-                detected.append({
+                purchase = {
                     "company": company_name, "ticker": ticker, "btc_amount": increase,
                     "usd_amount": round(increase * current_btc_price),
                     "price_per_btc": round(current_btc_price),
                     "filing_date": datetime.now().strftime("%Y-%m-%d"),
                     "source": "Auto-Detected (Snapshot Comparison)",
                     "notes": f"Holdings: {prev_btc:,} → {current_btc:,} BTC since {prev_date}",
-                    "detected": True,
-                })
+                }
+                result = reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False)
+                if result["action"] in ("confirmed", "upgraded"):
+                    detected.append(purchase)
 
+        # ─── Normalized ticker match ───
         elif norm_ticker in prev_normalized:
-            # No exact match, but normalized match found
-            # e.g., current has RIOT.US, previous has RIOT → same entity
             prev_data = prev_normalized[norm_ticker]
             prev_btc = prev_data["btc"]
             increase = current_btc - prev_btc
-
-            logger.debug(
-                f"Matched {ticker} → {prev_data['original_ticker']} via normalization "
-                f"({prev_btc:,} → {current_btc:,} BTC)"
-            )
-
-            # Reject increases above the absolute cap
+            logger.debug(f"Matched {ticker} → {prev_data['original_ticker']} via normalization")
             if increase >= MAX_SINGLE_SCAN_PURCHASE_BTC:
-                logger.warning(
-                    f"Rejected (normalized match): {company_name} ({ticker}↔{prev_data['original_ticker']}): "
-                    f"{prev_btc:,} → {current_btc:,} BTC (+{increase:,}). "
-                    f"Exceeds {MAX_SINGLE_SCAN_PURCHASE_BTC:,} BTC cap."
-                )
-            # Reject increases >10x previous holdings
+                logger.warning(f"Rejected (normalized): {company_name} ({ticker}↔{prev_data['original_ticker']}): +{increase:,} BTC exceeds cap")
             elif increase > 50 and prev_btc > 0 and increase >= prev_btc * 10:
-                logger.warning(
-                    f"Suspicious (normalized match): {company_name} ({ticker}↔{prev_data['original_ticker']}): "
-                    f"{prev_btc:,} → {current_btc:,} BTC (+{increase:,}). Skipping."
-                )
-            # Valid purchase detected via normalized match
+                logger.warning(f"Suspicious (normalized): {company_name} ({ticker}↔{prev_data['original_ticker']}): +{increase:,} BTC. Skipping.")
             elif increase > 50:
-                detected.append({
+                purchase = {
                     "company": company_name, "ticker": ticker, "btc_amount": increase,
                     "usd_amount": round(increase * current_btc_price),
                     "price_per_btc": round(current_btc_price),
                     "filing_date": datetime.now().strftime("%Y-%m-%d"),
                     "source": "Auto-Detected (Snapshot Comparison)",
                     "notes": f"Holdings: {prev_btc:,} → {current_btc:,} BTC since {prev_date} (ticker: {prev_data['original_ticker']}→{ticker})",
-                    "detected": True,
-                })
-            # If increase <= 50 or negative, it's just the same entity with no meaningful change
+                }
+                result = reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False)
+                if result["action"] in ("confirmed", "upgraded"):
+                    detected.append(purchase)
 
+        # ─── Truly new entity → PENDING (not confirmed) ───
         else:
-            # Truly new entity — not found in previous snapshot even after normalization
             if ticker in GOVERNMENT_TICKERS:
                 continue
-
-            if current_btc > 100 and current_btc < MAX_SINGLE_SCAN_PURCHASE_BTC:
-                detected.append({
+            if current_btc > 100:
+                purchase = {
                     "company": company_name, "ticker": ticker, "btc_amount": current_btc,
                     "usd_amount": round(current_btc * current_btc_price),
                     "price_per_btc": round(current_btc_price),
                     "filing_date": datetime.now().strftime("%Y-%m-%d"),
-                    "source": "Auto-Detected (New Entity)",
-                    "notes": f"First appeared with {current_btc:,} BTC",
-                    "detected": True,
-                })
-            elif current_btc >= MAX_SINGLE_SCAN_PURCHASE_BTC:
-                logger.warning(
-                    f"Rejected new entrant: {company_name} ({ticker}) with {current_btc:,} BTC. "
-                    f"Exceeds {MAX_SINGLE_SCAN_PURCHASE_BTC:,} BTC cap — likely pre-existing entity."
-                )
+                    "source": "Auto-Detected (New Entity — Pending Verification)",
+                    "notes": f"First appeared with {current_btc:,} BTC. Awaiting confirmation.",
+                }
+                result = reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=True)
+                logger.debug(f"New entrant {company_name}: {result['action']}")
 
     detected.sort(key=lambda x: x["btc_amount"], reverse=True)
     if detected:
-        logger.info(f"{len(detected)} purchase(s) detected!")
+        logger.info(f"{len(detected)} purchase(s) detected and reconciled!")
         for d in detected[:5]:
             logger.info(f"  {d['company']}: +{d['btc_amount']:,} BTC (~${d['usd_amount']/1_000_000:,.0f}M)")
     else:
@@ -485,74 +384,28 @@ def detect_new_purchases(btc_price=None):
 
 
 def log_detected_purchases(detected_purchases):
-    """Log detected purchases to Supabase."""
-    logged = 0
-    for p in detected_purchases:
-        purchase_id = f"auto_{p['ticker']}_{p['filing_date']}"
-        try:
-            existing = supabase.table("confirmed_purchases").select("purchase_id").eq("purchase_id", purchase_id).execute()
-            if existing.data:
-                continue
-            row = {
-                "purchase_id": purchase_id, "company": p["company"], "ticker": p["ticker"],
-                "btc_amount": p["btc_amount"], "usd_amount": p["usd_amount"],
-                "price_per_btc": p["price_per_btc"], "filing_date": p["filing_date"],
-                "filing_url": "", "was_predicted": False,
-            }
-            supabase.table("confirmed_purchases").insert(row).execute()
-            logged += 1
-        except Exception as e:
-            logger.error(f"Failed to log purchase {purchase_id}: {e}")
-    if logged:
-        logger.info(f"{logged} purchase(s) logged to database")
-    return logged
+    return len(detected_purchases)
 
 
 def get_recent_purchases(limit=20):
-    """Get purchases from database + live news."""
     all_purchases = []
-    db_ids = set()
-
     try:
         result = supabase.table("confirmed_purchases").select("*").order("filing_date", desc=True).limit(50).execute()
         if result.data:
             for p in result.data:
-                key = f"{p.get('ticker', '')}_{p.get('filing_date', '')}"
-                db_ids.add(key)
                 all_purchases.append({
                     "company": p.get("company", ""), "ticker": p.get("ticker", ""),
                     "btc_amount": int(float(p.get("btc_amount", 0))),
                     "usd_amount": int(float(p.get("usd_amount", 0))),
                     "price_per_btc": int(float(p.get("price_per_btc", 0))),
                     "filing_date": p.get("filing_date", ""),
-                    "source": p.get("filing_url", "") or "Database",
+                    "source": p.get("filing_url", "") or p.get("source", "") or "Database",
                     "notes": "", "was_predicted": p.get("was_predicted", False),
                 })
     except Exception as e:
         logger.error(f"Error fetching DB purchases: {e}", exc_info=True)
 
-    try:
-        news_purchases = scan_news_for_purchases()
-        for p in news_purchases:
-            key = f"{p['ticker']}_{p['filing_date']}"
-            if key not in db_ids:
-                all_purchases.append(p)
-                db_ids.add(key)
-                try:
-                    purchase_id = f"news_{p['ticker']}_{p['filing_date']}"
-                    supabase.table("confirmed_purchases").insert({
-                        "purchase_id": purchase_id, "company": p["company"], "ticker": p["ticker"],
-                        "btc_amount": p["btc_amount"], "usd_amount": p["usd_amount"],
-                        "price_per_btc": p["price_per_btc"], "filing_date": p["filing_date"],
-                        "filing_url": p.get("source", ""), "was_predicted": False,
-                    }).execute()
-                except Exception as e:
-                    logger.debug(f"Could not auto-save news purchase: {e}")
-    except Exception as e:
-        logger.error(f"News scan error in get_recent_purchases: {e}", exc_info=True)
-
     all_purchases.sort(key=lambda x: x.get("filing_date", ""), reverse=True)
-
     seen = set()
     unique = []
     for p in all_purchases:
@@ -571,7 +424,6 @@ def get_purchase_stats():
     all_p = get_recent_purchases(100)
     total_btc = sum(p.get("btc_amount", 0) for p in all_p)
     total_usd = sum(p.get("usd_amount", 0) for p in all_p)
-
     by_company = {}
     for p in all_p:
         ticker = p.get("ticker", p.get("company", "Unknown"))
@@ -580,7 +432,6 @@ def get_purchase_stats():
         by_company[ticker]["total_btc"] += p.get("btc_amount", 0)
         by_company[ticker]["total_usd"] += p.get("usd_amount", 0)
         by_company[ticker]["count"] += 1
-
     by_month = {}
     for p in all_p:
         month = p.get("filing_date", "")[:7]
@@ -590,7 +441,6 @@ def get_purchase_stats():
             by_month[month]["btc"] += p.get("btc_amount", 0)
             by_month[month]["usd"] += p.get("usd_amount", 0)
             by_month[month]["count"] += 1
-
     return {
         "total_purchases": len(all_p), "total_btc": total_btc, "total_usd": total_usd,
         "avg_price": round(total_usd / total_btc, 0) if total_btc > 0 else 0,
@@ -616,7 +466,6 @@ def seed_confirmed_purchases():
                    "price_per_btc": p["price_per_btc"], "filing_date": p["filing_date"], "filing_url": "", "was_predicted": False}
             supabase.table("confirmed_purchases").insert(row).execute()
             seeded += 1
-            logger.info(f"Seeded: {p['company']}: {p['btc_amount']:,} BTC on {p['filing_date']}")
         except Exception as e:
             logger.error(f"Seed failed for {purchase_id}: {e}")
     logger.info(f"Seeding complete: {seeded} seeded, {skipped} already existed")
@@ -642,7 +491,7 @@ BTC Purchase Tracker™
 
 
 if __name__ == "__main__":
-    logger.info("BTC Purchase Tracker v3.1 — testing...")
+    logger.info("BTC Purchase Tracker v3.2 — testing...")
     purchases = get_recent_purchases(10)
     stats = get_purchase_stats()
     logger.info(f"Total: {stats['total_purchases']} purchases | {stats['total_btc']:,} BTC | ${stats['total_usd']/1_000_000_000:.1f}B")

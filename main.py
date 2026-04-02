@@ -53,6 +53,7 @@ from shares_updater import update_shares
 from entity_classifier import fix_entity_types
 from entity_name_fixer import fix_entity_names
 from edgar_realtime import check_edgar_filings as check_edgar_realtime
+from purchase_reconciler import promote_pending_purchases, expire_stale_pending, get_reconciler_stats
 from global_filing_scanner import scan_all_filings
 from etf_holdings_scraper import update_etf_holdings
 from defi_tracker import update_defi_holdings
@@ -493,6 +494,30 @@ def main():
                     logger.debug(f"LLM purchase analysis skipped: {e}")
             else:
                 logger.info("No new purchases detected")
+
+            # Reconciler: promote pending purchases confirmed by other scanners
+            try:
+                promoted = promote_pending_purchases()
+                if promoted:
+                    logger.info(f"Reconciler: {promoted} pending purchase(s) promoted to confirmed")
+            except Exception as e:
+                logger.debug(f"Reconciler promote: {e}")
+
+            # Reconciler: expire stale pending entries (once per day)
+            if scan_number == 1 or (scan_number % 24 == 0):
+                try:
+                    expired = expire_stale_pending()
+                    if expired:
+                        logger.info(f"Reconciler: {expired} stale pending purchase(s) discarded")
+                except Exception as e:
+                    logger.debug(f"Reconciler expire: {e}")
+
+            # Log reconciler stats
+            try:
+                rstats = get_reconciler_stats()
+                logger.info(f"Reconciler: {rstats['confirmed_total']} confirmed | {rstats['pending_count']} pending | {rstats['promoted_count']} promoted | {rstats['discarded_count']} discarded")
+            except Exception as e:
+                logger.debug(f"Reconciler stats: {e}")
 
         with ScanContext(logger, scan_number, "[9/11] Regulatory scan"):
             scan_regulatory()
