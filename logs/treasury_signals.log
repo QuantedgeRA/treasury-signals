@@ -5779,3 +5779,264 @@
 2026-03-31 16:48:28 | DEBUG    | bms_scraper               |   BMS: could not find BTC column. Headers: ['#', 'company', 'bitcointreasury', '1m %', '6m %', 'yoy %', 'value', 'sats/share', 'mnav', '%mcap', 'source']
 2026-03-31 16:48:31 | DEBUG    | bms_scraper               |   BMS: could not find BTC column. Headers: ['#', 'company', 'bitcointreasury', '1m %', '6m %', 'yoy %', 'value', 'sats/share', 'mnav', '%mcap', 'source']
 2026-03-31 16:48:31 | WARNING  | bms_scraper               | BMS scraper: no data scraped
+2026-04-01 09:58:49 | DEBUG    | main                      | Market data fetch error: BaseSelectRequestBuilder.order() got an unexpected keyword argument 'ascending'
+2026-04-01 16:18:32 | INFO     | main                      | Ticker validator — manual run...
+2026-04-01 16:18:32 | INFO     | main                      | Ticker validator: starting...
+2026-04-01 16:18:32 | INFO     | main                      |   SEC tickers loaded: 10433 companies
+2026-04-01 16:18:33 | INFO     | main                      |   CORRECTED: Strategy — MSTR.US → STRD (SEC)
+2026-04-01 16:18:33 | DEBUG    | main                      |   WARNING: Block.one (Â¿164,000) — not found on SEC or Yahoo
+2026-04-01 16:18:34 | DEBUG    | main                      |   WARNING: Tether Holdings Limited (Â¿96,184) — not found on SEC or Yahoo
+2026-04-01 16:18:34 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿762,099) — not found on SEC or Yahoo
+2026-04-01 16:18:35 | DEBUG    | main                      |   WARNING: XXI (XXI.US) — not found on SEC or Yahoo
+2026-04-01 16:18:35 | INFO     | main                      |   CORRECTED: MARA Holdings — MARA.US → MARA (SEC)
+2026-04-01 16:18:36 | DEBUG    | main                      |   WARNING: Bitcoin Standard Treasury Company (CEPO.US) — not found on SEC or Yahoo
+2026-04-01 16:18:37 | INFO     | main                      |   CORRECTED: Bullish — BLSH.US → BLSH (SEC)
+2026-04-01 16:18:37 | INFO     | main                      |   CORRECTED: Galaxy Digital Holdings Ltd — GLXY.US → GLXY (SEC)
+2026-04-01 16:18:37 | INFO     | main                      |   CORRECTED: Riot Platforms — RIOT.US → RIOT (SEC)
+2026-04-01 16:18:37 | INFO     | main                      |   CORRECTED: Coinbase Global — COIN.US → COIN (SEC)
+2026-04-01 16:18:37 | DEBUG    | main                      |   WARNING: Hut 8 Mining Corp (HUT.US) — not found on SEC or Yahoo
+2026-04-01 16:18:38 | INFO     | main                      |   CORRECTED: CleanSpark — CLSK.US → CLSKW (SEC)
+2026-04-01 16:18:38 | INFO     | main                      |   CORRECTED: Strive — ASST.US → SATA (SEC)
+2026-04-01 16:18:38 | INFO     | main                      |   CORRECTED: Trump Media & Technology Group Corp. — DJT.US → DJTWW (SEC)
+2026-04-01 16:18:38 | INFO     | main                      |   CORRECTED: Tesla — TSLA.US → TSLA (SEC)
+2026-04-01 16:18:38 | INFO     | main                      |   CORRECTED: Stone Ridge Holdings Group — Â¿10,000 → SRI (SEC)
+2026-04-01 16:18:38 | INFO     | main                      |   CORRECTED: Block — XYZ.US → BSQKZ (SEC)
+2026-04-01 16:18:39 | INFO     | main                      |   CORRECTED: SpaceX — Â¿8,285 → ZSPC (SEC)
+2026-04-01 16:18:39 | DEBUG    | main                      |   WARNING: GD Culture Group (GDC.US) — Yahoo says invalid
+2026-04-01 16:18:39 | INFO     | main                      |   CORRECTED: American Bitcoin — ABTC.US → ABTC (SEC)
+2026-04-01 16:18:39 | DEBUG    | main                      |   WARNING: Next Technology Holding (NXTT.US) — Yahoo says invalid
+2026-04-01 16:18:40 | DEBUG    | main                      |   WARNING: ProCap BTC (BRR.US) — not found on SEC or Yahoo
+2026-04-01 16:18:40 | INFO     | main                      |   CORRECTED: Gemini Space Station — GEMI.US → GEMI (SEC)
+2026-04-01 16:18:40 | INFO     | main                      |   CORRECTED: Nakamoto Inc (formerly KindlyMD) — NAKA.US → NAKAW (SEC)
+2026-04-01 16:18:41 | INFO     | main                      |   CORRECTED: GameStop Corp. — GME.US → GME-WT (SEC)
+2026-04-01 16:18:41 | DEBUG    | main                      |   WARNING: Boyaa Interactive International Limited (434.HK) — Yahoo says invalid
+2026-04-01 16:18:42 | INFO     | main                      |   CORRECTED: Empery Digital — EMPD.US → EMPD (SEC)
+2026-04-01 16:18:42 | DEBUG    | main                      |   WARNING: Cango (CANG.US) — Yahoo says invalid
+2026-04-01 16:18:43 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿43,514) — not found on SEC or Yahoo
+2026-04-01 16:18:43 | DEBUG    | main                      |   WARNING: The Tezos Foundation (Â¿2,903) — not found on SEC or Yahoo
+2026-04-01 16:18:45 | INFO     | main                      |   CORRECTED: Ionic Digital Inc. — Â¿2,662 → ITOC (SEC)
+2026-04-01 16:18:45 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿38,689) — not found on SEC or Yahoo
+2026-04-01 16:18:45 | DEBUG    | main                      |   WARNING: ð¯ðµ (Â¿35,102) — not found on SEC or Yahoo
+2026-04-01 16:18:46 | DEBUG    | main                      |   WARNING: DDC Enterprise Limited (DDC.US) — not found on SEC or Yahoo
+2026-04-01 16:18:46 | DEBUG    | main                      |   WARNING: Microcloud Hologram (HOLO.US) — Yahoo says invalid
+2026-04-01 16:18:47 | DEBUG    | main                      |   WARNING: Sequans Communications S.A. (SQNS.US) — Yahoo says invalid
+2026-04-01 16:18:47 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿30,021) — not found on SEC or Yahoo
+2026-04-01 16:18:48 | INFO     | main                      |   CORRECTED: Canaan — CAN.US → CAN (SEC)
+2026-04-01 16:18:48 | DEBUG    | main                      |   WARNING: BITFUFU (FUFU.US) — Yahoo says invalid
+2026-04-01 16:18:48 | INFO     | main                      |   CORRECTED: Exodus Movement — EXOD.US → EXOD (SEC)
+2026-04-01 16:18:49 | DEBUG    | main                      |   WARNING: Bitfarms Ltd. (BITF.US) — Yahoo says invalid
+2026-04-01 16:18:49 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿24,300) — not found on SEC or Yahoo
+2026-04-01 16:18:49 | INFO     | main                      |   CORRECTED: Fold Holdings — FLD.US → FLDDW (SEC)
+2026-04-01 16:18:50 | INFO     | main                      |   CORRECTED: Cipher Mining — CIFR.US → CDE (SEC)
+2026-04-01 16:18:50 | INFO     | main                      |   CORRECTED: Zap Solutions, Inc (Strike) — Â¿1,500 → PDFS (SEC)
+2026-04-01 16:18:51 | DEBUG    | main                      |   WARNING: GIGA Inc. (Â¿1,252) — not found on SEC or Yahoo
+2026-04-01 16:18:52 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿18,005) — not found on SEC or Yahoo
+2026-04-01 16:18:52 | INFO     | main                      |   CORRECTED: KULR Technology Group — KULR.US → KULR (SEC)
+2026-04-01 16:18:53 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿15,389) — not found on SEC or Yahoo
+2026-04-01 16:18:54 | DEBUG    | main                      |   WARNING: Nano Labs (NA.US) — Yahoo says invalid
+2026-04-01 16:18:54 | INFO     | main                      |   CORRECTED: USBC — USBC.US → USBC (SEC)
+2026-04-01 16:18:54 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿13,696) — not found on SEC or Yahoo
+2026-04-01 16:18:55 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿13,628) — not found on SEC or Yahoo
+2026-04-01 16:18:55 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿13,363) — not found on SEC or Yahoo
+2026-04-01 16:18:56 | DEBUG    | main                      |   WARNING: Ming Shing Group (MSW.US) — Yahoo says invalid
+2026-04-01 16:18:56 | DEBUG    | main                      |   WARNING: Yueda Digital Holding (YDKG.US) — Yahoo says invalid
+2026-04-01 16:18:57 | DEBUG    | main                      |   WARNING: SOS Limited (SOS.US) — Yahoo says invalid
+2026-04-01 16:18:57 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿11,509) — not found on SEC or Yahoo
+2026-04-01 16:18:58 | DEBUG    | main                      |   WARNING: CIMG (IMG.US) — Yahoo says invalid
+2026-04-01 16:18:59 | DEBUG    | main                      |   WARNING: Phoenix Group PLC (PHX.AD) — Yahoo says invalid
+2026-04-01 16:18:59 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿9,542) — not found on SEC or Yahoo
+2026-04-01 16:19:00 | INFO     | main                      |   CORRECTED: Hyperscale Data — GPUS.US → GPUS-PD (SEC)
+2026-04-01 16:19:01 | INFO     | main                      |   CORRECTED: Core Scientific — CORZ.US → CORZR (SEC)
+2026-04-01 16:19:01 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿8,883) — not found on SEC or Yahoo
+2026-04-01 16:19:03 | INFO     | main                      |   CORRECTED: Alliance Resource Partners, L.P. — ARLP.US → ARLP (SEC)
+2026-04-01 16:19:03 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿7,500) — not found on SEC or Yahoo
+2026-04-01 16:19:04 | DEBUG    | main                      |   WARNING: Prenetics (PRE.US) — Yahoo says invalid
+2026-04-01 16:19:05 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿7,000) — not found on SEC or Yahoo
+2026-04-01 16:19:05 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿6,894) — not found on SEC or Yahoo
+2026-04-01 16:19:06 | INFO     | main                      |   CORRECTED: Virtu Financial — VIRT.US → VIRT (SEC)
+2026-04-01 16:19:07 | DEBUG    | main                      |   WARNING: ð¨ð³ (Â¿5,833) — not found on SEC or Yahoo
+2026-04-01 16:19:07 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿5,457) — not found on SEC or Yahoo
+2026-04-01 16:19:08 | INFO     | main                      |   CORRECTED: LM Funding America — LMFA.US → LMFA (SEC)
+2026-04-01 16:19:08 | DEBUG    | main                      |   WARNING: Net Holding A.S. (NTHOL.E.IS) — Yahoo says invalid
+2026-04-01 16:19:09 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿5,058) — not found on SEC or Yahoo
+2026-04-01 16:19:09 | DEBUG    | main                      |   WARNING: Melanion Digital (Â¿342) — not found on SEC or Yahoo
+2026-04-01 16:19:10 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿4,619) — not found on SEC or Yahoo
+2026-04-01 16:19:11 | DEBUG    | main                      |   WARNING: POP Culture Group Co. Ltd.  (CPOP.US) — Yahoo says invalid
+2026-04-01 16:19:11 | INFO     | main                      |   CORRECTED: S-Science — 5721 → SLBT (SEC)
+2026-04-01 16:19:12 | DEBUG    | main                      |   WARNING: The9 Limited (NTCY.US) — Yahoo says invalid
+2026-04-01 16:19:12 | DEBUG    | main                      |   WARNING: ð­ð° (Â¿4,091) — not found on SEC or Yahoo
+2026-04-01 16:19:13 | DEBUG    | main                      |   WARNING: ð§ð· (Â¿3,723) — not found on SEC or Yahoo
+2026-04-01 16:19:15 | DEBUG    | main                      |   WARNING: ð©ðª (Â¿3,605) — not found on SEC or Yahoo
+2026-04-01 16:19:15 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿3,502) — not found on SEC or Yahoo
+2026-04-01 16:19:16 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿3,313) — not found on SEC or Yahoo
+2026-04-01 16:19:17 | DEBUG    | main                      |   WARNING: Rumble (RUM.US) — Yahoo says invalid
+2026-04-01 16:19:18 | DEBUG    | main                      |   WARNING: HIVE Digital Technologies (HIVE.US) — Yahoo says invalid
+2026-04-01 16:19:19 | DEBUG    | main                      |   WARNING: ð«ð· (Â¿2,888) — not found on SEC or Yahoo
+2026-04-01 16:19:19 | DEBUG    | main                      |   WARNING: ð¬ð§ (Â¿2,695) — not found on SEC or Yahoo
+2026-04-01 16:19:21 | DEBUG    | main                      |   WARNING: Genius Group (GNS.US) — Yahoo says invalid
+2026-04-01 16:19:21 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿2,537) — not found on SEC or Yahoo
+2026-04-01 16:19:22 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿2,452) — not found on SEC or Yahoo
+2026-04-01 16:19:23 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿2,383) — not found on SEC or Yahoo
+2026-04-01 16:19:23 | DEBUG    | main                      |   WARNING: Steak 'n Shake (Â¿162) — not found on SEC or Yahoo
+2026-04-01 16:19:24 | DEBUG    | main                      |   WARNING: ð°ð¾ (Â¿2,353) — not found on SEC or Yahoo
+2026-04-01 16:19:24 | DEBUG    | main                      |   WARNING: FRMO Corp. (FRMO.US) — not found on SEC or Yahoo
+2026-04-01 16:19:25 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿2,201) — not found on SEC or Yahoo
+2026-04-01 16:19:26 | DEBUG    | main                      |   WARNING: ð«ð· (Â¿2,139) — not found on SEC or Yahoo
+2026-04-01 16:19:27 | DEBUG    | main                      |   WARNING: BTCS S.A. (BTF.WA) — Yahoo says invalid
+2026-04-01 16:19:27 | DEBUG    | main                      |   WARNING: Banxa Holdings (BNXA.V) — Yahoo says invalid
+2026-04-01 16:19:28 | INFO     | main                      |   CORRECTED: Horizon Kinetics Holding Corp — HKHC.US → HKHC (SEC)
+2026-04-01 16:19:28 | DEBUG    | main                      |   WARNING: Mac House (7603) — not found on SEC or Yahoo
+2026-04-01 16:19:29 | DEBUG    | main                      |   WARNING: ð¸ð¬ (Â¿1,830) — not found on SEC or Yahoo
+2026-04-01 16:19:29 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿1,827) — not found on SEC or Yahoo
+2026-04-01 16:19:31 | DEBUG    | main                      |   WARNING: Meanwhile Incorporated (Â¿123) — not found on SEC or Yahoo
+2026-04-01 16:19:31 | DEBUG    | main                      |   WARNING: ð¸ð¬ (Â¿1,793) — not found on SEC or Yahoo
+2026-04-01 16:19:31 | DEBUG    | main                      |   WARNING: ð¯ðµ (Â¿1,717) — not found on SEC or Yahoo
+2026-04-01 16:19:32 | INFO     | main                      |   CORRECTED: DigiPowerX — DGX.V → DGXX (SEC)
+2026-04-01 16:19:32 | INFO     | main                      |   CORRECTED: Bitcoin Depot — BTM.US → BTMWW (SEC)
+2026-04-01 16:19:33 | DEBUG    | main                      |   WARNING: Evertz Pharma (Â¿100) — not found on SEC or Yahoo
+2026-04-01 16:19:34 | DEBUG    | main                      |   WARNING: Roxom Global (Â¿98) — not found on SEC or Yahoo
+2026-04-01 16:19:34 | DEBUG    | main                      |   WARNING: ð¯ðµ (Â¿1,417) — not found on SEC or Yahoo
+2026-04-01 16:19:34 | DEBUG    | main                      |   WARNING: ð¯ðµ (Â¿1,411) — not found on SEC or Yahoo
+2026-04-01 16:19:35 | INFO     | main                      |   CORRECTED: K Wave Media — KWM.US → KWMWW (SEC)
+2026-04-01 16:19:36 | DEBUG    | main                      |   WARNING: Real Bedford FC Ltd (Â¿83) — not found on SEC or Yahoo
+2026-04-01 16:19:37 | DEBUG    | main                      |   WARNING: ð³ð± (Â¿1,111) — not found on SEC or Yahoo
+2026-04-01 16:19:38 | INFO     | main                      |   CORRECTED: Circle Internet Group — CRCL.US → CRCL (SEC)
+2026-04-01 16:19:38 | DEBUG    | main                      |   WARNING: ð¸ðª (Â¿1,051) — not found on SEC or Yahoo
+2026-04-01 16:19:38 | DEBUG    | main                      |   WARNING: ð®ð± (Â¿1,036) — not found on SEC or Yahoo
+2026-04-01 16:19:39 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿1,021) — not found on SEC or Yahoo
+2026-04-01 16:19:39 | DEBUG    | main                      |   WARNING: ð¨ð³ (Â¿1,000) — not found on SEC or Yahoo
+2026-04-01 16:19:40 | DEBUG    | main                      |   WARNING: SBC Medical Group Holdings (SBC.US) — Yahoo says invalid
+2026-04-01 16:19:40 | DEBUG    | main                      |   WARNING: ATAI Life Sciences N.V. (ATAI.US) — Yahoo says invalid
+2026-04-01 16:19:41 | DEBUG    | main                      |   WARNING: ð­ð° (Â¿833) — not found on SEC or Yahoo
+2026-04-01 16:19:41 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿827) — not found on SEC or Yahoo
+2026-04-01 16:19:41 | DEBUG    | main                      |   WARNING: ð¨ð³ (Â¿819) — not found on SEC or Yahoo
+2026-04-01 16:19:42 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿767) — not found on SEC or Yahoo
+2026-04-01 16:19:42 | DEBUG    | main                      |   WARNING: ð¯ðµ (Â¿763) — not found on SEC or Yahoo
+2026-04-01 16:19:43 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿762) — not found on SEC or Yahoo
+2026-04-01 16:19:43 | DEBUG    | main                      |   WARNING: ð³ð´ (Â¿754) — not found on SEC or Yahoo
+2026-04-01 16:19:44 | DEBUG    | main                      |   WARNING: ð­ð° (Â¿730) — not found on SEC or Yahoo
+2026-04-01 16:19:44 | DEBUG    | main                      |   WARNING: Mogo (MOGO.US) — Yahoo says invalid
+2026-04-01 16:19:45 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿628) — not found on SEC or Yahoo
+2026-04-01 16:19:46 | INFO     | main                      |   CORRECTED: LiveOne — LVO.US → LVO (SEC)
+2026-04-01 16:19:46 | DEBUG    | main                      |   WARNING: ð¬ð§ (Â¿620) — not found on SEC or Yahoo
+2026-04-01 16:19:47 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿610) — not found on SEC or Yahoo
+2026-04-01 16:19:47 | DEBUG    | main                      |   WARNING: ð§ð· (Â¿605) — not found on SEC or Yahoo
+2026-04-01 16:19:48 | DEBUG    | main                      |   WARNING: ð¦ð· (Â¿570) — not found on SEC or Yahoo
+2026-04-01 16:19:49 | DEBUG    | main                      |   WARNING: ð°ð· (Â¿551) — not found on SEC or Yahoo
+2026-04-01 16:19:49 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿541) — not found on SEC or Yahoo
+2026-04-01 16:19:49 | DEBUG    | main                      |   WARNING: ð²ð¹ (Â¿540) — not found on SEC or Yahoo
+2026-04-01 16:19:50 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿527) — not found on SEC or Yahoo
+2026-04-01 16:19:51 | DEBUG    | main                      |   WARNING: ð¦ðª (Â¿514) — not found on SEC or Yahoo
+2026-04-01 16:19:51 | DEBUG    | main                      |   WARNING: ð¦ðº (Â¿504) — not found on SEC or Yahoo
+2026-04-01 16:19:52 | DEBUG    | main                      |   WARNING: ð°ð¾ (Â¿502) — not found on SEC or Yahoo
+2026-04-01 16:19:52 | DEBUG    | main                      |   WARNING: AsiaStrategy (SORA.US) — Yahoo says invalid
+2026-04-01 16:19:53 | DEBUG    | main                      |   WARNING: Disher Music Gear (Â¿30) — not found on SEC or Yahoo
+2026-04-01 16:19:53 | DEBUG    | main                      |   WARNING: ð©ðª (Â¿427) — not found on SEC or Yahoo
+2026-04-01 16:19:54 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿417) — not found on SEC or Yahoo
+2026-04-01 16:19:55 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿414) — not found on SEC or Yahoo
+2026-04-01 16:19:55 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿410) — not found on SEC or Yahoo
+2026-04-01 16:19:56 | DEBUG    | main                      |   WARNING: SR DURDEN (Â¿28) — not found on SEC or Yahoo
+2026-04-01 16:19:57 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿356) — not found on SEC or Yahoo
+2026-04-01 16:19:57 | DEBUG    | main                      |   WARNING: ð¹ð· (Â¿352) — not found on SEC or Yahoo
+2026-04-01 16:19:58 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿346) — not found on SEC or Yahoo
+2026-04-01 16:19:58 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿303) — not found on SEC or Yahoo
+2026-04-01 16:19:58 | DEBUG    | main                      |   WARNING: ð¨ð³ (Â¿300) — not found on SEC or Yahoo
+2026-04-01 16:19:59 | DEBUG    | main                      |   WARNING: ð¯ðµ (Â¿296) — not found on SEC or Yahoo
+2026-04-01 16:20:00 | DEBUG    | main                      |   WARNING: ð¨ð³ (Â¿285) — not found on SEC or Yahoo
+2026-04-01 16:20:00 | DEBUG    | main                      |   WARNING: ssias (Â¿18) — not found on SEC or Yahoo
+2026-04-01 16:20:01 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿253) — not found on SEC or Yahoo
+2026-04-01 16:20:02 | DEBUG    | main                      |   WARNING: ð¯ðª (Â¿236) — not found on SEC or Yahoo
+2026-04-01 16:20:03 | DEBUG    | main                      |   WARNING: Altgeld Bitcoin Reserve (ABR) (Â¿16) — not found on SEC or Yahoo
+2026-04-01 16:20:03 | DEBUG    | main                      |   WARNING: ð°ð· (Â¿223) — not found on SEC or Yahoo
+2026-04-01 16:20:04 | DEBUG    | main                      |   WARNING: ABR WEALTH FUND (Â¿15) — not found on SEC or Yahoo
+2026-04-01 16:20:05 | DEBUG    | main                      |   WARNING: ðªð¸ (Â¿213) — not found on SEC or Yahoo
+2026-04-01 16:20:05 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿211) — not found on SEC or Yahoo
+2026-04-01 16:20:06 | DEBUG    | main                      |   WARNING: ð°ð· (Â¿200) — not found on SEC or Yahoo
+2026-04-01 16:20:06 | DEBUG    | main                      |   WARNING: ðµð± (Â¿199) — not found on SEC or Yahoo
+2026-04-01 16:20:06 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿193) — not found on SEC or Yahoo
+2026-04-01 16:20:07 | DEBUG    | main                      |   WARNING: ð¬ð® (Â¿182) — not found on SEC or Yahoo
+2026-04-01 16:20:08 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿175) — not found on SEC or Yahoo
+2026-04-01 16:20:08 | DEBUG    | main                      |   WARNING: King Tours (Â¿12) — not found on SEC or Yahoo
+2026-04-01 16:20:09 | DEBUG    | main                      |   WARNING: Locate Technologies (LOC.AX) — Yahoo says invalid
+2026-04-01 16:20:09 | DEBUG    | main                      |   WARNING: ð¸ðª (Â¿166) — not found on SEC or Yahoo
+2026-04-01 16:20:10 | DEBUG    | main                      |   WARNING: ð¹ð­ (Â¿165) — not found on SEC or Yahoo
+2026-04-01 16:20:10 | DEBUG    | main                      |   WARNING: ð¬ð§ (Â¿164) — not found on SEC or Yahoo
+2026-04-01 16:20:11 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿159) — not found on SEC or Yahoo
+2026-04-01 16:20:12 | DEBUG    | main                      |   WARNING: IRC Legal (Â¿10) — not found on SEC or Yahoo
+2026-04-01 16:20:12 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿149) — not found on SEC or Yahoo
+2026-04-01 16:20:13 | DEBUG    | main                      |   WARNING: ð³ð´ (Â¿141) — not found on SEC or Yahoo
+2026-04-01 16:20:13 | INFO     | main                      |   CORRECTED: LIXTE Biotechnology — LIXT.US → LIXT (SEC)
+2026-04-01 16:20:14 | DEBUG    | main                      |   WARNING: Walnut Capital Limited (905.HK) — Yahoo says invalid
+2026-04-01 16:20:14 | DEBUG    | main                      |   WARNING: ð¬ð§ (Â¿135) — not found on SEC or Yahoo
+2026-04-01 16:20:14 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿132) — not found on SEC or Yahoo
+2026-04-01 16:20:16 | DEBUG    | main                      |   WARNING: RCD Physical Therapy (Â¿8) — not found on SEC or Yahoo
+2026-04-01 16:20:16 | DEBUG    | main                      |   WARNING: ð¯ðµ (Â¿125) — not found on SEC or Yahoo
+2026-04-01 16:20:18 | DEBUG    | main                      |   WARNING: ONYX:XYZ (Â¿7) — not found on SEC or Yahoo
+2026-04-01 16:20:18 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿108) — not found on SEC or Yahoo
+2026-04-01 16:20:19 | DEBUG    | main                      |   WARNING: ð°ð· (Â¿104) — not found on SEC or Yahoo
+2026-04-01 16:20:19 | DEBUG    | main                      |   WARNING: ð¬ð§ (Â¿99) — not found on SEC or Yahoo
+2026-04-01 16:20:20 | DEBUG    | main                      |   WARNING: ð¸ð¬ (Â¿88) — not found on SEC or Yahoo
+2026-04-01 16:20:20 | DEBUG    | main                      |   WARNING: ð¸ð¬ (Â¿84) — not found on SEC or Yahoo
+2026-04-01 16:20:21 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿82) — not found on SEC or Yahoo
+2026-04-01 16:20:22 | INFO     | main                      |   CORRECTED: Bit Digital — BTBT.US → BTBT (SEC)
+2026-04-01 16:20:22 | DEBUG    | main                      |   WARNING: ð¯ðµ (Â¿80) — not found on SEC or Yahoo
+2026-04-01 16:20:22 | DEBUG    | main                      |   WARNING: ð¹ð­ (Â¿75) — not found on SEC or Yahoo
+2026-04-01 16:20:22 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿69) — not found on SEC or Yahoo
+2026-04-01 16:20:23 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿68) — not found on SEC or Yahoo
+2026-04-01 16:20:24 | DEBUG    | main                      |   WARNING: Tap Global (TAP.AQ) — Yahoo says invalid
+2026-04-01 16:20:24 | DEBUG    | main                      |   WARNING: ð¯ðµ (Â¿66) — not found on SEC or Yahoo
+2026-04-01 16:20:25 | DEBUG    | main                      |   WARNING: ð³ð´ (Â¿59) — not found on SEC or Yahoo
+2026-04-01 16:20:25 | DEBUG    | main                      |   WARNING: ð©ðª (Â¿58) — not found on SEC or Yahoo
+2026-04-01 16:20:26 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿53) — not found on SEC or Yahoo
+2026-04-01 16:20:26 | DEBUG    | main                      |   WARNING: ð¬ð§ (Â¿52) — not found on SEC or Yahoo
+2026-04-01 16:20:27 | INFO     | main                      |   CORRECTED: TeraWulf — WULF.US → WULF (SEC)
+2026-04-01 16:20:27 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿50) — not found on SEC or Yahoo
+2026-04-01 16:20:28 | DEBUG    | main                      |   WARNING: ð¨ð³ (Â¿44) — not found on SEC or Yahoo
+2026-04-01 16:20:28 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿43) — not found on SEC or Yahoo
+2026-04-01 16:20:28 | DEBUG    | main                      |   WARNING: ð­ð° (Â¿42) — not found on SEC or Yahoo
+2026-04-01 16:20:29 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿40) — not found on SEC or Yahoo
+2026-04-01 16:20:29 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿36) — not found on SEC or Yahoo
+2026-04-01 16:20:30 | DEBUG    | main                      |   WARNING: ð¬ð§ (Â¿31) — not found on SEC or Yahoo
+2026-04-01 16:20:30 | DEBUG    | main                      |   WARNING: ð¸ðª (Â¿29) — not found on SEC or Yahoo
+2026-04-01 16:20:31 | DEBUG    | main                      |   WARNING: ð«ð· (Â¿27) — not found on SEC or Yahoo
+2026-04-01 16:20:31 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿24) — not found on SEC or Yahoo
+2026-04-01 16:20:31 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿23) — not found on SEC or Yahoo
+2026-04-01 16:20:32 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿22) — not found on SEC or Yahoo
+2026-04-01 16:20:33 | DEBUG    | main                      |   WARNING: ð®ð³ (Â¿21) — not found on SEC or Yahoo
+2026-04-01 16:20:33 | DEBUG    | main                      |   WARNING: ðºð¸ (Â¿20) — not found on SEC or Yahoo
+2026-04-01 16:20:34 | DEBUG    | main                      |   WARNING: ð¬ð§ (Â¿19) — not found on SEC or Yahoo
+2026-04-01 16:20:34 | DEBUG    | main                      |   WARNING: ð¨ð¦ (Â¿17) — not found on SEC or Yahoo
+2026-04-01 16:20:35 | DEBUG    | main                      |   WARNING: ð¨ð³ (Â¿13) — not found on SEC or Yahoo
+2026-04-01 16:20:35 | DEBUG    | main                      |   WARNING: ð¹ð­ (Â¿11) — not found on SEC or Yahoo
+2026-04-01 16:20:35 | DEBUG    | main                      |   WARNING: ð¬ð§ (Â¿9) — not found on SEC or Yahoo
+2026-04-01 16:20:36 | INFO     | main                      | Ticker validator: 308 checked, 41 corrected, 188 warnings (124.2s)
+2026-04-01 16:20:36 | DEBUG    | main                      |   ⚠️  Block.one (Â¿164,000): not found on SEC or Yahoo
+2026-04-01 16:20:36 | DEBUG    | main                      |   ⚠️  Tether Holdings Limited (Â¿96,184): not found on SEC or Yahoo
+2026-04-01 16:20:36 | DEBUG    | main                      |   ⚠️  ðºð¸ (Â¿762,099): not found on SEC or Yahoo
+2026-04-01 16:20:36 | DEBUG    | main                      |   ⚠️  XXI (XXI.US): not found on SEC or Yahoo
+2026-04-01 16:20:36 | DEBUG    | main                      |   ⚠️  Bitcoin Standard Treasury Company (CEPO.US): not found on SEC or Yahoo
+2026-04-01 16:20:36 | DEBUG    | main                      |   ⚠️  Hut 8 Mining Corp (HUT.US): not found on SEC or Yahoo
+2026-04-01 16:20:36 | DEBUG    | main                      |   ⚠️  GD Culture Group (GDC.US): invalid on Yahoo Finance
+2026-04-01 16:20:36 | DEBUG    | main                      |   ⚠️  Next Technology Holding (NXTT.US): invalid on Yahoo Finance
+2026-04-01 16:20:36 | DEBUG    | main                      |   ⚠️  ProCap BTC (BRR.US): not found on SEC or Yahoo
+2026-04-01 16:20:36 | DEBUG    | main                      |   ⚠️  Boyaa Interactive International Limited (434.HK): invalid on Yahoo Finance
+2026-04-01 16:41:43 | INFO     | main                      | Ticker validator v2 — manual run...
+2026-04-01 16:41:43 | INFO     | main                      | Ticker validator v2: starting...
+2026-04-01 16:41:43 | INFO     | main                      |   SEC tickers loaded: 10433 entries
+2026-04-01 16:41:47 | INFO     | main                      |   CORRECTED: CIMG Inc — IMG → CIMG (SEC name match)
+2026-04-01 16:41:55 | INFO     | main                      | Ticker validator v2: 85 checked, 1 corrected, 15 warnings (12.4s)
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  OranjeBTC (OBTC3): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  Capital B (ALCPB): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  Treasury (TRSR): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  H100 Group (H100): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  Aker ASA (AKER): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  MÃ©liuz (CASH3): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  Samara Asset Group (SRAG): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  Phoenix Group PLC (PHX): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  Net Holding A.S. (NTHOL): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  LQWD Technologies Corp. (LQWD): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  Vanadi Coffee, SA (VANA): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  BTCS S.A. (36C): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  Matador Technologies Inc (MATA): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  Sixty-Six Capital Inc (SIX): not found anywhere
+2026-04-01 16:41:55 | DEBUG    | main                      |   ⚠️  K33 AB (K33): not found anywhere

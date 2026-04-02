@@ -80,6 +80,40 @@ HEADERS = {
     'Accept': 'application/json',
 }
 
+def _bridge_to_confirmed_purchases(filing_data):
+    """
+    Write EDGAR-detected purchases directly to confirmed_purchases
+    so the dashboard shows them immediately (fast path via SEC, not BitcoinTreasuries.net).
+    """
+    if filing_data.get("event_type") not in ("purchase", "acquisition"):
+        return
+
+    btc_amount = filing_data.get("btc_amount", 0)
+    if btc_amount <= 0:
+        return
+
+    usd_amount = filing_data.get("usd_amount", 0)
+    price_per_btc = round(usd_amount / btc_amount) if btc_amount > 0 else 0
+
+    purchase_id = f"edgar_{filing_data.get('ticker_cik', 'UNK')}_{filing_data.get('filing_date', '')}"
+
+    try:
+        supabase.table("confirmed_purchases").upsert({
+            "purchase_id": purchase_id,
+            "company": filing_data.get("company_name", ""),
+            "ticker": filing_data.get("ticker_cik", ""),
+            "btc_amount": btc_amount,
+            "usd_amount": usd_amount,
+            "price_per_btc": price_per_btc,
+            "filing_date": filing_data.get("filing_date", ""),
+            "filing_url": filing_data.get("filing_url", ""),
+            "was_predicted": False,
+            "source": "SEC EDGAR 8-K (real-time)",
+        }, on_conflict="purchase_id").execute()
+        logger.info(f"  ✅ Bridged to confirmed_purchases: {filing_data.get('company_name')} +{btc_amount:,.0f} BTC")
+    except Exception as e:
+        logger.debug(f"  ⚠️ Bridge to confirmed_purchases failed: {e}")
+
 
 def _search_edgar(query, days_back=1):
     """Search EDGAR full-text search for recent filings."""
@@ -294,6 +328,7 @@ def check_edgar_filings(days_back=1):
                 'processed_at': datetime.now().isoformat(),
             }
             _store_filing(filing_data)
+            _bridge_to_confirmed_purchases(filing_data)
             processed.add(accession)
             new_filings += 1
 
