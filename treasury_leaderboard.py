@@ -78,9 +78,13 @@ def fetch_live_leaderboard():
     # Source 1: CoinGecko
     try:
         logger.debug("Trying CoinGecko public companies API...")
+        cg_headers = headers.copy()
+        cg_api_key = os.getenv("COINGECKO_API_KEY", "")
+        if cg_api_key:
+            cg_headers["x-cg-demo-api-key"] = cg_api_key
         response = requests.get(
             "https://api.coingecko.com/api/v3/companies/public_treasury/bitcoin",
-            headers=headers, timeout=15
+            headers=cg_headers, timeout=15
         )
         if response.status_code == 200:
             data = response.json()
