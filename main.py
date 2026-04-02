@@ -52,7 +52,7 @@ from gov_entities import fix_government_entities
 from shares_updater import update_shares
 from entity_classifier import fix_entity_types
 from entity_name_fixer import fix_entity_names
-#from edgar_realtime import check_edgar_filings
+from edgar_realtime import check_edgar_filings as check_edgar_realtime
 from global_filing_scanner import scan_all_filings
 from etf_holdings_scraper import update_etf_holdings
 from defi_tracker import update_defi_holdings
@@ -409,6 +409,7 @@ def main():
     logger.info(f"Auto-Prediction Logging: ACTIVE")
     logger.info(f"Daily Email Briefing: ACTIVE (subscriber-based)")
     logger.info(f"Daily Leaderboard: ACTIVE")
+    logger.info(f"EDGAR Realtime Bridge: ACTIVE (purchases → confirmed_purchases)")
 
     scan_number = 0
     scan_count = 0
@@ -428,6 +429,13 @@ def main():
 
         with ScanContext(logger, scan_number, "[4/11] SEC EDGAR 8-K filings"):
             check_edgar_filings()
+            # Real-time EDGAR scanner with bridge to confirmed_purchases
+            # This queries SEC EDGAR full-text search and writes purchase-type
+            # filings directly to confirmed_purchases for instant dashboard display
+            try:
+                check_edgar_realtime(days_back=1)
+            except Exception as e:
+                logger.debug(f"EDGAR realtime: {e}")
 
         with ScanContext(logger, scan_number, "[5/11] Correlation Engine"):
             correlation = check_correlation()

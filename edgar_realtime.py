@@ -80,6 +80,7 @@ HEADERS = {
     'Accept': 'application/json',
 }
 
+
 def _bridge_to_confirmed_purchases(filing_data):
     """
     Write EDGAR-detected purchases directly to confirmed_purchases

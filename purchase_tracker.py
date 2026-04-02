@@ -277,6 +277,13 @@ def get_previous_snapshot():
         return None
 
 
+# Maximum credible BTC increase in a single scan cycle (60 minutes).
+# Strategy's largest single real purchase was ~55,500 BTC over multiple days.
+# In one scan-to-scan comparison, no company buys 30,000 BTC.
+# Anything above this cap is almost certainly a data source mismatch.
+MAX_SINGLE_SCAN_PURCHASE_BTC = 30000
+
+
 def detect_new_purchases(btc_price=None):
     """
     Detect new purchases by comparing today's vs previous snapshot.
@@ -319,9 +326,23 @@ def detect_new_purchases(btc_price=None):
             prev_btc = prev_holdings[ticker]["btc"]
             increase = current_btc - prev_btc
 
-            # Only flag if increase is meaningful AND consistent
-            # (>50 BTC and less than 10x previous holdings to filter data glitches)
-            if increase > 50 and (prev_btc == 0 or increase < prev_btc * 10):
+            # Reject increases above the absolute cap — these are data source changes
+            if increase >= MAX_SINGLE_SCAN_PURCHASE_BTC:
+                logger.warning(
+                    f"Rejected: {company_name} ({ticker}): "
+                    f"{prev_btc:,} → {current_btc:,} BTC (+{increase:,}). "
+                    f"Exceeds {MAX_SINGLE_SCAN_PURCHASE_BTC:,} BTC single-scan cap. "
+                    f"Likely data source change, not a real purchase."
+                )
+            # Reject increases that are >10x previous holdings (data glitch)
+            elif increase > 50 and prev_btc > 0 and increase >= prev_btc * 10:
+                logger.warning(
+                    f"Suspicious increase for {company_name} ({ticker}): "
+                    f"{prev_btc:,} → {current_btc:,} BTC (+{increase:,}). "
+                    f"Likely a data source change, not a real purchase. Skipping."
+                )
+            # Valid purchase detected
+            elif increase > 50:
                 detected.append({
                     "company": company_name, "ticker": ticker, "btc_amount": increase,
                     "usd_amount": round(increase * current_btc_price),
@@ -331,15 +352,10 @@ def detect_new_purchases(btc_price=None):
                     "notes": f"Holdings: {prev_btc:,} → {current_btc:,} BTC since {prev_date}",
                     "detected": True,
                 })
-            elif increase > 50:
-                logger.warning(
-                    f"Suspicious increase for {company_name} ({ticker}): "
-                    f"{prev_btc:,} → {current_btc:,} BTC (+{increase:,}). "
-                    f"Likely a data source change, not a real purchase. Skipping."
-                )
         else:
             # New entity appeared — only flag if it's a corporate entity with real holdings
-            if current_btc > 100 and ticker not in GOVERNMENT_TICKERS:
+            # Also apply the absolute cap to new entrants
+            if current_btc > 100 and current_btc < MAX_SINGLE_SCAN_PURCHASE_BTC and ticker not in GOVERNMENT_TICKERS:
                 detected.append({
                     "company": company_name, "ticker": ticker, "btc_amount": current_btc,
                     "usd_amount": round(current_btc * current_btc_price),
@@ -349,6 +365,12 @@ def detect_new_purchases(btc_price=None):
                     "notes": f"First appeared with {current_btc:,} BTC",
                     "detected": True,
                 })
+            elif current_btc >= MAX_SINGLE_SCAN_PURCHASE_BTC:
+                logger.warning(
+                    f"Rejected new entrant: {company_name} ({ticker}) with {current_btc:,} BTC. "
+                    f"Exceeds {MAX_SINGLE_SCAN_PURCHASE_BTC:,} BTC cap — likely pre-existing entity "
+                    f"appearing due to data source change."
+                )
 
     detected.sort(key=lambda x: x["btc_amount"], reverse=True)
     if detected:
