@@ -1,19 +1,20 @@
 """
-main.py — Treasury Signal Intelligence v2.0
+main.py — Treasury Signal Intelligence v2.1
 Full automated pipeline with all features integrated.
 
-Runs every 60 minutes:
+Scans at 6am, 12pm, 6pm:
   1. Scan tweets from 24+ executive accounts
   2. Classify signals + send Telegram alerts
   3. Check STRC issuance volume
-  4. Check SEC EDGAR for 8-K filings
+  4. SEC EDGAR realtime 8-K scanner (all bitcoin filings)
   5. Run Multi-Signal Correlation Engine
-  6. Auto-log predictions when confidence is high
-  7. Send daily email briefing at 7am ET
-  8. Send daily leaderboard at 8am
-  9. Detect new BTC purchases
-  10. Scan regulatory news & statements
-  11. Ping dashboard to keep alive
+  6. Send daily email briefing at 7am ET
+  7. Send daily leaderboard at 8am
+  8. Detect new BTC purchases (with reconciler)
+  9. Scan regulatory news & statements
+  10. Ping dashboard to keep alive
+
+6am scan also runs: shares_updater, entity fixers, ticker validator
 """
 
 import json
@@ -26,7 +27,6 @@ from database import save_tweet, get_new_tweets, mark_processed
 from classifier import classify_tweet, get_signal_label, get_dimension_breakdown
 from telegram_bot import send_alert, send_scan_summary, send_strc_alert, send_edgar_alert, send_to_paid, send_to_free
 from strc_tracker import get_strc_volume_data, analyze_strc_signal, format_strc_alert
-#from edgar_monitor import scan_edgar_filings, format_edgar_alert, TREASURY_COMPANIES
 from correlation_engine import CorrelationEngine
 from pattern_analyzer import pattern_engine
 from feedback_loop import feedback_engine
@@ -61,10 +61,6 @@ from whale_monitor import check_whale_transactions
 from filing_parser import parse_and_update
 from sync_protector import snapshot_primary_data, protect_primary_data
 from ticker_validator import validate_all_tickers
-#from ticker_validator import validate_all_tickers
-#from bms_scraper import sync_bms_data
-#from velocity_tracker import velocity
-#velocity.run()
 
 logger = get_logger(__name__)
 
@@ -72,13 +68,12 @@ load_dotenv()
 
 # Initialize persistent objects
 engine = CorrelationEngine()
-alerted_filings = set()
 last_correlation_alert_score = 0
 last_email_date = None
 last_leaderboard_date = None
 sent_tweet_ids = set()
 sent_strc_status = None
-sent_edgar_ids = set()
+sent_edgar_realtime_ids = set()
 sent_correlation_score = 0
 
 # Fallback email list — used only if subscribers table is empty
@@ -221,36 +216,6 @@ def check_strc_volume():
         logger.warning("STRC: Could not fetch data")
         return None, None
 
-'''
-def check_edgar_filings():
-    global alerted_filings, sent_edgar_ids
-    noteworthy = scan_edgar_filings(days_back=3)
-    new_filings = 0
-    if noteworthy:
-        for filing in noteworthy:
-            filing_id = f"{filing['ticker']}_{filing['date']}_{filing.get('url', '')[:50]}"
-            if filing_id not in alerted_filings and filing_id not in sent_edgar_ids:
-                alerted_filings.add(filing_id)
-                sent_edgar_ids.add(filing_id)
-                new_filings += 1
-                engine.add_edgar_filing(filing['company'], filing['ticker'], filing['is_btc_related'], filing['date'])
-
-                log_prediction(
-                    company=filing['company'], ticker=filing['ticker'],
-                    signal_type="edgar_8k",
-                    signal_score=70 if filing['is_btc_related'] else 40,
-                    signal_details=f"8-K filing on {filing['date']}: {filing.get('description', '')}",
-                )
-
-                label = "BTC-RELATED" if filing['is_btc_related'] else "HIGH-PRIORITY"
-                logger.info(f"EDGAR: {label} — {filing['company']} filed 8-K on {filing['date']}")
-                alert_message = format_edgar_alert(filing)
-                send_edgar_alert(alert_message)
-            else:
-                logger.debug(f"Already alerted: {filing['company']} 8-K from {filing['date']}")
-    logger.info(f"EDGAR: {len(noteworthy)} noteworthy filing(s), {new_filings} new alert(s)")
-    return noteworthy
-'''
 
 def check_correlation():
     global last_correlation_alert_score, sent_correlation_score
@@ -315,7 +280,6 @@ def send_daily_email():
         email_subscribers = subscribers.get_email_recipients()
 
         if not email_subscribers:
-            # Fallback to hardcoded list if no subscribers exist yet
             logger.info(f"No subscribers in DB — using fallback list ({len(FALLBACK_EMAIL_RECIPIENTS)} recipients)")
             for email in FALLBACK_EMAIL_RECIPIENTS:
                 try:
@@ -340,13 +304,8 @@ def send_daily_email():
                     logger.error(f"Email error for {sub['name']} ({email}): {e}", exc_info=True)
 
         last_email_date = today
-    else:
-        if last_email_date == today:
-            logger.debug("Daily briefing already sent today")
-        else:
-            logger.debug(f"Daily briefing scheduled for 7am (current hour: {now.hour})")
 
-# Send personalized Pro briefings
+        # Send personalized Pro briefings
         try:
             send_pro_briefings()
         except Exception as e:
@@ -358,6 +317,12 @@ def send_daily_email():
                 telegram_alerts.send_weekly_summary()
         except Exception as e:
             logger.debug(f"Weekly summary: {e}")
+    else:
+        if last_email_date == today:
+            logger.debug("Daily briefing already sent today")
+        else:
+            logger.debug(f"Daily briefing scheduled for 7am (current hour: {now.hour})")
+
 
 def send_daily_leaderboard():
     global last_leaderboard_date
@@ -384,9 +349,14 @@ def send_daily_leaderboard():
             logger.debug(f"Daily leaderboard scheduled for 8am (current hour: {now.hour})")
 
 
+def is_morning_scan():
+    """Check if current scan is the 6am morning maintenance scan."""
+    return datetime.now().hour < 9
+
+
 def main():
     logger.info("=" * 60)
-    logger.info("TREASURY PURCHASE SIGNAL INTELLIGENCE v2.0")
+    logger.info("TREASURY PURCHASE SIGNAL INTELLIGENCE v2.1")
     logger.info("=" * 60)
 
     # Auto-seed database if tables are empty (first run)
@@ -411,35 +381,39 @@ def main():
     logger.info(f"Daily Email Briefing: ACTIVE (subscriber-based)")
     logger.info(f"Daily Leaderboard: ACTIVE")
     logger.info(f"EDGAR Realtime Bridge: ACTIVE (purchases → confirmed_purchases)")
+    logger.info(f"Purchase Reconciler: ACTIVE (dedup + source hierarchy + pending verification)")
+    logger.info(f"Scan schedule: 6am (full), 12pm (detection), 6pm (detection)")
 
     scan_number = 0
     scan_count = 0
     while True:
         scan_number += 1
-        logger.info(f"{'='*50} SCAN #{scan_number} {'='*50}")
+        morning = is_morning_scan()
+        scan_type = "FULL (maintenance + detection)" if morning else "DETECTION"
+        logger.info(f"{'='*50} SCAN #{scan_number} [{scan_type}] {'='*50}")
 
-        with ScanContext(logger, scan_number, "[1/11] Fetching tweets"):
+        with ScanContext(logger, scan_number, "[1/10] Fetching tweets"):
             new_count, skip_count = scan_all_accounts(accounts)
             logger.info(f"Tweets: {new_count} new, {skip_count} duplicates")
 
-        with ScanContext(logger, scan_number, "[2/11] Classifying + alerting"):
+        with ScanContext(logger, scan_number, "[2/10] Classifying + alerting"):
             signals, alerts_sent = process_and_alert()
 
-        with ScanContext(logger, scan_number, "[3/11] STRC issuance volume"):
+        with ScanContext(logger, scan_number, "[3/10] STRC issuance volume"):
             check_strc_volume()
 
-        with ScanContext(logger, scan_number, "[4/11] SEC EDGAR 8-K filings"):
-            # Real-time EDGAR scanner — searches ALL 8-K filings for bitcoin keywords,
-            # extracts BTC/USD amounts, bridges to confirmed_purchases, sends Telegram alerts
+        with ScanContext(logger, scan_number, "[4/10] SEC EDGAR realtime"):
+            # Searches ALL 8-K filings for bitcoin keywords, extracts BTC/USD amounts,
+            # bridges purchases to confirmed_purchases, sends Telegram alerts
             try:
                 check_edgar_realtime(days_back=1)
             except Exception as e:
                 logger.debug(f"EDGAR realtime: {e}")
 
-        with ScanContext(logger, scan_number, "[5/11] Correlation Engine"):
+        with ScanContext(logger, scan_number, "[5/10] Correlation Engine"):
             correlation = check_correlation()
 
-            # Historical pattern matching (Phase 14)
+            # Historical pattern matching
             try:
                 from market_intelligence import get_risk_dashboard
                 risk_data = get_risk_dashboard()
@@ -462,13 +436,13 @@ def main():
                 logger.debug(f"Pattern analysis skipped: {e}")
                 pattern_match = {"score": 0, "matched_count": 0, "total_patterns": 0, "matching_patterns": [], "narrative": ""}
 
-        with ScanContext(logger, scan_number, "[6/11] Daily email briefing"):
+        with ScanContext(logger, scan_number, "[6/10] Daily email briefing"):
             send_daily_email()
 
-        with ScanContext(logger, scan_number, "[7/11] Daily leaderboard"):
+        with ScanContext(logger, scan_number, "[7/10] Daily leaderboard"):
             send_daily_leaderboard()
 
-        with ScanContext(logger, scan_number, "[8/11] Purchase detection"):
+        with ScanContext(logger, scan_number, "[8/10] Purchase detection"):
             detected = detect_new_purchases()
             if detected:
                 log_detected_purchases(detected)
@@ -501,8 +475,8 @@ def main():
             except Exception as e:
                 logger.debug(f"Reconciler promote: {e}")
 
-            # Reconciler: expire stale pending entries (once per day)
-            if scan_number == 1 or (scan_number % 24 == 0):
+            # Reconciler: expire stale pending entries (once per day, morning only)
+            if morning:
                 try:
                     expired = expire_stale_pending()
                     if expired:
@@ -517,40 +491,50 @@ def main():
             except Exception as e:
                 logger.debug(f"Reconciler stats: {e}")
 
-        with ScanContext(logger, scan_number, "[9/11] Regulatory scan"):
+        with ScanContext(logger, scan_number, "[9/10] Regulatory scan"):
             scan_regulatory()
 
-        with ScanContext(logger, scan_number, "[10/11] Dashboard ping"):
-            response = req.get("https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/", timeout=30)
-            logger.debug(f"Dashboard ping: {response.status_code}")
+        with ScanContext(logger, scan_number, "[10/10] Dashboard ping"):
+            try:
+                response = req.get("https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/", timeout=30)
+                logger.debug(f"Dashboard ping: {response.status_code}")
+            except Exception as e:
+                logger.debug(f"Dashboard ping failed: {e}")
 
-        logger.info(f"[11/11] Scan #{scan_number} complete")
+        logger.info(f"Scan #{scan_number} complete")
 
         # Save freshness snapshot to Supabase
-        from database import supabase as db_client
-        freshness.save_to_supabase(db_client)
+        try:
+            from database import supabase as db_client
+            freshness.save_to_supabase(db_client)
+        except Exception as e:
+            logger.debug(f"Freshness save: {e}")
 
         # Log system health
         health = freshness.get_overall_health()
         logger.info(f"System Health: {health['emoji']} {health['health'].upper()} — {health['message']}")
 
-        # Accuracy feedback loop (Phase 15) — learn once per day
-        try:
-            if scan_number == 1 or (scan_number % 24 == 0):
+        # ═══ DAILY-ONLY TASKS (morning scan) ═══
+
+        # Accuracy feedback loop — learn once per day
+        if morning:
+            try:
                 feedback_engine.learn()
                 feedback_engine.load_from_db()
                 report = feedback_engine.get_learning_report()
                 if "No learning data" not in report:
                     logger.info("Feedback loop: learning cycle complete")
-        except Exception as e:
-            logger.debug(f"Feedback loop: {e}")
+            except Exception as e:
+                logger.debug(f"Feedback loop: {e}")
 
-        # Price prediction model (runs once per day)
-        try:
-            if scan_number == 1 or (scan_number % 24 == 0):
+        # Price prediction model (once per day)
+        if morning:
+            try:
                 predictor.analyze()
-        except Exception as e:
-            logger.debug(f"Price predictor: {e}")
+            except Exception as e:
+                logger.debug(f"Price predictor: {e}")
+
+        # ═══ ENTITY SYNC (every scan) ═══
 
         # SNAPSHOT primary source data before aggregator sync
         try:
@@ -577,56 +561,40 @@ def main():
         except Exception as e:
             logger.debug(f"Velocity tracker: {e}")
 
-        # Fix government entity names after sync (6am only — gov data rarely changes)
-        if datetime.now().hour < 9:
+        # ═══ MAINTENANCE TASKS (6am only) ═══
+
+        if morning:
+            # Fix government entity names after sync
             try:
                 fix_government_entities()
             except Exception as e:
                 logger.debug(f"Gov fix: {e}")
-        else:
-            logger.debug("Gov fix: skipped (runs at 6am scan only)")
 
-        # Fix DeFi/ETF entity types after sync (6am only)
-        if datetime.now().hour < 9:
+            # Fix DeFi/ETF entity types after sync
             try:
                 fix_entity_types()
             except Exception as e:
                 logger.debug(f"Entity fix: {e}")
-        else:
-            logger.debug("Entity fix: skipped (runs at 6am scan only)")
 
-        # Fix garbled ETF/private company names (6am only — names rarely change)
-        if datetime.now().hour < 9:
+            # Fix garbled ETF/private company names
             try:
                 fix_entity_names()
             except Exception as e:
                 logger.debug(f"Name fix: {e}")
-        else:
-            logger.debug("Name fix: skipped (runs at 6am scan only)")
-        
-        '''
-        # Auto-update shares outstanding from Yahoo Finance
-        try:
-            update_shares()
-        except Exception as e:
-            logger.debug(f"Shares update: {e}")
-        '''
 
-        # Auto-update shares outstanding from Yahoo Finance (6am only — shares rarely change)
-        if datetime.now().hour < 9:
+            # Auto-update shares outstanding from Yahoo Finance
             try:
                 update_shares()
             except Exception as e:
                 logger.debug(f"Shares update: {e}")
-        else:
-            logger.debug("Shares update: skipped (runs at 6am scan only)")
 
-        # Validate and auto-correct tickers (once per day)
-        if scan_number == 1 or (scan_number % 24 == 0):
+            # Validate and auto-correct tickers
             try:
                 validate_all_tickers()
             except Exception as e:
                 logger.debug(f"Ticker validator: {e}")
+        else:
+            logger.debug("Maintenance tasks skipped (6am only)")
 
         # ═══ PRIMARY SOURCE DATA COLLECTION ═══
 
@@ -648,15 +616,15 @@ def main():
         except Exception as e:
             logger.debug(f"Whale monitor: {e}")
 
-        # ETF holdings: Direct from issuer websites (every 6th cycle = ~6 hours)
-        if scan_count % 6 == 0:
+        # ETF holdings: Direct from issuer websites (morning only)
+        if morning:
             try:
                 update_etf_holdings()
             except Exception as e:
                 logger.debug(f"ETF scraper: {e}")
 
-        # DeFi holdings: DeFi Llama on-chain data (every 6th cycle = ~6 hours)
-        if scan_count % 6 == 0:
+        # DeFi holdings: DeFi Llama on-chain data (morning only)
+        if morning:
             try:
                 update_defi_holdings()
             except Exception as e:
@@ -664,7 +632,7 @@ def main():
 
         scan_count += 1
 
-        # Watchlist alerts (Phase 8)
+        # Watchlist alerts
         try:
             all_subscribers = subscribers.get_active_subscribers()
             for sub in all_subscribers:
@@ -693,7 +661,7 @@ def main():
         except Exception as e:
             logger.debug(f"Watchlist alert check: {e}")
 
-        # Handle correlation result safely (may not exist if step 5 failed)
+        # Handle correlation result safely
         try:
             cor_score = correlation["correlated_score"]
             cor_active = correlation["active_streams"]
@@ -704,18 +672,9 @@ def main():
         send_scan_summary(scan_number, len(accounts), new_count if 'new_count' in dir() else 0, len(signals) if 'signals' in dir() else 0)
 
         logger.info(f"Tweets: {new_count if 'new_count' in dir() else '?'} | Signals: {len(signals) if 'signals' in dir() else '?'} | Correlation: {cor_score}/100 ({cor_active}/4)")
-        
-        '''
-        wait_minutes = 60
-        logger.info(f"Next scan in {wait_minutes} minutes. Press Ctrl+C to stop.")
-        try:
-            time.sleep(wait_minutes * 60)
-        except KeyboardInterrupt:
-            logger.info("Stopped by user. Goodbye!")
-            break
-        '''
 
-        # Scheduled scan times: 6am, 12pm, 6pm ET
+        # ═══ SCHEDULED SCAN TIMING ═══
+        # Scans at 6am, 12pm, 6pm
         SCAN_HOURS = [6, 12, 18]
         now = datetime.now()
         next_times = []
