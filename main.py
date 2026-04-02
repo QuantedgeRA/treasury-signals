@@ -579,23 +579,32 @@ def main():
         except Exception as e:
             logger.debug(f"Velocity tracker: {e}")
 
-        # Fix government entity names after sync
-        try:
-            fix_government_entities()
-        except Exception as e:
-            logger.debug(f"Gov fix: {e}")
+        # Fix government entity names after sync (6am only — gov data rarely changes)
+        if datetime.now().hour < 9:
+            try:
+                fix_government_entities()
+            except Exception as e:
+                logger.debug(f"Gov fix: {e}")
+        else:
+            logger.debug("Gov fix: skipped (runs at 6am scan only)")
 
-        # Fix DeFi/ETF entity types after sync
-        try:
-            fix_entity_types()
-        except Exception as e:
-            logger.debug(f"Entity fix: {e}")
+        # Fix DeFi/ETF entity types after sync (6am only)
+        if datetime.now().hour < 9:
+            try:
+                fix_entity_types()
+            except Exception as e:
+                logger.debug(f"Entity fix: {e}")
+        else:
+            logger.debug("Entity fix: skipped (runs at 6am scan only)")
 
-        # Fix garbled ETF/private company names
-        try:
-            fix_entity_names()
-        except Exception as e:
-            logger.debug(f"Name fix: {e}")
+        # Fix garbled ETF/private company names (6am only — names rarely change)
+        if datetime.now().hour < 9:
+            try:
+                fix_entity_names()
+            except Exception as e:
+                logger.debug(f"Name fix: {e}")
+        else:
+            logger.debug("Name fix: skipped (runs at 6am scan only)")
         
         '''
         # Auto-update shares outstanding from Yahoo Finance
