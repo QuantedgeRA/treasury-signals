@@ -1,5 +1,5 @@
 """
-main.py — Treasury Signal Intelligence v2.1
+main.py — Treasury Signal Intelligence v2.2
 Full automated pipeline with all features integrated.
 
 Scans at 6am, 12pm, 6pm:
@@ -7,7 +7,7 @@ Scans at 6am, 12pm, 6pm:
   2. Classify signals + send Telegram alerts
   3. Check STRC issuance volume
   4. SEC EDGAR realtime 8-K scanner (all bitcoin filings)
-  5. Run Multi-Signal Correlation Engine
+  5. Correlation Engine v2 (6-stream, per-company + market-wide)
   6. Send daily email briefing at 7am ET
   7. Send daily leaderboard at 8am
   8. Detect new BTC purchases (with reconciler)
@@ -15,6 +15,14 @@ Scans at 6am, 12pm, 6pm:
   10. Ping dashboard to keep alive
 
 6am scan also runs: shares_updater, entity fixers, ticker validator
+
+Correlation Engine v2 streams:
+  - Tweet signals (mapped to companies)
+  - STRC volume spikes (Strategy-specific)
+  - EDGAR realtime 8-K filings
+  - Global filing scanner (international)
+  - Whale on-chain detection
+  - News scanner (purchase headlines)
 """
 
 import json
@@ -27,7 +35,7 @@ from database import save_tweet, get_new_tweets, mark_processed
 from classifier import classify_tweet, get_signal_label, get_dimension_breakdown
 from telegram_bot import send_alert, send_scan_summary, send_strc_alert, send_edgar_alert, send_to_paid, send_to_free
 from strc_tracker import get_strc_volume_data, analyze_strc_signal, format_strc_alert
-from correlation_engine import CorrelationEngine
+from correlation_engine_v2 import CorrelationEngineV2
 from pattern_analyzer import pattern_engine
 from feedback_loop import feedback_engine
 from narrative_engine import narrator
@@ -67,13 +75,12 @@ logger = get_logger(__name__)
 load_dotenv()
 
 # Initialize persistent objects
-engine = CorrelationEngine()
+engine = CorrelationEngineV2()
 last_correlation_alert_score = 0
 last_email_date = None
 last_leaderboard_date = None
 sent_tweet_ids = set()
 sent_strc_status = None
-sent_edgar_realtime_ids = set()
 sent_correlation_score = 0
 
 # Fallback email list — used only if subscribers table is empty
@@ -149,8 +156,6 @@ def process_and_alert():
             logger.info(f"Signal: @{tweet['author_username']} {result['score']}/100 — {get_dimension_breakdown(result.get('dimensions', {}))}")
 
             if result['score'] >= 60:
-                engine.add_tweet_signal(tweet['author_username'], result['score'], tweet['tweet_text'])
-
                 company_name = tweet.get('company', 'Unknown')
                 ticker = ""
                 if "mstr" in company_name.lower() or "strategy" in company_name.lower():
@@ -165,6 +170,8 @@ def process_and_alert():
                     ticker = "GME"
                 elif "coinbase" in company_name.lower():
                     ticker = "COIN"
+
+                engine.add_tweet_signal(tweet['author_username'], company_name, ticker, result['score'], tweet['tweet_text'])
 
                 log_prediction(
                     company=company_name, ticker=ticker,
@@ -221,49 +228,56 @@ def check_correlation():
     global last_correlation_alert_score, sent_correlation_score
 
     result = engine.calculate_correlation()
-    score = result['correlated_score']
-    active = result['active_streams']
+    market_score = result['market_score']
+    total_streams = result['total_streams']
     level = result['alert_level']
 
-    logger.info(f"Correlation: {score}/100 | {active}/4 streams | {level}")
+    logger.info(f"Correlation v2: Market {market_score}/100 | {total_streams}/6 streams | {level}")
 
-    if active >= 1:
+    # Log top signaling companies
+    for c in result['top_companies'][:3]:
+        if c['score'] >= 30:
+            logger.info(f"  📊 {c['company']}: {c['score']}/100 ({' + '.join(c['streams'])})")
+
+    if result['reasons']:
         for reason in result['reasons']:
-            logger.debug(f"  {reason}")
+            logger.info(f"  {reason}")
 
-    if score >= 50 and active >= 2:
+    # Log predictions for high scores
+    if market_score >= 50:
+        signaling = [c for c in result['top_companies'] if c['score'] >= 40]
         log_prediction(
-            company="Multi-Signal", ticker="MSTR",
-            signal_type="correlation", signal_score=score,
-            signal_details=f"{active}/4 streams active. Multiplier: {result['multiplier']}x. {'; '.join(result['reasons'][:3])}",
+            company="Market-Wide", ticker="MULTI",
+            signal_type="correlation_v2", signal_score=market_score,
+            signal_details=f"{len(signaling)} companies signaling. Streams: {', '.join(result['active_streams'])}",
         )
 
-    if score >= 50 and (score - last_correlation_alert_score) >= 15 and score != sent_correlation_score:
+    # Send alerts based on market-wide score
+    if market_score >= 50 and (market_score - last_correlation_alert_score) >= 15 and market_score != sent_correlation_score:
         alert_message = engine.format_correlation_alert(result)
         send_to_paid(alert_message)
-        logger.info(f"Correlation alert sent to PAID channel (score: {score})")
-        sent_correlation_score = score
+        logger.info(f"Correlation v2 alert sent to PAID channel (market score: {market_score})")
+        sent_correlation_score = market_score
 
-        if score >= 90:
+        if market_score >= 70:
             free_message = f"""
-🔗 CRITICAL MULTI-SIGNAL ALERT
+🔗 INSTITUTIONAL WAVE DETECTED
 
-Correlated Score: {score}/100
-Active Streams: {active}/4
+Market-Wide Score: {market_score}/100
+Active Streams: {total_streams}/6
 
-{result['narrative']}
+{result['narrative'][:300]}
 
-🔓 Full details in PRO channel.
-Subscribe for instant multi-source correlation alerts.
+🔓 Full company breakdown in PRO channel.
 """
             send_to_free(free_message)
-            logger.info(f"Critical correlation alert sent to FREE channel (score: {score})")
+            logger.info(f"Critical correlation alert sent to FREE channel (market score: {market_score})")
 
-        last_correlation_alert_score = score
-    elif score == sent_correlation_score:
-        logger.debug(f"Correlation unchanged ({score}/100), no notification")
+        last_correlation_alert_score = market_score
+    elif market_score == sent_correlation_score:
+        logger.debug(f"Correlation unchanged ({market_score}/100), no notification")
 
-    if score < 30:
+    if market_score < 30:
         last_correlation_alert_score = 0
         sent_correlation_score = 0
 
@@ -356,7 +370,7 @@ def is_morning_scan():
 
 def main():
     logger.info("=" * 60)
-    logger.info("TREASURY PURCHASE SIGNAL INTELLIGENCE v2.1")
+    logger.info("TREASURY PURCHASE SIGNAL INTELLIGENCE v2.2")
     logger.info("=" * 60)
 
     # Auto-seed database if tables are empty (first run)
@@ -376,7 +390,7 @@ def main():
     logger.info(f"Monitoring {len(accounts)} X accounts")
     logger.info(f"EDGAR Realtime: monitoring ALL bitcoin-related 8-K filings")
     logger.info(f"STRC volume tracking: ACTIVE")
-    logger.info(f"Correlation Engine: ACTIVE")
+    logger.info(f"Correlation Engine v2: ACTIVE (6-stream, per-company + market-wide)")
     logger.info(f"Auto-Prediction Logging: ACTIVE")
     logger.info(f"Daily Email Briefing: ACTIVE (subscriber-based)")
     logger.info(f"Daily Leaderboard: ACTIVE")
@@ -406,19 +420,56 @@ def main():
             # Searches ALL 8-K filings for bitcoin keywords, extracts BTC/USD amounts,
             # bridges purchases to confirmed_purchases, sends Telegram alerts
             try:
-                check_edgar_realtime(days_back=1)
+                edgar_result = check_edgar_realtime(days_back=1)
+                # Feed EDGAR findings into correlation engine
+                if edgar_result and edgar_result.get("new_filings", 0) > 0:
+                    # Query recent edgar_filings from DB to get details
+                    try:
+                        from database import supabase as db
+                        recent_filings = db.table("edgar_filings").select("*").order("processed_at", desc=True).limit(5).execute()
+                        if recent_filings.data:
+                            for f in recent_filings.data:
+                                if f.get("event_type") == "purchase" and f.get("btc_amount", 0) > 0:
+                                    engine.add_edgar_filing(
+                                        company=f.get("company_name", ""),
+                                        ticker=f.get("ticker_cik", ""),
+                                        is_btc_related=True,
+                                        filing_date=f.get("filing_date", ""),
+                                        btc_amount=f.get("btc_amount", 0),
+                                    )
+                                elif f.get("event_type") in ("purchase", "holding"):
+                                    engine.add_edgar_filing(
+                                        company=f.get("company_name", ""),
+                                        ticker=f.get("ticker_cik", ""),
+                                        is_btc_related=True,
+                                        filing_date=f.get("filing_date", ""),
+                                    )
+                    except Exception as e:
+                        logger.debug(f"EDGAR → correlation feed: {e}")
             except Exception as e:
                 logger.debug(f"EDGAR realtime: {e}")
 
-        with ScanContext(logger, scan_number, "[5/10] Correlation Engine"):
-            correlation = check_correlation()
-
-            # Historical pattern matching
+        with ScanContext(logger, scan_number, "[5/10] Correlation Engine v2"):
+            # Feed market context into the engine before calculating
             try:
                 from market_intelligence import get_risk_dashboard
                 risk_data = get_risk_dashboard()
                 fg_value = risk_data.get("fear_greed_value", 50)
                 btc_weekly = risk_data.get("btc_7d_change", 0)
+                engine.update_market_context(
+                    fear_greed=fg_value,
+                    btc_weekly_change=btc_weekly,
+                    btc_price=risk_data.get("btc_price", 0)
+                )
+            except Exception as e:
+                logger.debug(f"Market context update: {e}")
+                fg_value = 50
+                btc_weekly = 0
+
+            correlation = check_correlation()
+
+            # Historical pattern matching
+            try:
                 strc_data = get_strc_volume_data()
                 strc_r = strc_data.get("volume_ratio", 0) if strc_data else 0
 
@@ -452,6 +503,15 @@ def main():
                     if d["btc_amount"] >= 1000:
                         send_to_free(msg)
                 logger.info(f"{len(detected)} purchase(s) detected and logged")
+
+                # Feed detected purchases into correlation engine as news signals
+                for d in detected[:10]:
+                    engine.add_news_signal(
+                        company=d.get("company", ""),
+                        ticker=d.get("ticker", ""),
+                        is_confirmed_purchase=True,
+                        headline=f"{d.get('company', '')} acquired {d.get('btc_amount', 0):,} BTC",
+                    )
 
                 # LLM purchase analysis
                 try:
@@ -600,7 +660,19 @@ def main():
 
         # Global filing scanner: SEC EDGAR + SEDAR + TDnet + DART + RNS + HKEX + ASX + more
         try:
-            scan_all_filings(days_back=1)
+            filing_result = scan_all_filings(days_back=1)
+            # Feed global filing alerts into correlation engine
+            if filing_result and isinstance(filing_result, dict):
+                alerts = filing_result.get("alerts", [])
+                if isinstance(alerts, list):
+                    for alert in alerts[:10]:
+                        engine.add_global_filing(
+                            company=alert.get("company", "Unknown"),
+                            ticker=alert.get("ticker", ""),
+                            country=alert.get("country", ""),
+                            filing_type=alert.get("source", "Global"),
+                            detail_text=alert.get("title", alert.get("description", ""))[:150],
+                        )
         except Exception as e:
             logger.debug(f"Global filing scanner: {e}")
 
@@ -610,9 +682,21 @@ def main():
         except Exception as e:
             logger.debug(f"Filing parser: {e}")
 
-        # Whale monitor: Large BTC transactions on-chain
+        # Whale monitor: Large BTC transactions on-chain → feeds into correlation engine
         try:
-            check_whale_transactions()
+            whale_result = check_whale_transactions()
+            # Feed whale movements into correlation engine
+            if whale_result and hasattr(whale_result, '__iter__'):
+                for w in (whale_result if isinstance(whale_result, list) else []):
+                    btc_amt = w.get("btc_amount", w.get("amount", 0))
+                    if btc_amt >= 500:
+                        engine.add_whale_movement(
+                            btc_amount=btc_amt,
+                            from_entity=w.get("from_entity"),
+                            to_entity=w.get("to_entity"),
+                            from_ticker=w.get("from_ticker"),
+                            to_ticker=w.get("to_ticker"),
+                        )
         except Exception as e:
             logger.debug(f"Whale monitor: {e}")
 
@@ -663,15 +747,17 @@ def main():
 
         # Handle correlation result safely
         try:
-            cor_score = correlation["correlated_score"]
-            cor_active = correlation["active_streams"]
+            cor_score = correlation["market_score"]
+            cor_streams = correlation["total_streams"]
+            cor_level = correlation["alert_level"]
         except (NameError, TypeError):
             cor_score = 0
-            cor_active = 0
+            cor_streams = 0
+            cor_level = "NONE"
 
         send_scan_summary(scan_number, len(accounts), new_count if 'new_count' in dir() else 0, len(signals) if 'signals' in dir() else 0)
 
-        logger.info(f"Tweets: {new_count if 'new_count' in dir() else '?'} | Signals: {len(signals) if 'signals' in dir() else '?'} | Correlation: {cor_score}/100 ({cor_active}/4)")
+        logger.info(f"Tweets: {new_count if 'new_count' in dir() else '?'} | Signals: {len(signals) if 'signals' in dir() else '?'} | Correlation v2: Market {cor_score}/100 ({cor_streams}/6 streams, {cor_level})")
 
         # ═══ SCHEDULED SCAN TIMING ═══
         # Scans at 6am, 12pm, 6pm
