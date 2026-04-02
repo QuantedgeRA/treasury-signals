@@ -686,11 +686,32 @@ def main():
         send_scan_summary(scan_number, len(accounts), new_count if 'new_count' in dir() else 0, len(signals) if 'signals' in dir() else 0)
 
         logger.info(f"Tweets: {new_count if 'new_count' in dir() else '?'} | Signals: {len(signals) if 'signals' in dir() else '?'} | Correlation: {cor_score}/100 ({cor_active}/4)")
-
+        
+        '''
         wait_minutes = 60
         logger.info(f"Next scan in {wait_minutes} minutes. Press Ctrl+C to stop.")
         try:
             time.sleep(wait_minutes * 60)
+        except KeyboardInterrupt:
+            logger.info("Stopped by user. Goodbye!")
+            break
+        '''
+        
+        # Scheduled scan times: 6am, 12pm, 6pm ET
+        SCAN_HOURS = [6, 12, 18]
+        now = datetime.now()
+        next_times = []
+        for h in SCAN_HOURS:
+            candidate = now.replace(hour=h, minute=0, second=0, microsecond=0)
+            if candidate <= now:
+                candidate += timedelta(days=1)
+            next_times.append(candidate)
+        next_scan = min(next_times)
+        wait_seconds = (next_scan - now).total_seconds()
+        wait_minutes = int(wait_seconds / 60)
+        logger.info(f"Next scan at {next_scan.strftime('%Y-%m-%d %H:%M')} ({wait_minutes} minutes). Press Ctrl+C to stop.")
+        try:
+            time.sleep(wait_seconds)
         except KeyboardInterrupt:
             logger.info("Stopped by user. Goodbye!")
             break
