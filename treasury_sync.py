@@ -419,32 +419,32 @@ class TreasurySync:
                 skipped_cols += 1
                 continue
 
+            # Get raw HTML to check for ₿ symbol (more reliable than text extraction)
+            row_html = str(row)
+            row_has_btc_symbol = ('₿' in row_html or '\u20bf' in row_html or '&#8383;' in row_html)
+
             texts = [td.get_text(strip=True) for td in cells]
 
-            # DATA ROW DETECTION: Real data rows have a rank number (1-999) in column 0.
-            # Summary/nav/stats rows have text or large numbers in column 0.
-            # This is far more precise than keyword filtering.
-            first_col = texts[0].strip()
-            is_data_row = False
-            try:
-                rank_num = int(first_col)
-                if 1 <= rank_num <= 999:
-                    is_data_row = True
-            except (ValueError, TypeError):
-                pass
+            # DATA ROW DETECTION: real data rows contain the ₿ symbol somewhere.
+            # Summary/nav/stats rows never have ₿.
+            # Also accept rows where column 0 is a rank number (1-999).
+            is_data_row = row_has_btc_symbol
 
             if not is_data_row:
-                # Also accept rows where column 0 is a 2-letter country code
-                # (some pages put country before rank)
-                if len(first_col) == 2 and first_col.isalpha() and first_col.isupper():
-                    is_data_row = True
+                first_col = texts[0].strip()
+                try:
+                    rank_num = int(first_col)
+                    if 1 <= rank_num <= 999:
+                        is_data_row = True
+                except (ValueError, TypeError):
+                    pass
 
             if not is_data_row:
                 failed += 1
                 continue
 
             # BTC: ₿ symbol first (most reliable, handles 0 correctly)
-            btc = -1  # -1 means not found yet
+            btc = -1
             for t in texts:
                 if '₿' in t or '\u20bf' in t:
                     clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
@@ -455,8 +455,21 @@ class TreasurySync:
                         btc = 0
                     break
 
-            # If no ₿ found, take largest number but SKIP first column (rank)
-            # and skip cells with $, %, M/B suffix (USD values)
+            # If no ₿ in text, try raw HTML of each cell
+            if btc < 0:
+                for cell in cells:
+                    cell_html = str(cell)
+                    if '₿' in cell_html or '\u20bf' in cell_html:
+                        cell_text = cell.get_text(strip=True)
+                        clean = cell_text.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
+                        clean = re.sub(r'[^\d.]', '', clean)
+                        try:
+                            btc = int(float(clean)) if clean else 0
+                        except:
+                            btc = 0
+                        break
+
+            # Fallback: take largest number, skip rank column and USD/% cells
             if btc < 0:
                 btc = 0
                 for t in texts[1:]:
@@ -491,8 +504,17 @@ class TreasurySync:
                 failed += 1
                 continue
 
-            # Skip total/aggregate rows
-            if name.lower().strip().rstrip(':') in ('total', 'totals', 'sum', 'all'):
+            # Skip category navigation labels and total rows
+            # These are the EXACT labels used in BitcoinTreasuries.net nav bar
+            # They can't match real company names because no company is named these
+            name_lower = name.lower().strip()
+            skip_exact = [
+                'total', 'totals', 'total:',
+                'public companies', 'private companies',
+                'government entities', 'etfs and exchanges',
+                'defi and other',
+            ]
+            if name_lower.rstrip(':') in skip_exact or name_lower in skip_exact:
                 failed += 1
                 continue
 
