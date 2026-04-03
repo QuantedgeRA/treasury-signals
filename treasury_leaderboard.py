@@ -1,13 +1,19 @@
 """
-treasury_leaderboard.py — v2.0
+treasury_leaderboard.py — v2.1
 -------------------------------
 BTC Treasury Company Leaderboard — LIVE DATA
 
-Pulls the latest holdings data from multiple sources:
-1. CoinGecko API (primary)
-2. BitcoinTreasuries.net (fallback)
-3. Supabase snapshot (fallback)
-4. Hardcoded fallback (last resort)
+Data source cascade:
+1. CoinGecko API (primary — 148 public companies)
+2. BitcoinTreasuries.net scraping (fallback — 300+ entities)
+3. Supabase snapshot (cached — last successful snapshot from DB)
+4. Dynamic fallback (auto-updated — saved every time a live source succeeds)
+5. Hardcoded fallback (last resort — static numbers, rarely used)
+
+v2.1 changes:
+- Fixed Source 3: Supabase snapshot parsing now handles dict format correctly
+- Added Source 4: Dynamic fallback that auto-updates from Supabase on every successful fetch
+- Hardcoded fallback demoted to Source 5 (should almost never be reached)
 """
 
 import json
@@ -30,7 +36,10 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-# Fallback data — used ONLY if live scraping fails
+# ============================================
+# SOURCE 5: HARDCODED FALLBACK (absolute last resort)
+# These numbers are static and only used if ALL other sources fail.
+# ============================================
 FALLBACK_COMPANIES = [
     {"company": "Strategy (MicroStrategy)", "ticker": "MSTR", "btc_holdings": 499096, "avg_purchase_price": 66357, "total_cost_usd": 33100000000, "country": "USA", "sector": "Software / BTC Treasury"},
     {"company": "Marathon Digital (MARA)", "ticker": "MARA", "btc_holdings": 46374, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "USA", "sector": "Bitcoin Mining"},
@@ -63,10 +72,203 @@ SOVEREIGN_HOLDERS = [
 _live_data_cache = {"data": None, "fetched_at": None}
 
 
+# ============================================
+# SOURCE 4: DYNAMIC FALLBACK (auto-updated)
+# Saved to Supabase every time a live source succeeds.
+# ============================================
+DYNAMIC_FALLBACK_KEY = "last_known_good_leaderboard"
+
+
+def _save_dynamic_fallback(companies):
+    """
+    Save current live data as the dynamic fallback.
+    Called every time Source 1 or Source 2 succeeds.
+    """
+    try:
+        fallback_data = []
+        for c in companies:
+            fallback_data.append({
+                "company": c.get("company", ""),
+                "ticker": c.get("ticker", ""),
+                "btc_holdings": c.get("btc_holdings", 0),
+                "avg_purchase_price": c.get("avg_purchase_price", 0),
+                "total_cost_usd": c.get("total_cost_usd", 0),
+                "country": c.get("country", "Unknown"),
+                "sector": c.get("sector", "BTC Treasury"),
+            })
+
+        supabase.table("leaderboard_snapshots").upsert({
+            "snapshot_date": DYNAMIC_FALLBACK_KEY,
+            "btc_price": 0,
+            "total_btc": sum(c["btc_holdings"] for c in fallback_data),
+            "total_value_b": 0,
+            "companies_json": json.dumps(fallback_data),
+        }, on_conflict="snapshot_date").execute()
+
+        logger.debug(f"Dynamic fallback saved: {len(fallback_data)} companies")
+    except Exception as e:
+        logger.debug(f"Dynamic fallback save failed: {e}")
+
+
+def _load_dynamic_fallback():
+    """
+    Load the last known good leaderboard data from Supabase.
+    Returns list of company dicts or None.
+    """
+    try:
+        result = supabase.table("leaderboard_snapshots").select("*").eq("snapshot_date", DYNAMIC_FALLBACK_KEY).execute()
+        if result.data:
+            snapshot = result.data[0]
+            companies_raw = snapshot.get("companies_json", "[]")
+
+            # Parse JSON string
+            if isinstance(companies_raw, str):
+                companies_data = json.loads(companies_raw)
+            else:
+                companies_data = companies_raw
+
+            # Handle list format (correct format from dynamic fallback)
+            if isinstance(companies_data, list) and len(companies_data) > 0:
+                # Verify it's a list of company dicts
+                if isinstance(companies_data[0], dict) and "company" in companies_data[0]:
+                    logger.info(f"Dynamic fallback loaded: {len(companies_data)} companies (last known good)")
+                    freshness.set_provenance("leaderboard_corporate", "Dynamic fallback (last known good)", "cached")
+                    return companies_data
+
+            # Handle dict format (old snapshot format: {ticker: {name, btc, country}})
+            if isinstance(companies_data, dict):
+                companies = []
+                for ticker, data in companies_data.items():
+                    if isinstance(data, dict) and data.get("btc", 0) > 0:
+                        companies.append({
+                            "company": data.get("name", ticker),
+                            "ticker": ticker,
+                            "btc_holdings": data.get("btc", 0),
+                            "avg_purchase_price": 0,
+                            "total_cost_usd": 0,
+                            "country": data.get("country", "Unknown"),
+                            "sector": "BTC Treasury",
+                        })
+                if companies:
+                    companies.sort(key=lambda x: x["btc_holdings"], reverse=True)
+                    logger.info(f"Dynamic fallback loaded (dict format): {len(companies)} companies")
+                    freshness.set_provenance("leaderboard_corporate", "Dynamic fallback (dict format)", "cached")
+                    return companies
+
+    except Exception as e:
+        logger.debug(f"Dynamic fallback load failed: {e}")
+    return None
+
+
+# ============================================
+# SOURCE 3: SUPABASE SNAPSHOT (most recent daily snapshot)
+# ============================================
+def _load_supabase_snapshot():
+    """
+    Load the most recent daily snapshot from Supabase.
+    Handles both old format (dict of tickers) and new format (list of companies).
+    """
+    try:
+        # Get the most recent snapshot that isn't the dynamic fallback
+        result = supabase.table("leaderboard_snapshots").select("*").neq("snapshot_date", DYNAMIC_FALLBACK_KEY).order("snapshot_date", desc=True).limit(1).execute()
+
+        if not result.data:
+            return None
+
+        snapshot = result.data[0]
+        snapshot_date = snapshot.get("snapshot_date", "unknown")
+        companies_raw = snapshot.get("companies_json", "[]")
+
+        # Parse JSON string
+        if isinstance(companies_raw, str):
+            companies_data = json.loads(companies_raw)
+        else:
+            companies_data = companies_raw
+
+        # Format 1: List of company dicts [{company, ticker, btc_holdings, ...}]
+        if isinstance(companies_data, list) and len(companies_data) > 0:
+            if isinstance(companies_data[0], dict) and "company" in companies_data[0]:
+                logger.warning(f"Using Supabase snapshot from {snapshot_date} (list format, {len(companies_data)} companies)")
+                freshness.set_provenance("leaderboard_corporate", f"Supabase snapshot ({snapshot_date})", "cached")
+                return companies_data
+
+            # Old format: list of {ticker, btc_holdings, rank} — needs enrichment from fallback
+            if isinstance(companies_data[0], dict) and "ticker" in companies_data[0]:
+                fallback_map = {c["ticker"]: c for c in FALLBACK_COMPANIES}
+                companies = []
+                for sc in companies_data:
+                    ticker = sc.get("ticker", "")
+                    btc = sc.get("btc_holdings", 0)
+                    if ticker in fallback_map:
+                        company = fallback_map[ticker].copy()
+                        company["btc_holdings"] = btc
+                        companies.append(company)
+                    elif btc > 0:
+                        companies.append({
+                            "company": ticker,
+                            "ticker": ticker,
+                            "btc_holdings": btc,
+                            "avg_purchase_price": 0,
+                            "total_cost_usd": 0,
+                            "country": "Unknown",
+                            "sector": "BTC Treasury",
+                        })
+                if companies:
+                    companies.sort(key=lambda x: x["btc_holdings"], reverse=True)
+                    logger.warning(f"Using Supabase snapshot from {snapshot_date} (old list format, {len(companies)} companies)")
+                    freshness.set_provenance("leaderboard_corporate", f"Supabase snapshot ({snapshot_date})", "cached")
+                    return companies
+
+        # Format 2: Dict of {ticker: {name, btc, country}} — snapshot comparison format
+        if isinstance(companies_data, dict) and len(companies_data) > 0:
+            companies = []
+            for ticker, data in companies_data.items():
+                if isinstance(data, dict):
+                    btc = data.get("btc", data.get("btc_holdings", 0))
+                    if btc > 0:
+                        companies.append({
+                            "company": data.get("name", data.get("company", ticker)),
+                            "ticker": ticker,
+                            "btc_holdings": btc,
+                            "avg_purchase_price": 0,
+                            "total_cost_usd": 0,
+                            "country": data.get("country", "Unknown"),
+                            "sector": "BTC Treasury",
+                        })
+                elif isinstance(data, (int, float)) and data > 0:
+                    # Simplest format: {ticker: btc_amount}
+                    companies.append({
+                        "company": ticker,
+                        "ticker": ticker,
+                        "btc_holdings": int(data),
+                        "avg_purchase_price": 0,
+                        "total_cost_usd": 0,
+                        "country": "Unknown",
+                        "sector": "BTC Treasury",
+                    })
+
+            if companies:
+                companies.sort(key=lambda x: x["btc_holdings"], reverse=True)
+                logger.warning(f"Using Supabase snapshot from {snapshot_date} (dict format, {len(companies)} companies)")
+                freshness.set_provenance("leaderboard_corporate", f"Supabase snapshot ({snapshot_date})", "cached")
+                return companies
+
+        logger.warning(f"Supabase snapshot from {snapshot_date} has unrecognized format")
+        return None
+
+    except Exception as e:
+        logger.warning(f"Supabase snapshot failed: {e}")
+        return None
+
+
+# ============================================
+# MAIN FETCH FUNCTION
+# ============================================
 def fetch_live_leaderboard():
     """Fetch live BTC treasury data. Tries each source in order."""
     global _live_data_cache
 
+    # Check cache first (1 hour TTL)
     if _live_data_cache["data"] and _live_data_cache["fetched_at"]:
         age_seconds = (datetime.now() - _live_data_cache["fetched_at"]).total_seconds()
         if age_seconds < 3600:
@@ -75,7 +277,7 @@ def fetch_live_leaderboard():
 
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-    # Source 1: CoinGecko
+    # ─── SOURCE 1: CoinGecko API ───
     try:
         logger.debug("Trying CoinGecko public companies API...")
         cg_headers = headers.copy()
@@ -114,6 +316,10 @@ def fetch_live_leaderboard():
                 logger.info(f"CoinGecko LIVE: {len(companies)} companies fetched")
                 freshness.record_success("coingecko", detail=f"{len(companies)} companies fetched")
                 freshness.set_provenance("leaderboard_corporate", "CoinGecko API", "live")
+
+                # Auto-update dynamic fallback with fresh data
+                _save_dynamic_fallback(companies)
+
                 return companies
         else:
             logger.warning(f"CoinGecko returned status {response.status_code}")
@@ -122,7 +328,7 @@ def fetch_live_leaderboard():
         logger.warning(f"CoinGecko failed: {e}")
         freshness.record_failure("coingecko", error=str(e))
 
-    # Source 2: BitcoinTreasuries.net scraping
+    # ─── SOURCE 2: BitcoinTreasuries.net scraping ───
     try:
         logger.debug("Trying BitcoinTreasuries.net scraping...")
         response = requests.get("https://bitcointreasuries.net/", headers=headers, timeout=15)
@@ -155,39 +361,34 @@ def fetch_live_leaderboard():
                     logger.info(f"BitcoinTreasuries LIVE: {len(companies)} companies scraped")
                     freshness.record_success("bitcointreasuries", detail=f"{len(companies)} companies scraped")
                     freshness.set_provenance("leaderboard_corporate", "BitcoinTreasuries.net", "live")
+
+                    # Auto-update dynamic fallback with fresh data
+                    _save_dynamic_fallback(companies)
+
                     return companies
             logger.warning("Could not parse BitcoinTreasuries.net tables")
     except Exception as e:
         logger.warning(f"BitcoinTreasuries.net scraping failed: {e}")
 
-    # Source 3: Supabase cached snapshot
-    try:
-        logger.debug("Trying Supabase cached snapshot...")
-        result = supabase.table("leaderboard_snapshots").select("*").order("snapshot_date", desc=True).limit(1).execute()
-        if result.data:
-            snapshot = result.data[0]
-            snapshot_companies = json.loads(snapshot.get("companies_json", "[]"))
-            if snapshot_companies:
-                logger.warning(f"Using Supabase snapshot from {snapshot['snapshot_date']} (live sources unavailable)")
-                freshness.set_provenance("leaderboard_corporate", f"Supabase snapshot ({snapshot['snapshot_date']})", "cached")
-                merged = []
-                fallback_map = {c["ticker"]: c for c in FALLBACK_COMPANIES}
-                for sc in snapshot_companies:
-                    ticker = sc.get("ticker", "")
-                    if ticker in fallback_map:
-                        company = fallback_map[ticker].copy()
-                        company["btc_holdings"] = sc.get("btc_holdings", company["btc_holdings"])
-                        merged.append(company)
-                if merged:
-                    return merged
-    except Exception as e:
-        logger.warning(f"Supabase snapshot failed: {e}")
+    # ─── SOURCE 3: Supabase daily snapshot ───
+    snapshot_data = _load_supabase_snapshot()
+    if snapshot_data:
+        return snapshot_data
 
-    logger.warning("ALL live sources unavailable — using hardcoded fallback data")
+    # ─── SOURCE 4: Dynamic fallback (last known good) ───
+    dynamic_data = _load_dynamic_fallback()
+    if dynamic_data:
+        return dynamic_data
+
+    # ─── SOURCE 5: Hardcoded fallback (absolute last resort) ───
+    logger.warning("ALL sources unavailable — using hardcoded fallback data")
     freshness.set_provenance("leaderboard_corporate", "Hardcoded fallback", "fallback")
     return None
 
 
+# ============================================
+# SOVEREIGN HOLDINGS
+# ============================================
 def fetch_sovereign_holdings():
     """Fetch live government BTC holdings."""
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -258,16 +459,7 @@ def fetch_sovereign_holdings():
     except Exception as e:
         logger.warning(f"BitcoinTreasuries.net sovereign API failed: {e}")
 
-    # Source 2: CoinGecko (doesn't have governments directly)
-    try:
-        logger.debug("Trying CoinGecko government holdings...")
-        response = requests.get("https://api.coingecko.com/api/v3/companies/public_treasury/bitcoin", headers=headers, timeout=15)
-        if response.status_code == 200:
-            pass  # CoinGecko doesn't have governments
-    except Exception as e:
-        logger.debug(f"CoinGecko government check: {e}")
-
-    # Source 3: Scan news
+    # Source 2: Scan news for sovereign updates
     try:
         logger.debug("Scanning news for sovereign BTC updates...")
         news_sovereigns = scan_sovereign_news()
@@ -352,6 +544,9 @@ def scan_sovereign_news():
     return None
 
 
+# ============================================
+# PUBLIC API
+# ============================================
 def get_treasury_companies():
     """Get the best available treasury company data."""
     live_data = fetch_live_leaderboard()
@@ -431,6 +626,9 @@ def get_leaderboard_with_live_price(btc_price, include_governments=True):
     return companies, summary
 
 
+# ============================================
+# FORMATTING
+# ============================================
 def format_leaderboard_text(companies, summary):
     source = "LIVE" if summary.get("data_source") == "live" else "CACHED"
     lines = []
@@ -503,7 +701,7 @@ def save_leaderboard_to_db(companies, summary):
 # QUICK TEST
 # ============================================
 if __name__ == "__main__":
-    logger.info("BTC Treasury Leaderboard v2.0 — testing...")
+    logger.info("BTC Treasury Leaderboard v2.1 — testing...")
     btc_price = 72456
     companies, summary = get_leaderboard_with_live_price(btc_price)
     logger.info(f"Source: {summary.get('data_source', 'unknown').upper()} | Companies: {summary['total_companies']} | Total: {summary['total_btc']:,} BTC (${summary['total_value_b']:.2f}B)")
