@@ -38,6 +38,8 @@ from subscriber_manager import subscribers as sub_mgr
 from watchlist_manager import get_watchlist_activity, format_watchlist_email_html
 from narrative_engine import narrator
 
+
+
 logger = get_logger(__name__)
 
 load_dotenv()

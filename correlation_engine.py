@@ -26,7 +26,6 @@ from logger import get_logger
 
 logger = get_logger(__name__)
 
-
 # ============================================
 # CONFIGURATION
 # ============================================
@@ -649,3 +648,6 @@ if __name__ == "__main__":
     logger.info(f"\nTelegram Alert:\n{engine.format_correlation_alert(result)}")
 
     logger.info("\nCorrelation Engine v2 self-test complete")
+
+# Backward compatibility — other files still import the old name
+CorrelationEngine = CorrelationEngineV2
