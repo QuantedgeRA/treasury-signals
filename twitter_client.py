@@ -3,6 +3,10 @@ twitter_client.py
 -----------------
 Handles all communication with TwitterAPI.io
 This file has ONE job: fetch tweets from X accounts.
+
+Includes a circuit breaker: if the API returns HTTP 402 (credits exhausted),
+all subsequent calls are skipped instantly for the rest of that scan cycle.
+The breaker resets at the start of each new scan via reset_circuit_breaker().
 """
 
 import requests
@@ -20,11 +24,40 @@ API_KEY = os.getenv("TWITTER_API_KEY")
 # Base URL for TwitterAPI.io
 BASE_URL = "https://api.twitterapi.io/twitter"
 
+# Circuit breaker state
+_circuit_open = False
+_circuit_reason = ""
+_circuit_tripped_at = None
+_CIRCUIT_COOLDOWN_SECONDS = 300  # Auto-reset after 5 minutes (each scan is hours apart)
+
+
+def reset_circuit_breaker():
+    """Reset the circuit breaker. Called automatically after cooldown,
+    or manually at the start of each scan from main.py."""
+    global _circuit_open, _circuit_reason, _circuit_tripped_at
+    _circuit_open = False
+    _circuit_reason = ""
+    _circuit_tripped_at = None
+
 
 def get_user_tweets(username):
     """
     Fetch the latest tweets from a specific X/Twitter user.
+    Returns immediately if circuit breaker is open (credits exhausted).
     """
+    global _circuit_open, _circuit_reason, _circuit_tripped_at
+
+    # Auto-reset circuit breaker after cooldown
+    if _circuit_open and _circuit_tripped_at:
+        import time
+        elapsed = time.time() - _circuit_tripped_at
+        if elapsed > _CIRCUIT_COOLDOWN_SECONDS:
+            reset_circuit_breaker()
+
+    # Circuit breaker: skip immediately if a previous call got 402
+    if _circuit_open:
+        return []
+
     url = f"{BASE_URL}/user/last_tweets"
     headers = {"X-API-Key": API_KEY}
     params = {"userName": username}
@@ -39,6 +72,15 @@ def get_user_tweets(username):
                 tweets = []
             freshness.record_success("twitter_api", detail=f"@{username}: {len(tweets)} tweets")
             return tweets
+        elif response.status_code == 402:
+            # Credits exhausted — trip the circuit breaker
+            import time
+            _circuit_open = True
+            _circuit_reason = "Credits exhausted (HTTP 402)"
+            _circuit_tripped_at = time.time()
+            logger.warning(f"TwitterAPI credits exhausted (402 on @{username}) — skipping all remaining accounts this scan")
+            freshness.record_failure("twitter_api", error="Credits exhausted (HTTP 402)")
+            return []
         elif response.status_code == 429:
             logger.warning(f"TwitterAPI rate limited for @{username} — backing off")
             freshness.record_failure("twitter_api", error=f"Rate limited for @{username}")
