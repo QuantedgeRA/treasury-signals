@@ -405,19 +405,51 @@ class TreasurySync:
         return self._parse_a(texts, page)
 
     def _parse_a(self, texts, page):
+        """
+        Parse rows from non-public pages (Private, Government, ETF, DeFi).
+        Column structure: # | Country | Name | [Chart] | ₿ BTC | $USD | /21M%
+        
+        Instead of relying on fixed column positions, we scan all columns:
+        - BTC column: contains ₿ symbol or is a large number without $ prefix
+        - Name column: longest text that isn't a number/symbol
+        - Country column: 2-letter uppercase code
+        """
         if len(texts) < 4:
             return None
-        raw_name = texts[2]
-        if not raw_name:
-            return None
-        btc = self._extract_btc(texts[3])
-        if btc <= 0:
-            for t in texts[3:]:
+
+        # Step 1: Find the BTC amount — look for ₿ symbol first
+        btc = 0
+        for t in texts:
+            if "₿" in t or "\u20bf" in t:
                 btc = self._extract_btc(t)
                 if btc > 0:
                     break
+
+        # Step 2: If no ₿ found, scan for largest number that isn't USD
+        if btc <= 0:
+            for t in texts:
+                if t.startswith("$") or "%" in t:
+                    continue  # Skip USD values and percentages
+                candidate = self._extract_btc(t)
+                if candidate > btc:
+                    btc = candidate
+
         if btc <= 0:
             return None
+
+        # Step 3: Find company name — column 2 for most pages
+        # (col 0 = rank #, col 1 = country flag, col 2 = name)
+        raw_name = texts[2] if len(texts) > 2 else ""
+
+        # For DeFi page which may not have country column, name might be col 1
+        if not raw_name or raw_name.replace(".", "").replace(",", "").isdigit():
+            # col 2 looks like a number, try col 1
+            raw_name = texts[1] if len(texts) > 1 else ""
+
+        if not raw_name:
+            return None
+
+        # Step 4: Extract name and ticker
         name, ticker = self._extract_name_ticker(raw_name)
         if not name:
             return None
@@ -426,21 +458,34 @@ class TreasurySync:
         if not ticker:
             return None
 
+        # Step 5: Extract country — look for 2-letter code in columns 0-2
+        country = ""
+        for t in texts[:3]:
+            t_stripped = t.strip()
+            if len(t_stripped) == 2 and t_stripped.isalpha() and t_stripped.isupper():
+                country = t_stripped
+                break
+
+        # Step 6: Handle government entities
         is_gov = page["is_government"]
         if is_gov:
-            for key, (display, gov_ticker, country) in SOVEREIGN_FLAGS.items():
+            for key, (display, gov_ticker, gov_country) in SOVEREIGN_FLAGS.items():
                 if key in name.lower():
                     name = display
                     ticker = gov_ticker
+                    country = gov_country
                     break
             else:
                 if not ticker.endswith("-GOV"):
                     ticker = f"{ticker[:5]}-GOV"
 
+        if not country:
+            country = self._get_country(name, is_gov)
+
         return {
             "ticker": ticker.upper(), "company": name[:200], "btc_holdings": btc,
             "avg_purchase_price": 0, "total_cost_usd": 0,
-            "country": self._get_country(name, is_gov),
+            "country": country,
             "sector": _guess_sector(name, page["category"]),
             "is_government": is_gov, "entity_type": page["category"],
             "data_source": "aggregator",
@@ -470,7 +515,15 @@ class TreasurySync:
     def _extract_btc(self, text):
         if not text:
             return 0
+        # Skip obvious non-BTC values
+        text_stripped = text.strip()
+        if text_stripped.startswith("$") or text_stripped.endswith("%"):
+            return 0
+        # Remove BTC symbols
         clean = text.replace("\u20bf", "").replace("₿", "").replace(",", "").replace(" ", "")
+        # Remove trailing M/B (millions/billions indicator from USD columns)
+        if clean.endswith("M") or clean.endswith("B"):
+            clean = clean[:-1]
         clean = re.sub(r'[^\d.]', '', clean)
         try:
             return int(float(clean)) if clean else 0
