@@ -476,85 +476,44 @@ def fetch_live_leaderboard():
 # SOVEREIGN HOLDINGS
 # ============================================
 def fetch_sovereign_holdings():
-    """Fetch live government BTC holdings."""
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-
-    # Source 1: BitcoinTreasuries.net API
+    """Fetch government BTC holdings from Supabase (already fixed by gov_entities.py)."""
+    # Source 1: Supabase — government entities with correct names and BTC from gov_entities.py
     try:
-        logger.debug("Trying BitcoinTreasuries.net sovereign API...")
-        response = requests.get("https://api.bitcointreasuries.net/views/countries", headers=headers, timeout=15)
-        if response.status_code == 200:
-            data = response.json()
+        result = supabase.table("treasury_companies").select(
+            "company, ticker, btc_holdings, country, is_government"
+        ).eq("is_government", True).gt("btc_holdings", 0).order(
+            "btc_holdings", desc=True
+        ).execute()
+
+        if result.data and len(result.data) > 0:
             sovereigns = []
-            flag_map = {
-                "united states": ("🇺🇸 United States Government", "US-GOV", "US"),
-                "china": ("🇨🇳 China Government", "CN-GOV", "CN"),
-                "united kingdom": ("🇬🇧 United Kingdom Government", "UK-GOV", "GB"),
-                "ukraine": ("🇺🇦 Ukraine Government", "UA-GOV", "UA"),
-                "bhutan": ("🇧🇹 Bhutan (Druk Holding)", "BT-GOV", "BT"),
-                "el salvador": ("🇸🇻 El Salvador Government", "SV-GOV", "SV"),
-                "finland": ("🇫🇮 Finland Government", "FI-GOV", "FI"),
-                "germany": ("🇩🇪 Germany Government", "DE-GOV", "DE"),
-                "georgia": ("🇬🇪 Georgia Government", "GE-GOV", "GE"),
-                "venezuela": ("🇻🇪 Venezuela Government", "VE-GOV", "VE"),
-                "north korea": ("🇰🇵 North Korea", "KP-GOV", "KP"),
-                "russia": ("🇷🇺 Russia", "RU-GOV", "RU"),
-                "japan": ("🇯🇵 Japan Government", "JP-GOV", "JP"),
-                "switzerland": ("🇨🇭 Switzerland", "CH-GOV", "CH"),
-                "canada": ("🇨🇦 Canada Government", "CA-GOV", "CA"),
-                "brazil": ("🇧🇷 Brazil Government", "BR-GOV", "BR"),
-                "australia": ("🇦🇺 Australia Government", "AU-GOV", "AU"),
-                "india": ("🇮🇳 India Government", "IN-GOV", "IN"),
-                "singapore": ("🇸🇬 Singapore Government", "SG-GOV", "SG"),
-                "saudi": ("🇸🇦 Saudi Arabia", "SA-GOV", "SA"),
-                "czech": ("🇨🇿 Czech Republic", "CZ-GOV", "CZ"),
-                "norway": ("🇳🇴 Norway", "NO-GOV", "NO"),
-                "poland": ("🇵🇱 Poland", "PL-GOV", "PL"),
-                "thailand": ("🇹🇭 Thailand", "TH-GOV", "TH"),
-            }
-            for item in data:
-                try:
-                    name = item.get("name", "Unknown")
-                    btc = int(float(item.get("total_holdings", 0)))
-                    if btc <= 0:
-                        continue
-                    name_lower = name.lower()
-                    matched = None
-                    for key, (display, ticker, country) in flag_map.items():
-                        if key in name_lower:
-                            matched = {"company": display, "ticker": ticker, "btc_holdings": btc,
-                                       "avg_purchase_price": 0, "total_cost_usd": 0,
-                                       "country": country, "sector": "Government",
-                                       "is_government": True, "notes": "LIVE from BitcoinTreasuries.net"}
-                            break
-                    if not matched:
-                        matched = {"company": f"🏛️ {name}", "ticker": f"{name[:2].upper()}-GOV",
-                                   "btc_holdings": btc, "avg_purchase_price": 0, "total_cost_usd": 0,
-                                   "country": "", "sector": "Government",
-                                   "is_government": True, "notes": "LIVE from BitcoinTreasuries.net"}
-                    sovereigns.append(matched)
-                except Exception as e:
-                    logger.debug(f"Skipping sovereign entry: {e}")
-                    continue
-            if sovereigns:
-                sovereigns.sort(key=lambda x: x["btc_holdings"], reverse=True)
-                logger.info(f"BitcoinTreasuries.net API: {len(sovereigns)} sovereign holders LIVE")
-                freshness.record_success("bitcointreasuries", detail=f"{len(sovereigns)} sovereign holders")
-                freshness.set_provenance("leaderboard_sovereign", "BitcoinTreasuries.net API", "live")
-                return sovereigns
+            for item in result.data:
+                sovereigns.append({
+                    "company": item.get("company", "Unknown"),
+                    "ticker": item.get("ticker", ""),
+                    "btc_holdings": item.get("btc_holdings", 0),
+                    "avg_purchase_price": 0,
+                    "total_cost_usd": 0,
+                    "country": item.get("country", ""),
+                    "sector": "Government",
+                    "is_government": True,
+                    "notes": "LIVE from Supabase (gov_entities.py)",
+                })
+            logger.info(f"Sovereign holdings: {len(sovereigns)} governments from Supabase")
+            freshness.set_provenance("leaderboard_sovereign", "Supabase (gov_entities)", "live")
+            return sovereigns
     except Exception as e:
-        logger.warning(f"BitcoinTreasuries.net sovereign API failed: {e}")
+        logger.warning(f"Supabase sovereign query failed: {e}")
 
-    # Source 2: Scan news for sovereign updates
+    # Source 2: Scan news for sovereign updates (supplement)
     try:
-        logger.debug("Scanning news for sovereign BTC updates...")
         news_sovereigns = scan_sovereign_news()
         if news_sovereigns:
             return news_sovereigns
     except Exception as e:
         logger.warning(f"Sovereign news scan failed: {e}")
 
-    logger.warning("All live sovereign sources failed, using fallback")
+    logger.warning("All sovereign sources failed, using fallback")
     freshness.set_provenance("leaderboard_sovereign", "Hardcoded fallback", "fallback")
     return None
 
