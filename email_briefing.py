@@ -446,7 +446,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
     else:
         exec_bullets.append(f"<span style='color: #10B981;'>🟢</span> STRC volume is {strc_ratio}x normal — no unusual capital raise activity")
     if cor_active >= 2:
-        exec_bullets.append(f"<span style='color: #F59E0B;'>🔗</span> Correlation Engine: {cor_score}/100 — {cor_active}/4 streams active")
+        exec_bullets.append(f"<span style='color: #F59E0B;'>🔗</span> Correlation Engine: {cor_score}/100 — {cor_active}/6 streams active")
     else:
         exec_bullets.append(f"<span style='color: #4b5563;'>🔗</span> Correlation Engine: {cor_score}/100 — baseline, no multi-stream convergence")
     if purchases:
@@ -855,7 +855,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                 <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
                         <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">③ Multi-Signal Correlation Engine™</span></td>
-                        <td style="text-align: right;"><span style="color: {cor_color}; font-size: 13px; font-weight: 700; font-family: 'Courier New', monospace;">{cor_score}/100 · {cor_active}/4 streams</span></td>
+                        <td style="text-align: right;"><span style="color: {cor_color}; font-size: 13px; font-weight: 700; font-family: 'Courier New', monospace;">{cor_score}/100 · {cor_active}/6 streams</span></td>
                     </tr>
                 </table>
                 <table width="100%" cellpadding="0" cellspacing="0" style="background: #111827; border-radius: 12px; margin-top: 10px; border-left: 4px solid {cor_color}; overflow: hidden;">
@@ -1137,7 +1137,13 @@ def generate_and_send_briefing(to_email, subscriber=None):
     for sig in signals:
         score = sig.get("confidence_score", 0)
         if score >= 60:
-            engine.add_tweet_signal(sig.get("author_username", ""), score, sig.get("tweet_text", ""))
+            company = sig.get("company", "Unknown")
+            ticker = sig.get("ticker", "")
+            try:
+                engine.add_tweet_signal(sig.get("author_username", ""), company, ticker, score, sig.get("tweet_text", ""))
+            except TypeError:
+                # Fallback for old engine API
+                engine.add_tweet_signal(sig.get("author_username", ""), score, sig.get("tweet_text", ""))
     correlation = engine.calculate_correlation()
 
     risk = get_risk_dashboard()
@@ -1157,9 +1163,13 @@ def generate_and_send_briefing(to_email, subscriber=None):
     except Exception as e:
         logger.debug(f"Pattern analysis for email skipped: {e}")
 
+    # Convert active_streams (list in v2) to int for generate_action_signal
+    _active_streams = correlation.get("active_streams", 0)
+    _active_count = len(_active_streams) if isinstance(_active_streams, list) else _active_streams
+
     action = generate_action_signal(
-        correlation_score=correlation["correlated_score"],
-        active_streams=correlation["active_streams"],
+        correlation_score=correlation.get("correlated_score", correlation.get("market_score", 0)),
+        active_streams=_active_count,
         strc_ratio=market.get("strc_ratio", 0),
         signals_24h=signals,
         btc_change=market.get("btc_change", 0),
@@ -1262,13 +1272,23 @@ if __name__ == "__main__":
     for sig in signals:
         score = sig.get("confidence_score", 0)
         if score >= 60:
-            engine.add_tweet_signal(sig.get("author_username", ""), score, sig.get("tweet_text", ""))
+            company = sig.get("company", "Unknown")
+            ticker = sig.get("ticker", "")
+            try:
+                engine.add_tweet_signal(sig.get("author_username", ""), company, ticker, score, sig.get("tweet_text", ""))
+            except TypeError:
+                engine.add_tweet_signal(sig.get("author_username", ""), score, sig.get("tweet_text", ""))
     correlation = engine.calculate_correlation()
 
     risk = get_risk_dashboard()
+
+    # Convert active_streams (list in v2) to int
+    _active_streams2 = correlation.get("active_streams", 0)
+    _active_count2 = len(_active_streams2) if isinstance(_active_streams2, list) else _active_streams2
+
     action = generate_action_signal(
-        correlation_score=correlation["correlated_score"],
-        active_streams=correlation["active_streams"],
+        correlation_score=correlation.get("correlated_score", correlation.get("market_score", 0)),
+        active_streams=_active_count2,
         strc_ratio=market.get("strc_ratio", 0),
         signals_24h=signals,
         btc_change=market.get("btc_change", 0),

@@ -421,7 +421,29 @@ class TreasurySync:
 
             texts = [td.get_text(strip=True) for td in cells]
 
-            # BTC extraction — ₿ symbol first (most reliable, handles 0 correctly)
+            # DATA ROW DETECTION: Real data rows have a rank number (1-999) in column 0.
+            # Summary/nav/stats rows have text or large numbers in column 0.
+            # This is far more precise than keyword filtering.
+            first_col = texts[0].strip()
+            is_data_row = False
+            try:
+                rank_num = int(first_col)
+                if 1 <= rank_num <= 999:
+                    is_data_row = True
+            except (ValueError, TypeError):
+                pass
+
+            if not is_data_row:
+                # Also accept rows where column 0 is a 2-letter country code
+                # (some pages put country before rank)
+                if len(first_col) == 2 and first_col.isalpha() and first_col.isupper():
+                    is_data_row = True
+
+            if not is_data_row:
+                failed += 1
+                continue
+
+            # BTC: ₿ symbol first (most reliable, handles 0 correctly)
             btc = -1  # -1 means not found yet
             for t in texts:
                 if '₿' in t or '\u20bf' in t:
@@ -434,10 +456,10 @@ class TreasurySync:
                     break
 
             # If no ₿ found, take largest number but SKIP first column (rank)
-            # and skip cells with $, %, M (USD values like "$552M")
+            # and skip cells with $, %, M/B suffix (USD values)
             if btc < 0:
                 btc = 0
-                for t in texts[1:]:  # Skip texts[0] which is the rank number
+                for t in texts[1:]:
                     t_stripped = t.strip()
                     if t_stripped.startswith('$') or t_stripped.endswith('%'):
                         continue
@@ -456,7 +478,7 @@ class TreasurySync:
                 failed += 1
                 continue
 
-            # Name: longest text starting with ASCII letter (entity_name_fixer's exact approach)
+            # Name: longest text starting with ASCII letter
             name = ""
             for t in texts:
                 stripped = t.strip()
@@ -469,21 +491,9 @@ class TreasurySync:
                 failed += 1
                 continue
 
-            # Skip summary/navigation/stat rows that are not real entities
-            name_lower = name.lower()
-            skip_keywords = [
-                'total', 'btc held', 'number of', 'btc price', 'asset dominance',
-                'filter by', 'public companies', 'private companies',
-                'government entities', 'etfs and exchanges', 'defi and other',
-                'bitcoin treasuries', 'ranked by', 'embed',
-                'holding bitcoin', 'treasury reserve', 'protocols ranked',
-            ]
-            if any(kw in name_lower for kw in skip_keywords):
-                failed += 1
-                continue
-
-            # Skip aggregate total rows
+            # Skip total/aggregate rows
             if name.lower().strip().rstrip(':') in ('total', 'totals', 'sum', 'all'):
+                failed += 1
                 continue
 
             # Clean name: remove concatenated tickers
