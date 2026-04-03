@@ -74,19 +74,40 @@ def _scrape_government_btc():
             if len(cells) < 2:
                 continue
             texts = [td.get_text(strip=True) for td in cells]
-            # Find the largest number in this row (likely BTC amount)
-            max_btc = 0
+
+            # Step 1: Look for ₿ symbol (most reliable)
+            btc = 0
             for t in texts:
-                clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
-                clean = re.sub(r'[^\d.]', '', clean)
-                try:
-                    val = int(float(clean)) if clean else 0
-                    if val > max_btc and val < 50_000_000:  # sanity check
-                        max_btc = val
-                except:
-                    pass
-            if max_btc > 0:
-                btc_amounts.append(max_btc)
+                if '₿' in t or '\u20bf' in t:
+                    clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
+                    clean = re.sub(r'[^\d.]', '', clean)
+                    try:
+                        btc = int(float(clean)) if clean else 0
+                    except:
+                        btc = 0
+                    if btc > 0:
+                        break
+
+            # Step 2: If no ₿ found, scan for largest number that isn't USD or percentage
+            if btc <= 0:
+                for t in texts:
+                    t_stripped = t.strip()
+                    if t_stripped.startswith('$') or t_stripped.endswith('%'):
+                        continue
+                    clean = t.replace(',', '').replace(' ', '')
+                    # Skip if contains M/B (likely USD value like "$10,919M")
+                    if clean.endswith('M') or clean.endswith('B'):
+                        continue
+                    clean = re.sub(r'[^\d.]', '', clean)
+                    try:
+                        val = int(float(clean)) if clean else 0
+                        if val > btc and val < 50_000_000:
+                            btc = val
+                    except:
+                        pass
+
+            if btc > 0:
+                btc_amounts.append(btc)
 
         # Sort descending — should match our GOVERNMENT_NAMES order
         btc_amounts.sort(reverse=True)
@@ -143,10 +164,10 @@ def fix_government_entities(supabase_client=None):
             current_name = row.get("company", "")
 
             # Determine best BTC amount:
-            # Priority: 1) extracted from ticker field (most reliable), 2) live website, 3) existing db value
-            if row["_real_btc"] > 0:
-                best_btc = row["_real_btc"]
-            elif i < len(live_btc_amounts) and live_btc_amounts[i] > 0:
+            # Priority: 1) live website scrape (most current), 2) extracted from ticker field, 3) existing db value
+            if i < len(live_btc_amounts) and live_btc_amounts[i] > 0:
+                best_btc = live_btc_amounts[i]
+            elif row["_real_btc"] > 0:
                 best_btc = row["_real_btc"]
             else:
                 best_btc = row.get("btc_holdings", 0)

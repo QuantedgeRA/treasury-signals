@@ -370,22 +370,67 @@ class TreasurySync:
             raise Exception(f"HTTP {resp.status_code}")
         soup = BeautifulSoup(resp.text, "lxml")
 
-        for table in soup.find_all("table"):
+        # Find the table with the most rows (the data table, not summary tables)
+        all_tables = soup.find_all("table")
+        best_table = None
+        best_row_count = 0
+        for i, table in enumerate(all_tables):
             rows = table.find_all("tr")
-            if len(rows) < 2:
+            logger.debug(f"  {page['label']}: table {i} has {len(rows)} rows")
+            if len(rows) > best_row_count:
+                best_row_count = len(rows)
+                best_table = table
+
+        if not best_table or best_row_count < 2:
+            # Fallback: try all tables
+            for table in all_tables:
+                rows = table.find_all("tr")
+                if len(rows) < 2:
+                    continue
+                first_texts = [td.get_text(strip=True) for td in rows[1].find_all("td")]
+                fmt = self._detect_format(first_texts)
+                for row in rows[1:]:
+                    cols = row.find_all("td")
+                    if len(cols) < 3:
+                        continue
+                    try:
+                        entity = self._parse_row(cols, fmt, page)
+                        if entity and entity.get("btc_holdings", 0) > 0:
+                            entities.append(entity)
+                    except Exception:
+                        continue
+            return entities
+
+        # Process the largest table
+        rows = best_table.find_all("tr")
+        first_texts = [td.get_text(strip=True) for td in rows[1].find_all("td")] if len(rows) > 1 else []
+        fmt = self._detect_format(first_texts)
+        
+        parsed = 0
+        failed = 0
+        for row in rows[1:]:
+            cols = row.find_all("td")
+            if len(cols) < 3:
                 continue
-            first_texts = [td.get_text(strip=True) for td in rows[1].find_all("td")]
-            fmt = self._detect_format(first_texts)
-            for row in rows[1:]:
-                cols = row.find_all("td")
-                if len(cols) < 3:
-                    continue
-                try:
-                    entity = self._parse_row(cols, fmt, page)
-                    if entity and entity.get("btc_holdings", 0) > 0:
-                        entities.append(entity)
-                except Exception:
-                    continue
+            try:
+                entity = self._parse_row(cols, fmt, page)
+                if entity and entity.get("btc_holdings", 0) > 0:
+                    entities.append(entity)
+                    parsed += 1
+                else:
+                    failed += 1
+                    # Log first few failures for debugging
+                    if failed <= 3:
+                        texts = [td.get_text(strip=True)[:30] for td in cols]
+                        logger.debug(f"  {page['label']}: row failed — cols={len(cols)} texts={texts[:5]}")
+            except Exception as e:
+                failed += 1
+                if failed <= 3:
+                    logger.debug(f"  {page['label']}: row exception — {e}")
+
+        if failed > 0:
+            logger.debug(f"  {page['label']}: {parsed} parsed, {failed} failed out of {best_row_count-1} data rows")
+
         return entities
 
     def _detect_format(self, texts):
