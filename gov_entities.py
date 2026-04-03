@@ -83,6 +83,7 @@ def _scrape_government_data():
     Fetch LIVE government BTC holdings from BitcoinTreasuries.net.
     Returns list of {"name": "United States", "btc": 328372} dicts.
     Extracts BOTH name and BTC from each row.
+    Includes countries with 0 BTC.
     """
     url = "https://bitcointreasuries.net/governments"
     try:
@@ -100,21 +101,6 @@ def _scrape_government_data():
                 continue
             texts = [td.get_text(strip=True) for td in cells]
 
-            # BTC: largest number < 50M (entity_name_fixer's proven approach)
-            btc = 0
-            for t in texts:
-                clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
-                clean = re.sub(r'[^\d.]', '', clean)
-                try:
-                    val = int(float(clean)) if clean else 0
-                    if val > btc and val < 50_000_000:
-                        btc = val
-                except:
-                    pass
-
-            if btc <= 0:
-                continue
-
             # Name: longest text starting with ASCII letter
             name = ""
             for t in texts:
@@ -124,10 +110,45 @@ def _scrape_government_data():
                     not stripped.replace(',', '').replace('.', '').replace(' ', '').isdigit()):
                     name = stripped
 
-            if name:
-                # Clean parenthetical notes like "(holdings of public official..."
-                name = re.sub(r'\(.*$', '', name).strip()
-                entities.append({"name": name, "btc": btc})
+            if not name:
+                continue
+
+            # Clean parenthetical notes like "(holdings of public official..."
+            name = re.sub(r'\(.*$', '', name).strip()
+
+            # Skip aggregate rows
+            if name.lower() in ('total', 'total:', 'totals'):
+                continue
+
+            # BTC: first try ₿ symbol (handles 0 BTC correctly)
+            btc = -1  # -1 means not found yet
+            for t in texts:
+                if '₿' in t or '\u20bf' in t:
+                    clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
+                    clean = re.sub(r'[^\d.]', '', clean)
+                    try:
+                        btc = int(float(clean)) if clean else 0
+                    except:
+                        btc = 0
+                    break
+
+            # If no ₿ found, take largest number but SKIP first column (rank number)
+            if btc < 0:
+                btc = 0
+                for t in texts[1:]:  # Skip texts[0] which is the rank number
+                    t_stripped = t.strip()
+                    if t_stripped.startswith('$') or t_stripped.endswith('%') or t_stripped.endswith('M'):
+                        continue
+                    clean = t.replace(',', '').replace(' ', '')
+                    clean = re.sub(r'[^\d.]', '', clean)
+                    try:
+                        val = int(float(clean)) if clean else 0
+                        if val > btc and val < 50_000_000:
+                            btc = val
+                    except:
+                        pass
+
+            entities.append({"name": name, "btc": btc})
 
         # Sort by BTC descending
         entities.sort(key=lambda x: -x["btc"])
@@ -213,11 +234,29 @@ def fix_government_entities(supabase_client=None):
 
         for row in garbled_rows:
             row_btc = row["_real_btc"]
-            if row_btc <= 0:
-                continue
-
             row_id = row["id"]
             current_name = row.get("company", "")
+
+            if row_btc <= 0:
+                # For 0-BTC entries, match to scraped entries that also have 0 BTC
+                for j, candidate in enumerate(scraped):
+                    if j in used_indices:
+                        continue
+                    if candidate["btc"] == 0:
+                        used_indices.add(j)
+                        clean_name = candidate["name"]
+                        ticker = _get_ticker_for_country(clean_name)
+                        supabase_client.table("treasury_companies").update({
+                            "company": clean_name[:200],
+                            "ticker": ticker,
+                            "entity_type": "government",
+                            "is_government": True,
+                            "btc_holdings": 0,
+                        }).eq("id", row_id).execute()
+                        logger.info(f"  Gov fix: '{current_name}' → '{clean_name}' (0 BTC)")
+                        fixed += 1
+                        break
+                continue
 
             # Find closest BTC match from scraped data
             best_match = None
@@ -259,14 +298,20 @@ def fix_government_entities(supabase_client=None):
             fixed += 1
 
         # Step 5: Also fix any clean-named entries that have wrong BTC
-        # (match by name directly)
+        # (match by name — strip flag emojis before comparing)
         if scraped:
             scraped_map = {e["name"].lower().strip(): e for e in scraped}
             for row in gov_rows:
                 if row in garbled_rows:
                     continue  # Already handled
                 name = row.get("company", "").strip()
-                name_lower = name.lower()
+
+                # Strip flag emojis and other unicode prefixes for comparison
+                name_clean = re.sub(r'[^\x20-\x7E]', '', name).strip()
+                name_lower = name_clean.lower()
+
+                if not name_lower:
+                    continue
 
                 # Try to find this country in scraped data
                 match = None
@@ -275,12 +320,27 @@ def fix_government_entities(supabase_client=None):
                         match = scraped_data
                         break
 
-                if match and row.get("btc_holdings", 0) != match["btc"]:
-                    supabase_client.table("treasury_companies").update({
-                        "btc_holdings": match["btc"],
-                    }).eq("id", row["id"]).execute()
-                    logger.debug(f"  Gov fix: updated BTC for {name}: {row.get('btc_holdings', 0):,} → {match['btc']:,}")
-                    fixed += 1
+                if match:
+                    needs_update = False
+                    update_data = {}
+
+                    # Fix BTC if wrong
+                    if row.get("btc_holdings", 0) != match["btc"]:
+                        update_data["btc_holdings"] = match["btc"]
+                        needs_update = True
+
+                    # Fix ticker if missing or generic
+                    ticker = _get_ticker_for_country(match["name"])
+                    if row.get("ticker", "") != ticker:
+                        update_data["ticker"] = ticker
+                        needs_update = True
+
+                    if needs_update:
+                        supabase_client.table("treasury_companies").update(
+                            update_data
+                        ).eq("id", row["id"]).execute()
+                        logger.info(f"  Gov fix: '{name}' → BTC: {match['btc']:,}, ticker: {ticker}")
+                        fixed += 1
 
         if fixed > 0:
             logger.info(f"Gov fix: {fixed} government entities updated")

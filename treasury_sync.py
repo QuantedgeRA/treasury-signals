@@ -421,17 +421,36 @@ class TreasurySync:
 
             texts = [td.get_text(strip=True) for td in cells]
 
-            # BTC: take largest number < 50M (entity_name_fixer's exact approach)
-            btc = 0
+            # BTC extraction — ₿ symbol first (most reliable, handles 0 correctly)
+            btc = -1  # -1 means not found yet
             for t in texts:
-                clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
-                clean = re.sub(r'[^\d.]', '', clean)
-                try:
-                    val = int(float(clean)) if clean else 0
-                    if val > btc and val < 50_000_000:
-                        btc = val
-                except:
-                    pass
+                if '₿' in t or '\u20bf' in t:
+                    clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
+                    clean = re.sub(r'[^\d.]', '', clean)
+                    try:
+                        btc = int(float(clean)) if clean else 0
+                    except:
+                        btc = 0
+                    break
+
+            # If no ₿ found, take largest number but SKIP first column (rank)
+            # and skip cells with $, %, M (USD values like "$552M")
+            if btc < 0:
+                btc = 0
+                for t in texts[1:]:  # Skip texts[0] which is the rank number
+                    t_stripped = t.strip()
+                    if t_stripped.startswith('$') or t_stripped.endswith('%'):
+                        continue
+                    if t_stripped.endswith('M') or t_stripped.endswith('B'):
+                        continue
+                    clean = t.replace(',', '').replace(' ', '')
+                    clean = re.sub(r'[^\d.]', '', clean)
+                    try:
+                        val = int(float(clean)) if clean else 0
+                        if val > btc and val < 50_000_000:
+                            btc = val
+                    except:
+                        pass
 
             if btc <= 0:
                 failed += 1
@@ -448,6 +467,23 @@ class TreasurySync:
 
             if not name:
                 failed += 1
+                continue
+
+            # Skip summary/navigation/stat rows that are not real entities
+            name_lower = name.lower()
+            skip_keywords = [
+                'total', 'btc held', 'number of', 'btc price', 'asset dominance',
+                'filter by', 'public companies', 'private companies',
+                'government entities', 'etfs and exchanges', 'defi and other',
+                'bitcoin treasuries', 'ranked by', 'embed',
+                'holding bitcoin', 'treasury reserve', 'protocols ranked',
+            ]
+            if any(kw in name_lower for kw in skip_keywords):
+                failed += 1
+                continue
+
+            # Skip aggregate total rows
+            if name.lower().strip().rstrip(':') in ('total', 'totals', 'sum', 'all'):
                 continue
 
             # Clean name: remove concatenated tickers
@@ -492,6 +528,17 @@ class TreasurySync:
             parsed += 1
 
         logger.info(f"  {page['label']}: {parsed} parsed, {failed} failed, {skipped_cols} skipped (<2 cols) out of {len(rows)} rows")
+
+        # Post-processing: filter out aggregate totals
+        # If any entity's BTC ≈ sum of all others, it's likely the page total row
+        if len(entities) > 3:
+            entities.sort(key=lambda x: -x["btc_holdings"])
+            largest = entities[0]["btc_holdings"]
+            rest_sum = sum(e["btc_holdings"] for e in entities[1:])
+            if rest_sum > 0 and abs(largest - rest_sum) / rest_sum < 0.15:
+                logger.debug(f"  {page['label']}: filtered aggregate total ({entities[0]['company']}: {largest:,} ≈ sum {rest_sum:,})")
+                entities = entities[1:]
+
         return entities
 
         return entities
