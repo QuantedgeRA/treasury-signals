@@ -1,22 +1,21 @@
 """
 velocity_tracker.py — Accumulation Velocity & New Entrant Detection
 --------------------------------------------------------------------
-Runs after treasury_sync to:
+Runs after treasury_sync + name fixers to:
   1. Record daily snapshot of each company's BTC holdings
   2. Detect new entrants (companies appearing for the first time)
   3. Calculate accumulation velocity (BTC added per month)
   4. Send alerts for new entrants via Telegram
 
+New entrant detection uses COMPANY NAME (not ticker) to avoid false
+positives when gov_entities/entity_name_fixer renames garbled entries.
+
 Requires table: treasury_history (ticker, company, btc_holdings, snapshot_date)
 Requires table: new_entrants (ticker, company, btc_holdings, first_seen, notified)
-
-Usage:
-    from velocity_tracker import velocity
-    velocity.run()  # Call after treasury_sync.run()
 """
 
 import os
-import json
+import re
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from supabase import create_client
@@ -33,6 +32,25 @@ EMAIL_FROM = os.getenv("EMAIL_FROM_ADDRESS", "briefing@quantedgeriskadvisory.com
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Minimum BTC to count as a real new entrant (filters noise)
+MIN_BTC_NEW_ENTRANT = 1
+
+
+def _normalize_name(name):
+    """Normalize company name for comparison. Strips emojis, punctuation, case."""
+    if not name:
+        return ""
+    # Remove non-ASCII (flag emojis, garbled chars)
+    clean = re.sub(r'[^\x20-\x7E]', '', name)
+    # Lowercase, strip whitespace
+    clean = clean.lower().strip()
+    # Remove common suffixes that vary
+    for suffix in [' inc', ' inc.', ' corp', ' corp.', ' ltd', ' ltd.', ' plc',
+                   ' llc', ' ag', ' se', ' sa', ' gmbh', ' co.', ' co']:
+        if clean.endswith(suffix):
+            clean = clean[:-len(suffix)].strip()
+    return clean
+
 
 class VelocityTracker:
 
@@ -48,7 +66,7 @@ class VelocityTracker:
         # Step 1: Get current holdings
         try:
             result = supabase.table("treasury_companies").select(
-                "ticker, company, btc_holdings"
+                "id, ticker, company, btc_holdings"
             ).gt("btc_holdings", 0).execute()
             current = result.data if result.data else []
         except Exception as e:
@@ -58,18 +76,27 @@ class VelocityTracker:
         if not current:
             return
 
-        # Step 2: Get yesterday's snapshot to detect new entrants
+        # Step 2: Get previous snapshot — load company names AND BTC amounts
+        prev_names = set()
+        prev_btc_amounts = set()
+
         try:
             yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
             prev_result = supabase.table("treasury_history").select(
-                "ticker"
+                "ticker, company, btc_holdings"
             ).eq("snapshot_date", yesterday).execute()
-            prev_tickers = set(r["ticker"] for r in (prev_result.data or []))
-        except Exception:
-            prev_tickers = set()
 
-        # If no previous data, try any recent date
-        if not prev_tickers:
+            if prev_result.data:
+                for r in prev_result.data:
+                    prev_names.add(_normalize_name(r.get("company", "")))
+                    btc = r.get("btc_holdings", 0)
+                    if btc and btc > 0:
+                        prev_btc_amounts.add(btc)
+        except Exception:
+            pass
+
+        # If no data from yesterday, try most recent date
+        if not prev_names:
             try:
                 any_prev = supabase.table("treasury_history").select(
                     "ticker, snapshot_date"
@@ -77,9 +104,14 @@ class VelocityTracker:
                 if any_prev.data:
                     last_date = any_prev.data[0]["snapshot_date"]
                     prev_result = supabase.table("treasury_history").select(
-                        "ticker"
+                        "ticker, company, btc_holdings"
                     ).eq("snapshot_date", last_date).execute()
-                    prev_tickers = set(r["ticker"] for r in (prev_result.data or []))
+                    if prev_result.data:
+                        for r in prev_result.data:
+                            prev_names.add(_normalize_name(r.get("company", "")))
+                            btc = r.get("btc_holdings", 0)
+                            if btc and btc > 0:
+                                prev_btc_amounts.add(btc)
             except Exception:
                 pass
 
@@ -102,31 +134,40 @@ class VelocityTracker:
 
         logger.info(f"Velocity Tracker: {recorded} snapshots recorded for {today}")
 
-        # Step 4: Detect new entrants
+        # Step 4: Detect REAL new entrants
+        # Compare by COMPANY NAME (not ticker) to avoid false positives from renames.
+        # Three layers of protection:
+        #   1. Name match: if normalized name existed yesterday → not new
+        #   2. BTC match: if exact BTC amount existed yesterday → likely rename
+        #   3. Garbled filter: if name starts with non-ASCII → skip (will be fixed next scan)
         self._new_entrants = []
-        if prev_tickers:
-            current_tickers = set(c["ticker"] for c in current)
-            new_tickers = current_tickers - prev_tickers
 
-            for ticker in new_tickers:
-                company_data = next((c for c in current if c["ticker"] == ticker), None)
-                if not company_data:
+        if prev_names:
+            for c in current:
+                name = c.get("company", "")
+                ticker = c.get("ticker", "")
+                btc = c.get("btc_holdings", 0)
+                norm_name = _normalize_name(name)
+
+                # Layer 1: Name existed yesterday (even under different ticker)
+                if norm_name in prev_names:
                     continue
 
-                btc = company_data.get("btc_holdings", 0)
-                name = company_data.get("company", ticker)
+                # Layer 2: Garbled name — will be fixed by name fixer, skip for now
+                if name and not (name[0].isascii() and name[0].isalpha()):
+                    continue
 
-                # Record new entrant
-                try:
-                    supabase.table("new_entrants").upsert({
-                        "ticker": ticker,
-                        "company": name[:200],
-                        "btc_holdings": btc,
-                        "first_seen": today,
-                        "notified": False,
-                    }, on_conflict="ticker").execute()
-                except Exception:
-                    pass
+                # Layer 3: BTC amount exactly matches a previous entity → likely a rename
+                if btc in prev_btc_amounts:
+                    continue
+
+                # Layer 4: Very small holdings (noise)
+                if btc < MIN_BTC_NEW_ENTRANT:
+                    continue
+
+                # Layer 5: Empty/short name
+                if not norm_name or len(norm_name) < 2:
+                    continue
 
                 self._new_entrants.append({
                     "ticker": ticker,
@@ -140,11 +181,14 @@ class VelocityTracker:
                     logger.info(f"  🆕 {ne['company']} ({ne['ticker']}): {ne['btc_holdings']:,} BTC")
                 if len(self._new_entrants) > 5:
                     logger.info(f"  ... and {len(self._new_entrants) - 5} more")
-                # Only send alerts if fewer than 10 new entrants (skip first-run flood)
+
+                # Only send alerts if reasonable count (skip bulk loads)
                 if len(self._new_entrants) <= 10:
                     self._send_new_entrant_alerts()
                 else:
-                    logger.info(f"Velocity Tracker: skipping alerts for {len(self._new_entrants)} entrants (first run / bulk load)")
+                    logger.info(f"Velocity Tracker: skipping alerts for {len(self._new_entrants)} entrants (bulk load)")
+            else:
+                logger.debug("Velocity Tracker: no new entrants detected")
         else:
             logger.info("Velocity Tracker: no previous data yet — new entrant detection starts tomorrow")
 
@@ -200,12 +244,7 @@ class VelocityTracker:
                 pass
 
     def get_velocity(self, ticker, days=30):
-        """Calculate accumulation velocity for a specific company.
-
-        Returns:
-            dict with btc_added, btc_per_month, first_seen, data_points
-            or None if insufficient data
-        """
+        """Calculate accumulation velocity for a specific company."""
         try:
             cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
             result = supabase.table("treasury_history").select(
@@ -249,14 +288,11 @@ class VelocityTracker:
         """Get the fastest accumulators over the last N days."""
         try:
             cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
-            today = datetime.now().strftime("%Y-%m-%d")
 
-            # Get earliest snapshot in window for each ticker
             first_snaps = supabase.table("treasury_history").select(
-                "ticker, btc_holdings, snapshot_date"
+                "ticker, btc_holdings, snapshot_date, company"
             ).gte("snapshot_date", cutoff).order("snapshot_date", desc=False).execute()
 
-            # Get latest snapshot
             last_snaps = supabase.table("treasury_history").select(
                 "ticker, btc_holdings, snapshot_date"
             ).order("snapshot_date", desc=True).limit(500).execute()
@@ -264,7 +300,6 @@ class VelocityTracker:
             if not first_snaps.data or not last_snaps.data:
                 return []
 
-            # Build first/last maps
             first_map = {}
             for r in first_snaps.data:
                 if r["ticker"] not in first_map:
@@ -275,7 +310,6 @@ class VelocityTracker:
                 if r["ticker"] not in last_map:
                     last_map[r["ticker"]] = r
 
-            # Calculate velocity for each
             velocities = []
             for ticker, first in first_map.items():
                 last = last_map.get(ticker)
