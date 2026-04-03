@@ -27,8 +27,13 @@ DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://app.quantedgeriskadvisory.co
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-def _get_market_data():
-    """Fetch all data needed for the briefing."""
+def _get_market_data(btc_price_override=None):
+    """Fetch all data needed for the briefing.
+    
+    Args:
+        btc_price_override: If provided, use this BTC price instead of querying.
+                           Passed from main.py which already fetched it.
+    """
     try:
         # Companies
         comp_res = supabase.table("treasury_companies").select(
@@ -36,11 +41,56 @@ def _get_market_data():
         ).gt("btc_holdings", 0).order("btc_holdings", ascending=False).execute()
         companies = comp_res.data or []
 
-        # BTC price from latest snapshot
-        snap_res = supabase.table("leaderboard_snapshots").select(
-            "btc_price, snapshot_date"
-        ).order("snapshot_date", ascending=False).limit(1).execute()
-        btc_price = float(snap_res.data[0]["btc_price"]) if snap_res.data else 0
+        # BTC price — use override if provided, otherwise query snapshot
+        btc_price = 0
+        if btc_price_override and btc_price_override > 0:
+            btc_price = btc_price_override
+        else:
+            try:
+                snap_res = supabase.table("leaderboard_snapshots").select(
+                    "btc_price, snapshot_date"
+                ).neq("snapshot_date", "last_known_good_leaderboard").order(
+                    "snapshot_date", ascending=False
+                ).limit(1).execute()
+                btc_price = float(snap_res.data[0]["btc_price"]) if snap_res.data and snap_res.data[0].get("btc_price") else 0
+            except Exception:
+                pass
+
+        # If still 0, try market_intelligence module
+        if btc_price <= 0:
+            try:
+                from market_intelligence import get_risk_dashboard
+                risk = get_risk_dashboard()
+                btc_price = risk.get("btc_price", 0)
+            except Exception:
+                pass
+
+        # If still 0, try confirmed_purchases table for most recent price_per_btc
+        if btc_price <= 0:
+            try:
+                price_res = supabase.table("confirmed_purchases").select(
+                    "price_per_btc"
+                ).gt("price_per_btc", 0).order("filing_date", ascending=False).limit(1).execute()
+                if price_res.data and price_res.data[0].get("price_per_btc"):
+                    btc_price = float(price_res.data[0]["price_per_btc"])
+            except Exception:
+                pass
+
+        # If still 0, try ANY leaderboard snapshot that has a valid price (including older ones)
+        if btc_price <= 0:
+            try:
+                any_price_res = supabase.table("leaderboard_snapshots").select(
+                    "btc_price"
+                ).gt("btc_price", 0).order("snapshot_date", ascending=False).limit(1).execute()
+                if any_price_res.data and any_price_res.data[0].get("btc_price"):
+                    btc_price = float(any_price_res.data[0]["btc_price"])
+            except Exception:
+                pass
+
+        # If ALL sources failed, return None — better to skip briefing than show wrong price
+        if btc_price <= 0:
+            logger.warning("Pro briefing: could not determine BTC price from any source — skipping")
+            return None
 
         # Recent purchases (last 48h)
         cutoff = (datetime.now() - timedelta(hours=48)).isoformat()
@@ -346,12 +396,16 @@ def _build_email_html(subscriber, market, position):
     return html
 
 
-def send_pro_briefings():
-    """Send personalized daily briefing to all Pro subscribers with email_briefing enabled."""
+def send_pro_briefings(btc_price=None):
+    """Send personalized daily briefing to all Pro subscribers with email_briefing enabled.
+    
+    Args:
+        btc_price: Optional BTC price from main.py to avoid redundant API calls.
+    """
     logger.info("Pro briefing: generating daily intelligence...")
 
-    # Fetch market data
-    market = _get_market_data()
+    # Fetch market data, reusing BTC price if provided
+    market = _get_market_data(btc_price_override=btc_price)
     if not market:
         logger.warning("Pro briefing: could not fetch market data")
         return

@@ -322,7 +322,14 @@ def send_daily_email():
 
         # Send personalized Pro briefings
         try:
-            send_pro_briefings()
+            # Reuse BTC price from market intelligence to avoid redundant API calls
+            try:
+                from market_intelligence import get_risk_dashboard
+                _risk = get_risk_dashboard()
+                _btc_price = _risk.get("btc_price", 0)
+            except Exception:
+                _btc_price = None
+            send_pro_briefings(btc_price=_btc_price)
         except Exception as e:
             logger.debug(f"Pro briefing: {e}")
 
