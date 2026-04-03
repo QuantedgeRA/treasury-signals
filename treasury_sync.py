@@ -435,37 +435,31 @@ class TreasurySync:
     def _parse_a(self, texts, page):
         """
         Parse rows from non-public pages (Private, Government, ETF, DeFi).
-        Uses same flexible approach as entity_name_fixer (which gets 71/71):
-        - Scan ALL cells for ₿ symbol to find BTC amount
+        Uses entity_name_fixer's EXACT approach (proven 71/71):
+        - Take largest number < 50M as BTC
         - Pick longest alphabetic text as name
-        - Pick 2-letter uppercase code as country
         """
         if len(texts) < 2:
             return None
 
-        # Step 1: Find the BTC amount — look for ₿ symbol first
+        # BTC extraction — EXACT copy of entity_name_fixer approach
+        # Takes the largest number from any cell, < 50M sanity cap
         btc = 0
         for t in texts:
-            if "₿" in t or "\u20bf" in t:
-                btc = self._extract_btc(t)
-                if btc > 0:
-                    break
-
-        # Step 2: If no ₿ found, scan for largest number that isn't USD or percentage
-        if btc <= 0:
-            for t in texts:
-                t_stripped = t.strip()
-                if t_stripped.startswith("$") or "%" in t_stripped:
-                    continue
-                candidate = self._extract_btc(t)
-                if candidate > btc:
-                    btc = candidate
+            clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
+            clean = re.sub(r'[^\d.]', '', clean)
+            try:
+                val = int(float(clean)) if clean else 0
+                if val > btc and val < 50_000_000:
+                    btc = val
+            except:
+                pass
 
         if btc <= 0:
             return None
 
-        # Step 3: Find company name — pick the longest text that starts with a letter
-        # (same approach as entity_name_fixer which gets 71/71)
+        # Name extraction — EXACT copy of entity_name_fixer approach
+        # Pick the longest text that starts with an ASCII letter
         name = ""
         for t in texts:
             stripped = t.strip()
@@ -475,19 +469,12 @@ class TreasurySync:
                 name = stripped
 
         if not name:
-            # Fallback: try column 2, then column 1
-            if len(texts) > 2 and texts[2].strip():
-                name = texts[2].strip()
-            elif len(texts) > 1 and texts[1].strip():
-                name = texts[1].strip()
-
-        if not name:
             return None
 
         # Clean name: remove concatenated tickers at end
         name = re.sub(r'([a-z])\s*([A-Z]{2,6})$', r'\1', name).strip()
 
-        # Step 4: Extract ticker from name or generate one
+        # Extract ticker from name or generate one
         ticker = ""
         name_clean, ticker_extracted = self._extract_name_ticker(name)
         if name_clean:
@@ -499,7 +486,7 @@ class TreasurySync:
         if not ticker:
             return None
 
-        # Step 5: Extract country — look for 2-letter uppercase code
+        # Extract country — 2-letter uppercase code
         country = ""
         for t in texts[:4]:
             t_stripped = t.strip()
@@ -507,7 +494,7 @@ class TreasurySync:
                 country = t_stripped
                 break
 
-        # Step 6: Handle government entities
+        # Handle government entities
         is_gov = page["is_government"]
         if is_gov:
             for key, (display, gov_ticker, gov_country) in SOVEREIGN_FLAGS.items():
