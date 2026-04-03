@@ -75,42 +75,33 @@ def _scrape_government_btc():
                 continue
             texts = [td.get_text(strip=True) for td in cells]
 
-            # Step 1: Look for ₿ symbol (most reliable)
+            # Use entity_name_fixer's proven approach: take largest number < 50M
             btc = 0
             for t in texts:
-                if '₿' in t or '\u20bf' in t:
-                    clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
-                    clean = re.sub(r'[^\d.]', '', clean)
-                    try:
-                        btc = int(float(clean)) if clean else 0
-                    except:
-                        btc = 0
-                    if btc > 0:
-                        break
-
-            # Step 2: If no ₿ found, scan for largest number that isn't USD or percentage
-            if btc <= 0:
-                for t in texts:
-                    t_stripped = t.strip()
-                    if t_stripped.startswith('$') or t_stripped.endswith('%'):
-                        continue
-                    clean = t.replace(',', '').replace(' ', '')
-                    # Skip if contains M/B (likely USD value like "$10,919M")
-                    if clean.endswith('M') or clean.endswith('B'):
-                        continue
-                    clean = re.sub(r'[^\d.]', '', clean)
-                    try:
-                        val = int(float(clean)) if clean else 0
-                        if val > btc and val < 50_000_000:
-                            btc = val
-                    except:
-                        pass
+                clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
+                clean = re.sub(r'[^\d.]', '', clean)
+                try:
+                    val = int(float(clean)) if clean else 0
+                    if val > btc and val < 50_000_000:
+                        btc = val
+                except:
+                    pass
 
             if btc > 0:
                 btc_amounts.append(btc)
 
-        # Sort descending — should match our GOVERNMENT_NAMES order
+        # Sort descending
         btc_amounts.sort(reverse=True)
+
+        # Filter out aggregate total: if the largest amount ≈ sum of all others, it's the total row
+        if len(btc_amounts) > 2:
+            largest = btc_amounts[0]
+            rest_sum = sum(btc_amounts[1:])
+            # If largest is within 10% of the sum of the rest, it's the aggregate total
+            if rest_sum > 0 and abs(largest - rest_sum) / rest_sum < 0.10:
+                logger.debug(f"  Gov scrape: filtered aggregate total ({largest:,} ≈ sum of rest {rest_sum:,})")
+                btc_amounts = btc_amounts[1:]
+
         logger.info(f"  Gov scrape: fetched {len(btc_amounts)} BTC amounts from website")
         return btc_amounts
 
