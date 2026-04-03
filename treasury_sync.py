@@ -377,6 +377,8 @@ class TreasurySync:
         if not rows:
             return entities
 
+        logger.info(f"  {page['label']}: found {len(rows)} total <tr> tags in HTML")
+
         # Detect format from first data row
         first_data_row = None
         for row in rows:
@@ -389,9 +391,11 @@ class TreasurySync:
 
         parsed = 0
         failed = 0
+        skipped_cols = 0
         for row in rows:
             cols = row.find_all("td")
-            if len(cols) < 3:
+            if len(cols) < 2:
+                skipped_cols += 1
                 continue
             try:
                 entity = self._parse_row(cols, fmt, page)
@@ -402,14 +406,13 @@ class TreasurySync:
                     failed += 1
                     if failed <= 3:
                         texts = [td.get_text(strip=True)[:30] for td in cols]
-                        logger.debug(f"  {page['label']}: row skipped — texts={texts[:5]}")
+                        logger.debug(f"  {page['label']}: row skipped — {len(cols)} cols, texts={texts[:5]}")
             except Exception as e:
                 failed += 1
                 if failed <= 3:
                     logger.debug(f"  {page['label']}: row exception — {e}")
 
-        if failed > 0:
-            logger.debug(f"  {page['label']}: {parsed} parsed, {failed} failed out of {len(rows)} total rows")
+        logger.info(f"  {page['label']}: {parsed} parsed, {failed} failed, {skipped_cols} skipped (<2 cols) out of {len(rows)} rows")
 
         return entities
 
@@ -432,14 +435,12 @@ class TreasurySync:
     def _parse_a(self, texts, page):
         """
         Parse rows from non-public pages (Private, Government, ETF, DeFi).
-        Column structure: # | Country | Name | [Chart] | ₿ BTC | $USD | /21M%
-        
-        Instead of relying on fixed column positions, we scan all columns:
-        - BTC column: contains ₿ symbol or is a large number without $ prefix
-        - Name column: longest text that isn't a number/symbol
-        - Country column: 2-letter uppercase code
+        Uses same flexible approach as entity_name_fixer (which gets 71/71):
+        - Scan ALL cells for ₿ symbol to find BTC amount
+        - Pick longest alphabetic text as name
+        - Pick 2-letter uppercase code as country
         """
-        if len(texts) < 4:
+        if len(texts) < 2:
             return None
 
         # Step 1: Find the BTC amount — look for ₿ symbol first
@@ -450,11 +451,12 @@ class TreasurySync:
                 if btc > 0:
                     break
 
-        # Step 2: If no ₿ found, scan for largest number that isn't USD
+        # Step 2: If no ₿ found, scan for largest number that isn't USD or percentage
         if btc <= 0:
             for t in texts:
-                if t.startswith("$") or "%" in t:
-                    continue  # Skip USD values and percentages
+                t_stripped = t.strip()
+                if t_stripped.startswith("$") or "%" in t_stripped:
+                    continue
                 candidate = self._extract_btc(t)
                 if candidate > btc:
                     btc = candidate
@@ -462,30 +464,44 @@ class TreasurySync:
         if btc <= 0:
             return None
 
-        # Step 3: Find company name — column 2 for most pages
-        # (col 0 = rank #, col 1 = country flag, col 2 = name)
-        raw_name = texts[2] if len(texts) > 2 else ""
+        # Step 3: Find company name — pick the longest text that starts with a letter
+        # (same approach as entity_name_fixer which gets 71/71)
+        name = ""
+        for t in texts:
+            stripped = t.strip()
+            if (len(stripped) > len(name) and
+                stripped[0:1].isascii() and stripped[0:1].isalpha() and
+                not stripped.replace(",", "").replace(".", "").replace(" ", "").isdigit()):
+                name = stripped
 
-        # For DeFi page which may not have country column, name might be col 1
-        if not raw_name or raw_name.replace(".", "").replace(",", "").isdigit():
-            # col 2 looks like a number, try col 1
-            raw_name = texts[1] if len(texts) > 1 else ""
+        if not name:
+            # Fallback: try column 2, then column 1
+            if len(texts) > 2 and texts[2].strip():
+                name = texts[2].strip()
+            elif len(texts) > 1 and texts[1].strip():
+                name = texts[1].strip()
 
-        if not raw_name:
-            return None
-
-        # Step 4: Extract name and ticker
-        name, ticker = self._extract_name_ticker(raw_name)
         if not name:
             return None
+
+        # Clean name: remove concatenated tickers at end
+        name = re.sub(r'([a-z])\s*([A-Z]{2,6})$', r'\1', name).strip()
+
+        # Step 4: Extract ticker from name or generate one
+        ticker = ""
+        name_clean, ticker_extracted = self._extract_name_ticker(name)
+        if name_clean:
+            name = name_clean
+        if ticker_extracted:
+            ticker = ticker_extracted
         if not ticker:
             ticker = re.sub(r'[^A-Za-z0-9]', '', name.upper()[:10])
         if not ticker:
             return None
 
-        # Step 5: Extract country — look for 2-letter code in columns 0-2
+        # Step 5: Extract country — look for 2-letter uppercase code
         country = ""
-        for t in texts[:3]:
+        for t in texts[:4]:
             t_stripped = t.strip()
             if len(t_stripped) == 2 and t_stripped.isalpha() and t_stripped.isupper():
                 country = t_stripped
