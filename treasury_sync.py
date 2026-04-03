@@ -369,10 +369,8 @@ class TreasurySync:
         if resp.status_code != 200:
             raise Exception(f"HTTP {resp.status_code}")
 
-        # Use html.parser (not lxml) — lxml is stricter and drops content on SvelteKit pages
+        # Use html.parser (not lxml) — proven to capture all rows
         soup = BeautifulSoup(resp.text, "html.parser")
-
-        # Get ALL table rows across all tables (same approach as entity_name_fixer which gets 71/71)
         rows = soup.select("table tr")
         if not rows:
             return entities
@@ -389,30 +387,117 @@ class TreasurySync:
 
         fmt = self._detect_format(first_data_row) if first_data_row else "A"
 
+        # For public companies page (format B), use the existing parser
+        if fmt == "B":
+            parsed = 0
+            failed = 0
+            skipped_cols = 0
+            for row in rows:
+                cols = row.find_all("td")
+                if len(cols) < 2:
+                    skipped_cols += 1
+                    continue
+                try:
+                    texts = [td.get_text(strip=True) for td in cols]
+                    entity = self._parse_b(texts, page)
+                    if entity and entity.get("btc_holdings", 0) > 0:
+                        entities.append(entity)
+                        parsed += 1
+                    else:
+                        failed += 1
+                except Exception:
+                    failed += 1
+            logger.info(f"  {page['label']}: {parsed} parsed, {failed} failed, {skipped_cols} skipped (<2 cols) out of {len(rows)} rows")
+            return entities
+
+        # For non-public pages (Private, Government, ETF, DeFi):
+        # Use entity_name_fixer's EXACT proven approach — inline BTC + name extraction
+        is_gov = page["is_government"]
+        category = page["category"]
         parsed = 0
         failed = 0
         skipped_cols = 0
+
         for row in rows:
-            cols = row.find_all("td")
-            if len(cols) < 2:
+            cells = row.find_all("td")
+            if len(cells) < 2:
                 skipped_cols += 1
                 continue
-            try:
-                entity = self._parse_row(cols, fmt, page)
-                if entity and entity.get("btc_holdings", 0) > 0:
-                    entities.append(entity)
-                    parsed += 1
-                else:
-                    failed += 1
-                    if failed <= 3:
-                        texts = [td.get_text(strip=True)[:30] for td in cols]
-                        logger.debug(f"  {page['label']}: row skipped — {len(cols)} cols, texts={texts[:5]}")
-            except Exception as e:
+
+            texts = [td.get_text(strip=True) for td in cells]
+
+            # BTC: take largest number < 50M (entity_name_fixer's exact approach)
+            btc = 0
+            for t in texts:
+                clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
+                clean = re.sub(r'[^\d.]', '', clean)
+                try:
+                    val = int(float(clean)) if clean else 0
+                    if val > btc and val < 50_000_000:
+                        btc = val
+                except:
+                    pass
+
+            if btc <= 0:
                 failed += 1
-                if failed <= 3:
-                    logger.debug(f"  {page['label']}: row exception — {e}")
+                continue
+
+            # Name: longest text starting with ASCII letter (entity_name_fixer's exact approach)
+            name = ""
+            for t in texts:
+                stripped = t.strip()
+                if (len(stripped) > len(name) and
+                    stripped[0:1].isascii() and stripped[0:1].isalpha() and
+                    not stripped.replace(',', '').replace('.', '').replace(' ', '').isdigit()):
+                    name = stripped
+
+            if not name:
+                failed += 1
+                continue
+
+            # Clean name: remove concatenated tickers
+            name = re.sub(r'([a-z])\s*([A-Z]{2,6})$', r'\1', name).strip()
+
+            # Generate ticker from name
+            ticker = re.sub(r'[^A-Za-z0-9]', '', name.upper()[:10])
+            if not ticker:
+                ticker = f"UNK{parsed}"
+
+            # Country: 2-letter uppercase code
+            country = ""
+            for t in texts[:4]:
+                t_stripped = t.strip()
+                if len(t_stripped) == 2 and t_stripped.isalpha() and t_stripped.isupper():
+                    country = t_stripped
+                    break
+
+            # Handle government entities
+            if is_gov:
+                for key, (display, gov_ticker, gov_country) in SOVEREIGN_FLAGS.items():
+                    if key in name.lower():
+                        name = display
+                        ticker = gov_ticker
+                        country = gov_country
+                        break
+                else:
+                    if not ticker.endswith("-GOV"):
+                        ticker = f"{ticker[:5]}-GOV"
+
+            if not country:
+                country = self._get_country(name, is_gov)
+
+            entities.append({
+                "ticker": ticker.upper(), "company": name[:200], "btc_holdings": btc,
+                "avg_purchase_price": 0, "total_cost_usd": 0,
+                "country": country,
+                "sector": _guess_sector(name, category),
+                "is_government": is_gov, "entity_type": category,
+                "data_source": "aggregator",
+            })
+            parsed += 1
 
         logger.info(f"  {page['label']}: {parsed} parsed, {failed} failed, {skipped_cols} skipped (<2 cols) out of {len(rows)} rows")
+        return entities
 
         return entities
 
