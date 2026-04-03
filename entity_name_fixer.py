@@ -169,7 +169,11 @@ def fix_entity_names(supabase_client=None):
         # Sort garbled rows by real BTC descending
         garbled_rows.sort(key=lambda x: -x["_real_btc"])
 
-        # Step 4: Match garbled rows to scraped names by rank
+        # Step 4: Match garbled rows to scraped names by BTC AMOUNT (not rank)
+        # For each garbled entry, find the scraped name with the closest BTC amount.
+        # This is more resilient than rank matching — even if sort order shifts slightly,
+        # each entity finds its correct match.
+
         # First, find which scraped names are NOT already in the DB with clean names
         clean_names = set()
         for row in db_rows:
@@ -180,18 +184,52 @@ def fix_entity_names(supabase_client=None):
         available_scraped = [s for s in scraped if s["name"].lower().strip() not in clean_names]
 
         fixed = 0
-        for i, row in enumerate(garbled_rows):
-            if i >= len(available_scraped):
-                break
+        used_indices = set()  # Track which scraped entries have been matched
 
-            target = available_scraped[i]
+        for row in garbled_rows:
+            row_btc = row["_real_btc"]
+            if row_btc <= 0:
+                continue
+
             current_name = row.get("company", "")
-            best_btc = row["_real_btc"] if row["_real_btc"] > 0 else target["btc"]
+
+            # Find the closest BTC match from available scraped entries
+            best_match = None
+            best_match_idx = -1
+            best_diff = float("inf")
+
+            for j, candidate in enumerate(available_scraped):
+                if j in used_indices:
+                    continue  # Already matched to another garbled entry
+
+                candidate_btc = candidate["btc"]
+                if candidate_btc <= 0:
+                    continue
+
+                # Calculate how close the BTC amounts are
+                diff = abs(row_btc - candidate_btc)
+                diff_pct = diff / max(row_btc, candidate_btc, 1)
+
+                # Must be within 30% tolerance to be considered a match
+                if diff_pct <= 0.30 and diff < best_diff:
+                    best_diff = diff
+                    best_match = candidate
+                    best_match_idx = j
+
+            if best_match is None:
+                # No match within tolerance — skip rather than assign wrong name
+                logger.debug(f"  Name fix: no BTC match for garbled entry ({row_btc:,} BTC) — skipping")
+                continue
+
+            # Mark this scraped entry as used
+            used_indices.add(best_match_idx)
+
+            best_btc = row_btc if row_btc > 0 else best_match["btc"]
 
             # Clean non-ASCII junk from scraped names
-            clean_name = re.sub(r'[^\x20-\x7E]', '', target["name"]).strip()
+            clean_name = re.sub(r'[^\x20-\x7E]', '', best_match["name"]).strip()
             if not clean_name:
-                clean_name = target["name"][:200]
+                clean_name = best_match["name"][:200]
 
             supabase_client.table("treasury_companies").update({
                 "company": clean_name[:200],
