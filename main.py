@@ -35,7 +35,7 @@ from database import save_tweet, get_new_tweets, mark_processed
 from classifier import classify_tweet, get_signal_label, get_dimension_breakdown
 from telegram_bot import send_alert, send_scan_summary, send_strc_alert, send_edgar_alert, send_to_paid, send_to_free
 from strc_tracker import get_strc_volume_data, analyze_strc_signal, format_strc_alert
-from correlation_engine import CorrelationEngineV2
+from correlation_engine_v2 import CorrelationEngineV2
 from pattern_analyzer import pattern_engine
 from feedback_loop import feedback_engine
 from narrative_engine import narrator
@@ -616,47 +616,51 @@ def main():
         except Exception as e:
             logger.debug(f"Sync protector: {e}")
 
-        # Record daily snapshots + detect new entrants
+        # ═══ NAME/TYPE FIXERS (every scan — must run before velocity tracker) ═══
+        # These fix garbled emoji names from BitcoinTreasuries.net scraping.
+        # Lightweight: just DB updates + BT page scraping, no Yahoo calls.
+
+        # Fix government entity names after sync
+        try:
+            fix_government_entities()
+        except Exception as e:
+            logger.debug(f"Gov fix: {e}")
+
+        # Fix DeFi/ETF entity types after sync
+        try:
+            fix_entity_types()
+        except Exception as e:
+            logger.debug(f"Entity fix: {e}")
+
+        # Fix garbled ETF/private company names
+        try:
+            fix_entity_names()
+        except Exception as e:
+            logger.debug(f"Name fix: {e}")
+
+        # Record daily snapshots + detect new entrants (AFTER fixers so names are clean)
         try:
             from velocity_tracker import velocity
             velocity.run()
         except Exception as e:
             logger.debug(f"Velocity tracker: {e}")
 
-        # ═══ MAINTENANCE TASKS (6am only) ═══
+        # ═══ HEAVY MAINTENANCE TASKS (6am only) ═══
 
         if morning:
-            # Fix government entity names after sync
-            try:
-                fix_government_entities()
-            except Exception as e:
-                logger.debug(f"Gov fix: {e}")
-
-            # Fix DeFi/ETF entity types after sync
-            try:
-                fix_entity_types()
-            except Exception as e:
-                logger.debug(f"Entity fix: {e}")
-
-            # Fix garbled ETF/private company names
-            try:
-                fix_entity_names()
-            except Exception as e:
-                logger.debug(f"Name fix: {e}")
-
-            # Auto-update shares outstanding from Yahoo Finance
+            # Auto-update shares outstanding from Yahoo Finance (225 API calls)
             try:
                 update_shares()
             except Exception as e:
                 logger.debug(f"Shares update: {e}")
 
-            # Validate and auto-correct tickers
+            # Validate and auto-correct tickers (SEC + Yahoo lookups)
             try:
                 validate_all_tickers()
             except Exception as e:
                 logger.debug(f"Ticker validator: {e}")
         else:
-            logger.debug("Maintenance tasks skipped (6am only)")
+            logger.debug("Heavy maintenance tasks skipped (6am only)")
 
         # ═══ PRIMARY SOURCE DATA COLLECTION ═══
 
