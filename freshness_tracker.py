@@ -53,18 +53,18 @@ load_dotenv()
 # Beyond "stale" = considered unavailable.
 
 THRESHOLDS = {
-    "twitter_api":          {"fresh": 120, "stale": 360},     # Fresh < 2h, stale > 6h
-    "coingecko":            {"fresh": 90,  "stale": 360},     # Fresh < 1.5h, stale > 6h
-    "bitcointreasuries":    {"fresh": 90,  "stale": 360},
-    "sec_edgar":            {"fresh": 120, "stale": 720},     # Fresh < 2h, stale > 12h
-    "strc_yfinance":        {"fresh": 120, "stale": 360},
-    "btc_yfinance":         {"fresh": 30,  "stale": 120},     # Price data: fresh < 30min
-    "mstr_yfinance":        {"fresh": 30,  "stale": 120},
-    "fear_greed":           {"fresh": 360, "stale": 1440},    # Updates daily, so 6h is fine
-    "google_news_reg":      {"fresh": 120, "stale": 360},
-    "google_news_stmt":     {"fresh": 120, "stale": 360},
-    "google_news_purchases":{"fresh": 120, "stale": 360},
-    "supabase":             {"fresh": 15,  "stale": 60},      # DB should always be reachable
+    "twitter_api":          {"fresh": 420, "stale": 720},     # Fresh < 7h (between scans), stale > 12h
+    "coingecko":            {"fresh": 420, "stale": 720},     # Fresh < 7h, stale > 12h
+    "bitcointreasuries":    {"fresh": 420, "stale": 720},
+    "sec_edgar":            {"fresh": 420, "stale": 1440},    # Fresh < 7h, stale > 24h
+    "strc_yfinance":        {"fresh": 420, "stale": 720},
+    "btc_yfinance":         {"fresh": 420, "stale": 720},     # Updated for 3x daily scans
+    "mstr_yfinance":        {"fresh": 420, "stale": 720},
+    "fear_greed":           {"fresh": 420, "stale": 1440},    # Updates daily, 7h is fine
+    "google_news_reg":      {"fresh": 420, "stale": 720},
+    "google_news_stmt":     {"fresh": 420, "stale": 720},
+    "google_news_purchases":{"fresh": 420, "stale": 720},
+    "supabase":             {"fresh": 420, "stale": 720},     # DB checked every scan
 }
 
 # Human-readable names for display
@@ -308,31 +308,41 @@ class FreshnessTracker:
         """
         Get an overall system health summary.
         Returns: "healthy", "degraded", or "critical"
+        
+        Only sources that have been checked (not "unknown") count toward health.
+        "unknown" means the source hasn't been called yet this session — not a failure.
         """
         statuses = self.get_all_statuses()
-        live_count = sum(1 for s in statuses if s["status"] == "live")
-        stale_count = sum(1 for s in statuses if s["status"] == "stale")
-        unavailable_count = sum(1 for s in statuses if s["status"] == "unavailable")
+
+        # Only count sources that have actually been checked
+        checked = [s for s in statuses if s["status"] != "unknown"]
+        live_count = sum(1 for s in checked if s["status"] == "live")
+        stale_count = sum(1 for s in checked if s["status"] == "stale")
+        unavailable_count = sum(1 for s in checked if s["status"] == "unavailable")
         unknown_count = sum(1 for s in statuses if s["status"] == "unknown")
         total = len(statuses)
 
-        # Critical sources that must be live
-        critical_sources = ["supabase", "btc_yfinance"]
-        critical_down = any(
-            self.get_status(s)["status"] in ("unavailable", "unknown")
-            for s in critical_sources
-        )
+        # Only truly critical source is Supabase — everything else has fallbacks
+        critical_down = self.get_status("supabase")["status"] == "unavailable"
 
-        if critical_down or unavailable_count >= 3:
+        if critical_down or unavailable_count >= 4:
             health = "critical"
             color = "#EF4444"
             emoji = "🔴"
-            message = f"{unavailable_count} source(s) unavailable — data quality degraded"
-        elif stale_count >= 3 or unavailable_count >= 1:
+            if critical_down:
+                message = "Supabase database unavailable — system cannot function"
+            else:
+                message = f"{unavailable_count} source(s) unavailable — data quality degraded"
+        elif unavailable_count >= 2 or stale_count >= 4:
             health = "degraded"
             color = "#F59E0B"
             emoji = "🟡"
             message = f"{live_count} live, {stale_count} stale, {unavailable_count} down"
+        elif len(checked) == 0:
+            health = "starting"
+            color = "#6B7280"
+            emoji = "⚪"
+            message = "System starting — no sources checked yet"
         else:
             health = "healthy"
             color = "#10B981"
