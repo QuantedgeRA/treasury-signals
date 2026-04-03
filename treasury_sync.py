@@ -332,7 +332,11 @@ class TreasurySync:
 
     def _fetch_coingecko(self):
         entities = []
-        resp = requests.get("https://api.coingecko.com/api/v3/companies/public_treasury/bitcoin", headers=HEADERS, timeout=15)
+        cg_headers = HEADERS.copy()
+        cg_api_key = os.getenv("COINGECKO_API_KEY", "")
+        if cg_api_key:
+            cg_headers["x-cg-demo-api-key"] = cg_api_key
+        resp = requests.get("https://api.coingecko.com/api/v3/companies/public_treasury/bitcoin", headers=cg_headers, timeout=15)
         if resp.status_code != 200:
             raise Exception(f"HTTP {resp.status_code}")
         for item in resp.json().get("companies", []):
