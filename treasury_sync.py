@@ -377,18 +377,13 @@ class TreasurySync:
 
         logger.info(f"  {page['label']}: found {len(rows)} total <tr> tags in HTML")
 
-        # Detect format from first data row
-        first_data_row = None
-        for row in rows:
-            cells = row.find_all("td")
-            if len(cells) >= 3:
-                first_data_row = [td.get_text(strip=True) for td in cells]
-                break
+        # Route by PAGE CATEGORY, not format detection
+        # Format detection was misclassifying non-public pages because the
+        # stats/summary table at the top of each page has different column structure
+        is_public_companies = (page["category"] == "public_company")
 
-        fmt = self._detect_format(first_data_row) if first_data_row else "A"
-
-        # For public companies page (format B), use the existing parser
-        if fmt == "B":
+        # For public companies page ONLY, use _parse_b (column-based parser)
+        if is_public_companies:
             parsed = 0
             failed = 0
             skipped_cols = 0
