@@ -83,8 +83,18 @@ def _save_dynamic_fallback(companies):
     """
     Save current live data as the dynamic fallback.
     Called every time Source 1 or Source 2 succeeds.
+    
+    Validation safeguard (checks ALL entities):
+    - Large holders (>1000 BTC): block if ANY drops >50%
+    - Medium holders (100-1000 BTC): block if 3+ drop >50%
+    - Small holders (10-100 BTC): block if 5+ drop >50%
+    - Entity count: block if total drops by >30%
+    - Total BTC: block if aggregate BTC drops by >20%
+    
+    One company selling is normal. Many companies dropping simultaneously = bad data.
     """
     try:
+        # Build new fallback data
         fallback_data = []
         for c in companies:
             fallback_data.append({
@@ -97,6 +107,82 @@ def _save_dynamic_fallback(companies):
                 "sector": c.get("sector", "BTC Treasury"),
             })
 
+        # Validation: compare ALL entities against existing fallback
+        existing = _load_dynamic_fallback()
+        if existing and len(existing) > 10:
+            existing_map = {c["ticker"]: c for c in existing if c.get("btc_holdings", 0) > 0}
+            new_map = {c["ticker"]: c for c in fallback_data if c.get("btc_holdings", 0) > 0}
+
+            # Check every entity for suspicious drops
+            suspicious_large = []   # >1000 BTC holders
+            suspicious_medium = []  # 100-1000 BTC holders
+            suspicious_small = []   # 10-100 BTC holders
+
+            for ticker, old_data in existing_map.items():
+                old_btc = old_data.get("btc_holdings", 0)
+                new_data = new_map.get(ticker)
+                new_btc = new_data.get("btc_holdings", 0) if new_data else 0
+                company_name = old_data.get("company", ticker)
+
+                # Only flag drops (not increases or disappearances from API)
+                if old_btc > 0 and new_btc > 0 and new_btc < (old_btc * 0.5):
+                    drop_pct = (1 - new_btc / old_btc) * 100
+                    entry = f"{company_name} ({ticker}): {old_btc:,} → {new_btc:,} (-{drop_pct:.0f}%)"
+
+                    if old_btc > 1000:
+                        suspicious_large.append(entry)
+                    elif old_btc > 100:
+                        suspicious_medium.append(entry)
+                    elif old_btc > 10:
+                        suspicious_small.append(entry)
+
+            # Decision logic — tiered thresholds
+            block_save = False
+            block_reasons = []
+
+            # ANY large holder dropping >50% is suspicious (Strategy going from 762K to 300K = bad data)
+            if suspicious_large:
+                block_save = True
+                block_reasons.append(f"{len(suspicious_large)} large holder(s) (>1000 BTC) dropped >50%")
+                for s in suspicious_large[:5]:
+                    block_reasons.append(f"  ⚠️ {s}")
+
+            # 3+ medium holders dropping simultaneously = bad data
+            if len(suspicious_medium) >= 3:
+                block_save = True
+                block_reasons.append(f"{len(suspicious_medium)} medium holders (100-1000 BTC) dropped >50%")
+                for s in suspicious_medium[:3]:
+                    block_reasons.append(f"  ⚠️ {s}")
+
+            # 5+ small holders dropping simultaneously = bad data
+            if len(suspicious_small) >= 5:
+                block_save = True
+                block_reasons.append(f"{len(suspicious_small)} small holders (10-100 BTC) dropped >50%")
+
+            # Total entity count dropped by >30% (API returned partial data)
+            if len(fallback_data) < len(existing) * 0.7:
+                block_save = True
+                block_reasons.append(f"Entity count dropped: {len(existing)} → {len(fallback_data)} ({len(fallback_data)/len(existing)*100:.0f}%)")
+
+            # Total BTC across all entities dropped by >20% (massive data corruption)
+            old_total = sum(c.get("btc_holdings", 0) for c in existing)
+            new_total = sum(c.get("btc_holdings", 0) for c in fallback_data)
+            if old_total > 0 and new_total < (old_total * 0.8):
+                block_save = True
+                block_reasons.append(f"Total BTC dropped: {old_total:,} → {new_total:,} (-{(1-new_total/old_total)*100:.0f}%)")
+
+            if block_save:
+                logger.warning(f"Dynamic fallback SKIPPED — data validation failed:")
+                for reason in block_reasons:
+                    logger.warning(f"  {reason}")
+                logger.warning("Keeping previous fallback to protect data integrity.")
+                return
+            else:
+                # Log minor changes for transparency
+                all_suspicious = len(suspicious_large) + len(suspicious_medium) + len(suspicious_small)
+                if all_suspicious > 0:
+                    logger.debug(f"Dynamic fallback: {all_suspicious} entity drop(s) detected but within normal thresholds — saving")
+
         supabase.table("leaderboard_snapshots").upsert({
             "snapshot_date": DYNAMIC_FALLBACK_KEY,
             "btc_price": 0,
@@ -105,7 +191,7 @@ def _save_dynamic_fallback(companies):
             "companies_json": json.dumps(fallback_data),
         }, on_conflict="snapshot_date").execute()
 
-        logger.debug(f"Dynamic fallback saved: {len(fallback_data)} companies")
+        logger.debug(f"Dynamic fallback saved: {len(fallback_data)} companies (validated)")
     except Exception as e:
         logger.debug(f"Dynamic fallback save failed: {e}")
 
