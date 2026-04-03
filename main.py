@@ -35,7 +35,7 @@ from database import save_tweet, get_new_tweets, mark_processed
 from classifier import classify_tweet, get_signal_label, get_dimension_breakdown
 from telegram_bot import send_alert, send_scan_summary, send_strc_alert, send_edgar_alert, send_to_paid, send_to_free
 from strc_tracker import get_strc_volume_data, analyze_strc_signal, format_strc_alert
-from correlation_engine_v2 import CorrelationEngineV2
+from correlation_engine import CorrelationEngineV2
 from pattern_analyzer import pattern_engine
 from feedback_loop import feedback_engine
 from narrative_engine import narrator
