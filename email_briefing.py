@@ -422,7 +422,8 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
         strc_dot = "🟢"
 
     cor_score = correlation.get("correlated_score", 0)
-    cor_active = correlation.get("active_streams", 0)
+    cor_active_raw = correlation.get("active_streams", 0)
+    cor_active = len(cor_active_raw) if isinstance(cor_active_raw, list) else cor_active_raw
     cor_narrative = correlation.get("narrative", "No significant signals.")
     if cor_score >= 70:
         cor_color = "#EF4444"
