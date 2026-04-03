@@ -419,79 +419,25 @@ class TreasurySync:
                 skipped_cols += 1
                 continue
 
-            # Get raw HTML to check for ₿ symbol (more reliable than text extraction)
-            row_html = str(row)
-            row_has_btc_symbol = ('₿' in row_html or '\u20bf' in row_html or '&#8383;' in row_html)
-
             texts = [td.get_text(strip=True) for td in cells]
 
-            # DATA ROW DETECTION: real data rows contain the ₿ symbol somewhere.
-            # Summary/nav/stats rows never have ₿.
-            # Also accept rows where column 0 is a rank number (1-999).
-            is_data_row = row_has_btc_symbol
-
-            if not is_data_row:
-                first_col = texts[0].strip()
-                try:
-                    rank_num = int(first_col)
-                    if 1 <= rank_num <= 999:
-                        is_data_row = True
-                except (ValueError, TypeError):
-                    pass
-
-            if not is_data_row:
-                failed += 1
-                continue
-
-            # BTC: ₿ symbol first (most reliable, handles 0 correctly)
-            btc = -1
+            # EXACT entity_name_fixer approach: take largest number < 50M
+            btc = 0
             for t in texts:
-                if '₿' in t or '\u20bf' in t:
-                    clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
-                    clean = re.sub(r'[^\d.]', '', clean)
-                    try:
-                        btc = int(float(clean)) if clean else 0
-                    except:
-                        btc = 0
-                    break
-
-            # If no ₿ in text, try raw HTML of each cell
-            if btc < 0:
-                for cell in cells:
-                    cell_html = str(cell)
-                    if '₿' in cell_html or '\u20bf' in cell_html:
-                        cell_text = cell.get_text(strip=True)
-                        clean = cell_text.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
-                        clean = re.sub(r'[^\d.]', '', clean)
-                        try:
-                            btc = int(float(clean)) if clean else 0
-                        except:
-                            btc = 0
-                        break
-
-            # Fallback: take largest number, skip rank column and USD/% cells
-            if btc < 0:
-                btc = 0
-                for t in texts[1:]:
-                    t_stripped = t.strip()
-                    if t_stripped.startswith('$') or t_stripped.endswith('%'):
-                        continue
-                    if t_stripped.endswith('M') or t_stripped.endswith('B'):
-                        continue
-                    clean = t.replace(',', '').replace(' ', '')
-                    clean = re.sub(r'[^\d.]', '', clean)
-                    try:
-                        val = int(float(clean)) if clean else 0
-                        if val > btc and val < 50_000_000:
-                            btc = val
-                    except:
-                        pass
+                clean = t.replace('\u20bf', '').replace('₿', '').replace(',', '').replace(' ', '')
+                clean = re.sub(r'[^\d.]', '', clean)
+                try:
+                    val = int(float(clean)) if clean else 0
+                    if val > btc and val < 50_000_000:
+                        btc = val
+                except:
+                    pass
 
             if btc <= 0:
                 failed += 1
                 continue
 
-            # Name: longest text starting with ASCII letter
+            # EXACT entity_name_fixer approach: longest text starting with ASCII letter
             name = ""
             for t in texts:
                 stripped = t.strip()
@@ -504,17 +450,10 @@ class TreasurySync:
                 failed += 1
                 continue
 
-            # Skip category navigation labels and total rows
-            # These are the EXACT labels used in BitcoinTreasuries.net nav bar
-            # They can't match real company names because no company is named these
+            # Skip ONLY exact category navigation labels and totals
             name_lower = name.lower().strip()
-            skip_exact = [
-                'total', 'totals', 'total:',
-                'public companies', 'private companies',
-                'government entities', 'etfs and exchanges',
-                'defi and other',
-            ]
-            if name_lower.rstrip(':') in skip_exact or name_lower in skip_exact:
+            if name_lower.rstrip(':') in ('total', 'totals', 'public companies', 'private companies',
+                'government entities', 'etfs and exchanges', 'defi and other'):
                 failed += 1
                 continue
 
