@@ -434,9 +434,10 @@ class TreasurySync:
                     not stripped.replace(',', '').replace('.', '').replace(' ', '').isdigit()):
                     name = stripped
 
-            # Clean name (from entity_name_fixer._clean_name)
+            # Clean name: strip ALL non-ASCII (flag emojis, garbled chars)
+            # then remove concatenated tickers
             if name:
-                name = re.sub(r'[\U0001f000-\U0001ffff]+', '', name).strip()
+                name = re.sub(r'[^\x20-\x7E]', '', name).strip()
                 name = re.sub(r'([a-z])\s*([A-Z]{2,6})$', r'\1', name).strip()
 
             if not name or btc <= 0:

@@ -182,16 +182,50 @@ def _get_ticker_for_country(name):
     return f"{clean}.GOV" if clean else "UNK.GOV"
 
 
+def _strip_emojis(name):
+    """Strip flag emojis and other non-ASCII prefixes from a name."""
+    if not name:
+        return ""
+    return re.sub(r'[^\x20-\x7E]', '', name).strip()
+
+
 def _is_garbled(name):
-    """Check if a name is garbled (non-ASCII first char or encoding artifacts)."""
+    """Check if a name is garbled (encoding artifacts, not just flag emojis).
+    '🇨🇳 China' → NOT garbled (clean name with flag prefix)
+    'ð¨ð³' → garbled (no readable name)
+    'Â¿328,372' → garbled (encoding artifacts)
+    """
     if not name:
         return True
-    first = name[0]
-    if not (first.isascii() and (first.isalpha() or first.isdigit())):
+    # Strip non-ASCII (flag emojis etc) and check what's left
+    clean = _strip_emojis(name)
+    if not clean or len(clean) < 2:
+        return True  # Nothing readable left → garbled
+    # Check if the clean part starts with a letter
+    if not (clean[0].isalpha()):
         return True
+    # Check for encoding artifacts in the original
     if '\xc2' in name or '\xbf' in name or '\u20bf' in name:
         return True
     return False
+
+
+def _needs_update(row, target_name, target_btc, target_ticker):
+    """Check if a gov entity actually needs updating.
+    Compares stripped names to avoid rewriting '🇨🇳 China' → 'China' every scan."""
+    current_name = row.get("company", "")
+    current_btc = row.get("btc_holdings", 0)
+    current_ticker = row.get("ticker", "")
+
+    # Compare names after stripping emojis
+    current_clean = _strip_emojis(current_name).lower().strip()
+    target_clean = target_name.lower().strip()
+
+    name_matches = (current_clean == target_clean)
+    btc_matches = (current_btc == target_btc)
+    ticker_matches = (current_ticker == target_ticker)
+
+    return not (name_matches and btc_matches and ticker_matches)
 
 
 def fix_government_entities(supabase_client=None):
@@ -246,15 +280,16 @@ def fix_government_entities(supabase_client=None):
                         used_indices.add(j)
                         clean_name = candidate["name"]
                         ticker = _get_ticker_for_country(clean_name)
-                        supabase_client.table("treasury_companies").update({
-                            "company": clean_name[:200],
-                            "ticker": ticker,
-                            "entity_type": "government",
-                            "is_government": True,
-                            "btc_holdings": 0,
-                        }).eq("id", row_id).execute()
-                        logger.info(f"  Gov fix: '{current_name}' → '{clean_name}' (0 BTC)")
-                        fixed += 1
+                        if _needs_update(row, clean_name, 0, ticker):
+                            supabase_client.table("treasury_companies").update({
+                                "company": clean_name[:200],
+                                "ticker": ticker,
+                                "entity_type": "government",
+                                "is_government": True,
+                                "btc_holdings": 0,
+                            }).eq("id", row_id).execute()
+                            logger.info(f"  Gov fix: '{current_name}' → '{clean_name}' (0 BTC)")
+                            fixed += 1
                         break
                 continue
 
@@ -282,20 +317,21 @@ def fix_government_entities(supabase_client=None):
 
             used_indices.add(best_match_idx)
 
-            # Use scraped name and BTC
+            # Use scraped name and BTC — but only write if actually different
             clean_name = best_match["name"]
             best_btc = best_match["btc"]
             ticker = _get_ticker_for_country(clean_name)
 
-            supabase_client.table("treasury_companies").update({
-                "company": clean_name[:200],
-                "ticker": ticker,
-                "entity_type": "government",
-                "is_government": True,
-                "btc_holdings": best_btc,
-            }).eq("id", row_id).execute()
-            logger.info(f"  Gov fix: '{current_name}' → '{clean_name}' ({best_btc:,} BTC)")
-            fixed += 1
+            if _needs_update(row, clean_name, best_btc, ticker):
+                supabase_client.table("treasury_companies").update({
+                    "company": clean_name[:200],
+                    "ticker": ticker,
+                    "entity_type": "government",
+                    "is_government": True,
+                    "btc_holdings": best_btc,
+                }).eq("id", row_id).execute()
+                logger.info(f"  Gov fix: '{current_name}' → '{clean_name}' ({best_btc:,} BTC)")
+                fixed += 1
 
         # Step 5: Also fix any clean-named entries that have wrong BTC
         # (match by name — strip flag emojis before comparing)
@@ -344,6 +380,8 @@ def fix_government_entities(supabase_client=None):
 
         if fixed > 0:
             logger.info(f"Gov fix: {fixed} government entities updated")
+        else:
+            logger.info(f"Gov fix: all {len(gov_rows)} government entities already correct")
         return fixed
 
     except Exception as e:
