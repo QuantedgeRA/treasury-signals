@@ -620,7 +620,7 @@ if page == "🏠 Home":
             "icon": signal_icon,
             "text": signal_text,
             "tooltip_title": "Purchase Signals",
-            "tooltip": "Our AI monitors 24+ executive accounts on X/Twitter every hour, scoring each tweet 0-100 for Bitcoin purchase intent. Signals above 60 are HIGH confidence — historically preceding confirmed purchases within 24-72 hours. When Saylor posts cryptic hints like 'Stretch the Orange Dots', our system catches it instantly.",
+            "tooltip": "Our AI monitors 64+ executive accounts on X/Twitter every hour, scoring each tweet 0-100 for Bitcoin purchase intent. Signals above 60 are HIGH confidence — historically preceding confirmed purchases within 24-72 hours. When Saylor posts cryptic hints like 'Stretch the Orange Dots', our system catches it instantly.",
         },
         {
             "icon": strc_icon,
@@ -632,19 +632,19 @@ if page == "🏠 Home":
             "icon": "🔗",
             "text": f"<span style='color: #9ca3af;'>Correlation Engine: 0/100</span> — baseline, no multi-stream convergence" if high_signals == 0 else f"<span style='color: #F59E0B;'>Correlation Engine active</span> — multiple streams detecting signals",
             "tooltip_title": "Multi-Signal Correlation Engine™",
-            "tooltip": "Our proprietary engine monitors 4 independent data streams: executive tweets, STRC volume, SEC EDGAR filings, and timing patterns. When a single stream fires, confidence is ~35%. When 2 streams converge, it jumps to ~72%. When 3+ streams fire simultaneously, confidence hits 99%. This multi-source confirmation is what no competitor offers.",
+            "tooltip": "Our proprietary engine monitors 6 independent data streams: executive tweets, STRC volume, SEC EDGAR filings, global regulatory filings, whale on-chain movements, and news scanner. When a single stream fires, confidence is ~35%. When 2 streams converge, it jumps to ~72%. When 3+ streams fire simultaneously, confidence hits 99%. This multi-source confirmation is what no competitor offers.",
         },
         {
             "icon": "📋",
-            "text": f"<span style='color: #9ca3af;'>SEC EDGAR:</span> Monitoring 11 treasury companies for 8-K filings",
+            "text": f"<span style='color: #9ca3af;'>SEC EDGAR:</span> Monitoring treasury companies for 8-K filings",
             "tooltip_title": "SEC EDGAR 8-K Monitor",
-            "tooltip": "We monitor SEC EDGAR for 8-K filings from 11 major Bitcoin treasury companies including Strategy (MSTR), MARA, Riot, Tesla, GameStop, and more. 8-K filings are used to disclose material events — including Bitcoin purchases. When a company files an 8-K with Bitcoin-related keywords, our system detects it instantly and alerts subscribers.",
+            "tooltip": "We monitor SEC EDGAR for 8-K filings from Bitcoin treasury companies including Strategy (STRC), MARA, Riot, Tesla, GameStop, and more. 8-K filings are used to disclose material events — including Bitcoin purchases. When a company files an 8-K with Bitcoin-related keywords, our system detects it instantly and alerts subscribers.",
         },
         {
             "icon": "🏆",
-            "text": f"<span style='color: #E67E22;'>{len([c for c in strc_hist.index]) if not strc_hist.empty else 148} companies</span> on live BTC Treasury Leaderboard — {btc_price:,.0f} BTC price" if btc_price else "BTC Treasury Leaderboard tracking 148+ companies",
+            "text": f"<span style='color: #E67E22;'>{len([c for c in strc_hist.index]) if not strc_hist.empty else 430} entities</span> on live BTC Treasury Leaderboard — {btc_price:,.0f} BTC price" if btc_price else "BTC Treasury Leaderboard tracking 430+ entities",
             "tooltip_title": "BTC Treasury Leaderboard",
-            "tooltip": "A live ranking of every publicly traded company holding Bitcoin on their balance sheet — pulled from CoinGecko in real-time. Currently tracking 148 companies across 25+ countries. Shows BTC holdings, USD value, unrealized P&L, and company details. Updated every scan cycle.",
+            "tooltip": "A live ranking of every entity holding Bitcoin on their balance sheet — public companies, private companies, governments, ETFs, and DeFi protocols. Currently tracking 430+ entities across 5 categories. Shows BTC holdings, USD value, unrealized P&L, and entity details. Updated every scan cycle.",
         },
         {
             "icon": "🏛️",
@@ -689,13 +689,13 @@ if page == "🏠 Home":
     
     # How it works
     st.markdown("### How the Multi-Signal Correlation Engine™ Works")
-    st.markdown("Four independent data streams. When they converge, confidence compounds exponentially.")
+    st.markdown("Six independent data streams. When they converge, confidence compounds exponentially.")
     
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("""<div class="feature-box">
             <p class="feature-title">📡 Executive Signals</p>
-            <p style="color: #BDC3C7; font-size: 0.9rem;">AI monitors 24+ executive accounts for cryptic purchase hints like Saylor's "orange dot" posts.</p>
+            <p style="color: #BDC3C7; font-size: 0.9rem;">AI monitors 64+ executive accounts for cryptic purchase hints like Saylor's "orange dot" posts.</p>
         </div>""", unsafe_allow_html=True)
     with c2:
         st.markdown("""<div class="feature-box">
@@ -705,12 +705,24 @@ if page == "🏠 Home":
     with c3:
         st.markdown("""<div class="feature-box">
             <p class="feature-title">📋 SEC EDGAR</p>
-            <p style="color: #BDC3C7; font-size: 0.9rem;">Monitors 8-K filings from 11 treasury companies for Bitcoin purchase confirmations.</p>
+            <p style="color: #BDC3C7; font-size: 0.9rem;">Monitors 8-K filings from treasury companies for Bitcoin purchase confirmations.</p>
         </div>""", unsafe_allow_html=True)
+    
+    c4, c5, c6 = st.columns(3)
     with c4:
         st.markdown("""<div class="feature-box">
+            <p class="feature-title">🌍 Global Filings</p>
+            <p style="color: #BDC3C7; font-size: 0.9rem;">Scans 17 regulators across 15 languages for international Bitcoin treasury filings.</p>
+        </div>""", unsafe_allow_html=True)
+    with c5:
+        st.markdown("""<div class="feature-box">
+            <p class="feature-title">🐋 Whale On-Chain</p>
+            <p style="color: #BDC3C7; font-size: 0.9rem;">Detects large BTC movements on-chain that precede corporate treasury announcements.</p>
+        </div>""", unsafe_allow_html=True)
+    with c6:
+        st.markdown("""<div class="feature-box">
             <p class="feature-title">🔗 Correlation</p>
-            <p style="color: #BDC3C7; font-size: 0.9rem;">Multiple streams firing together = exponential confidence. 1 stream: 35%. 3 streams: 99%.</p>
+            <p style="color: #BDC3C7; font-size: 0.9rem;">Multiple streams firing together = exponential confidence. 1 stream: 35%. 3+ streams: 99%.</p>
         </div>""", unsafe_allow_html=True)
     
     st.markdown("---")
@@ -761,7 +773,7 @@ if page == "🏠 Home":
         st.markdown("""<div class="pricing-pro">
             <h3 style="color: #E67E22;">PRO ⭐</h3>
             <p style="font-size: 2rem; font-weight: 800; color: #E67E22;">$19<span style="font-size: 1rem; color: #95A5A6;">/month</span></p>
-            <p>✅ All 24+ executive accounts</p>
+            <p>✅ All 64+ executive accounts</p>
             <p>✅ Instant real-time alerts</p>
             <p>✅ STRC volume spike alerts</p>
             <p>✅ SEC EDGAR 8-K alerts</p>
@@ -799,7 +811,7 @@ if page == "🏠 Home":
         st.markdown("""<div class="feature-box" style="text-align: center; padding: 20px;">
             <p style="font-size: 1.8rem; margin: 0;">🏆</p>
             <p class="feature-title">BTC Leaderboard</p>
-            <p style="color: #9ca3af; font-size: 0.85rem;">148 companies ranked by BTC holdings with P&L, charts, and market share</p>
+            <p style="color: #9ca3af; font-size: 0.85rem;">430+ entities ranked by BTC holdings with P&L, charts, and market share</p>
         </div>""", unsafe_allow_html=True)
     with nav3:
         st.markdown("""<div class="feature-box" style="text-align: center; padding: 20px;">
@@ -831,7 +843,7 @@ if page == "🏠 Home":
     st.markdown("---")
     st.markdown(f"""<p style="text-align: center; color: #7F8C8D; font-size: 0.85rem;">
         Treasury Signal Intelligence™ — Independent research tool. Not financial advice.<br>
-        Data: TwitterAPI.io • Yahoo Finance • SEC EDGAR • © {datetime.now().year} All rights reserved.
+        Data: CoinGecko • BitcoinTreasuries.net • TwitterAPI.io • Yahoo Finance • SEC EDGAR • © {datetime.now().year} All rights reserved.
     </p>""", unsafe_allow_html=True)
 
 
@@ -1035,7 +1047,7 @@ elif page == "🏆 BTC Leaderboard":
         st.stop()
 
     st.markdown('<p class="main-header">🏆 BTC Treasury Leaderboard</p>', unsafe_allow_html=True)
-    st.markdown('<p class="hero-sub">Every publicly traded company holding Bitcoin on their balance sheet</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-sub">Every entity holding Bitcoin — public companies, private companies, governments, ETFs, and DeFi protocols</p>', unsafe_allow_html=True)
     
     companies, summary = get_leaderboard_with_live_price(btc_price)
 
