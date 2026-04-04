@@ -251,20 +251,38 @@ def save_leaderboard_snapshot(btc_price=None):
             btc = yf.Ticker("BTC-USD")
             hist = btc.history(period="5d")
             btc_price = float(hist["Close"].iloc[-1]) if not hist.empty else 72000
-        companies, summary = get_leaderboard_with_live_price(btc_price)
+
+        # Query ALL entities from treasury_companies (not just leaderboard)
+        # This captures private companies, ETFs, DeFi — not just CoinGecko public companies
+        result = supabase.table("treasury_companies").select(
+            "ticker, company, btc_holdings, country, is_government"
+        ).gt("btc_holdings", 0).execute()
+
+        all_entities = result.data if result.data else []
         snapshot_date = datetime.now().strftime("%Y-%m-%d")
+
         holdings = {}
-        for c in companies:
-            if c["btc_holdings"] > 0:
-                key = c.get("ticker", c["company"][:20])
-                holdings[key] = {"name": c["company"], "btc": c["btc_holdings"], "country": c.get("country", "")}
+        total_btc = 0
+        for c in all_entities:
+            btc_held = c.get("btc_holdings", 0) or 0
+            if btc_held > 0:
+                key = c.get("ticker", c.get("company", "UNK")[:20])
+                holdings[key] = {
+                    "name": c.get("company", key),
+                    "btc": btc_held,
+                    "country": c.get("country", ""),
+                }
+                total_btc += btc_held
+
+        total_value_b = round((total_btc * btc_price) / 1_000_000_000, 2)
+
         row = {
             "snapshot_date": snapshot_date, "btc_price": btc_price,
-            "total_btc": summary["total_btc"], "total_value_b": summary["total_value_b"],
+            "total_btc": total_btc, "total_value_b": total_value_b,
             "companies_json": json.dumps(holdings),
         }
         supabase.table("leaderboard_snapshots").upsert(row, on_conflict="snapshot_date").execute()
-        logger.info(f"Snapshot saved: {snapshot_date} | {len(holdings)} entities | {summary['total_btc']:,} BTC")
+        logger.info(f"Snapshot saved: {snapshot_date} | {len(holdings)} entities | {total_btc:,} BTC")
         return holdings
     except Exception as e:
         logger.error(f"Snapshot save failed: {e}", exc_info=True)
@@ -361,7 +379,7 @@ def detect_new_purchases(btc_price=None):
         else:
             if ticker in GOVERNMENT_TICKERS:
                 continue
-            if current_btc > 100:
+            if current_btc >= 10:  # 10 BTC minimum — filters scraping noise but catches real small purchases
                 purchase = {
                     "company": company_name, "ticker": ticker, "btc_amount": current_btc,
                     "usd_amount": round(current_btc * current_btc_price),
