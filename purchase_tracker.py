@@ -329,6 +329,11 @@ def detect_new_purchases(btc_price=None):
         company_name = current["name"]
         if ticker in GOVERNMENT_TICKERS:
             continue
+        # Skip garbled entities — non-ASCII names or tickers with BTC amounts
+        if company_name and not (company_name[0].isascii() and company_name[0].isalpha()):
+            continue
+        if ticker and not ticker[0].isascii():
+            continue
         norm_ticker = _normalize_ticker(ticker)
 
         # ─── Exact ticker match ───
