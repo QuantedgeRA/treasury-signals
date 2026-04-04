@@ -413,9 +413,9 @@ def seed_hardcoded_data():
 
 
 def get_all_regulatory_from_db():
-    """Get all regulatory items from database."""
+    """Get recent regulatory items from database (for email/dashboard)."""
     try:
-        result = supabase.table("regulatory_items").select("*").order("date_updated", desc=True).limit(100).execute()
+        result = supabase.table("regulatory_items").select("*").order("date_updated", desc=True).limit(200).execute()
         return result.data if result.data else []
     except Exception as e:
         logger.error(f"Failed to fetch regulatory items from DB: {e}", exc_info=True)
@@ -423,13 +423,22 @@ def get_all_regulatory_from_db():
 
 
 def get_all_statements_from_db():
-    """Get all statements from database."""
+    """Get recent statements from database (for email/dashboard)."""
     try:
-        result = supabase.table("notable_statements").select("*").order("date", desc=True).limit(100).execute()
+        result = supabase.table("notable_statements").select("*").order("date", desc=True).limit(200).execute()
         return result.data if result.data else []
     except Exception as e:
         logger.error(f"Failed to fetch statements from DB: {e}", exc_info=True)
         return []
+
+
+def _count_table(table_name):
+    """Get total row count for a table."""
+    try:
+        result = supabase.table(table_name).select("id", count="exact").execute()
+        return result.count if result.count is not None else len(result.data or [])
+    except Exception:
+        return 0
 
 
 def run_full_scan():
@@ -444,13 +453,11 @@ def run_full_scan():
     if statements:
         save_notable_statements(statements)
 
-    all_reg = get_all_regulatory_from_db()
-    all_stmt = get_all_statements_from_db()
+    # Use COUNT queries for accurate totals (not limited SELECTs)
+    total_reg = _count_table("regulatory_items")
+    total_stmt = _count_table("notable_statements")
 
-    auto_reg = len([r for r in all_reg if r.get("auto_detected")])
-    auto_stmt = len([s for s in all_stmt if s.get("auto_detected")])
-
-    logger.info(f"DB totals: {len(all_reg)} regulatory items ({auto_reg} auto) | {len(all_stmt)} statements ({auto_stmt} auto)")
+    logger.info(f"DB totals: {total_reg} regulatory items | {total_stmt} statements")
 
     return reg_items, statements
 
