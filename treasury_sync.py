@@ -185,17 +185,77 @@ class EntityStore:
 
 
 def _guess_sector(name, entity_type):
+    """Assign sector based on company name and entity type.
+    Uses keyword matching to categorize into specific industry sectors."""
     n = name.lower()
+
+    # Entity-type-based sectors
     if entity_type == "government": return "Government"
     if entity_type == "etf": return "ETF / Fund"
     if entity_type == "defi": return "DeFi / Protocol"
-    if entity_type == "private_company": return "Private Company"
-    if any(kw in n for kw in ["mining", "miner", "mara", "riot", "cleanspark", "bitfarms", "hut 8", "iris", "core scientific", "bitfufu", "canaan"]): return "Bitcoin Mining"
-    if any(kw in n for kw in ["exchange", "coinbase", "kraken", "binance"]): return "Crypto Exchange"
-    if any(kw in n for kw in ["bank", "financial", "capital"]): return "Financial Services"
-    if any(kw in n for kw in ["tesla"]): return "Automotive"
-    if any(kw in n for kw in ["block", "square", "payment"]): return "Fintech / Payments"
-    return "Technology"
+
+    # Bitcoin Mining
+    if any(kw in n for kw in ["mining", "miner", "marathon", "mara ", "riot platform",
+        "cleanspark", "bitfarms", "hut 8", "hut8", "iris energy", "core scientific",
+        "bitfufu", "canaan", "cipher mining", "terawulf", "hive digi", "stronghold",
+        "bitdeer", "argo blockchain", "griid", "applied digital", "bit digital",
+        "soluna", "dmg blockchain", "digihost", "cathedra", "rhodium", "sato tech"]):
+        return "Bitcoin Mining"
+
+    # Crypto Exchange
+    if any(kw in n for kw in ["coinbase", "binance", "kraken", "bitmex", "bitfinex",
+        "gemini", "bitstamp", "bybit", "okx", "okex", "huobi", "htx", "kucoin",
+        "crypto.com", "robinhood", "bullish", "nexo", "xapo", "river", "bitpanda",
+        "bitcoin depot", "bakkt", "bitcoin group", "mt. gox", "mt gox", "casascius"]):
+        return "Crypto Exchange"
+
+    # Bitcoin Treasury (pure-play BTC accumulation)
+    if any(kw in n for kw in ["metaplanet", "twenty one", "xxi", "bitcoin treasury",
+        "nakamoto", "kulr", "defi tech", "bitcoin standard", "sol strategies",
+        "orange pill"]):
+        return "Bitcoin Treasury"
+    if n in ["strategy", "strategy inc"] or "microstrategy" in n:
+        return "Bitcoin Treasury"
+
+    # Financial Services / Asset Management
+    if any(kw in n for kw in ["galaxy digital", "grayscale", "blackrock", "fidelity",
+        "vaneck", "wisdomtree", "bitwise", "osprey", "coinshares", "blockstream",
+        "digital currency group", "tether", "circle", "strive",
+        "asset manage", "investment", "ventures"]):
+        return "Financial Services"
+    if entity_type == "private_company" and any(kw in n for kw in [
+        "capital", "fund", "holdings", "wealth", "advisory", "management",
+        "partners", "financial", "trust", "invest"]):
+        return "Financial Services"
+
+    # Fintech / Payments
+    if any(kw in n for kw in ["block inc", "block ", "square", "paypal", "stripe",
+        "cash app", "strike", "fold", "exodus", "nuvei", "mogo"]):
+        return "Fintech / Payments"
+
+    # Automotive
+    if any(kw in n for kw in ["tesla", "cango", "automotive", "motor"]):
+        return "Automotive"
+
+    # Healthcare
+    if any(kw in n for kw in ["semler", "health", "pharma", "biotech", "medical"]):
+        return "Healthcare"
+
+    # Retail / Consumer
+    if any(kw in n for kw in ["gamestop", "overstock", "mercadolibre", "shopify",
+        "newegg", "carvana"]):
+        return "Retail / Consumer"
+
+    # Media / Entertainment
+    if any(kw in n for kw in ["rumble", "trump media", "reddit"]):
+        return "Media / Entertainment"
+
+    # Private company fallback
+    if entity_type == "private_company":
+        return "Private / Other"
+
+    # Public company fallback
+    return "Software / Tech"
 
 
 class StalenessTracker:
