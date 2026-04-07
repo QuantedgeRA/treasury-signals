@@ -120,6 +120,11 @@ class EntityStore:
     def add(self, entity, is_primary=False):
         ticker = entity["ticker"]
         name = entity["company"]
+        # Strip non-ASCII characters (flag emojis, invisible Unicode) from entity names
+        clean_name = re.sub(r'[^\x20-\x7E]', '', name).strip()
+        if clean_name:
+            entity["company"] = clean_name
+            name = clean_name
         norm = normalize_name(name)
         category = entity.get("entity_type", "public_company")
 
