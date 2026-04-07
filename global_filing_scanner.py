@@ -34,6 +34,12 @@ from dotenv import load_dotenv
 from supabase import create_client
 from logger import get_logger
 
+try:
+    from purchase_reconciler import reconcile_and_save
+    HAS_RECONCILER = True
+except ImportError:
+    HAS_RECONCILER = False
+
 logger = get_logger(__name__)
 load_dotenv()
 
@@ -129,6 +135,64 @@ def _send_alert(source, company, event_type, btc_amount, url):
         requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
             json={'chat_id': TELEGRAM_PAID_CHANNEL_ID, 'text': msg, 'parse_mode': 'Markdown', 'disable_web_page_preview': True}, timeout=10)
     except: pass
+
+
+def _resolve_ticker_for_reconciler(company_name):
+    """Resolve a company name from filings to our database ticker."""
+    if not company_name:
+        return company_name, ""
+    try:
+        result = supabase.table("treasury_companies").select("company, ticker").gt("btc_holdings", 0).execute()
+        if not result.data:
+            return company_name, ""
+        name_clean = re.sub(r'[^\x20-\x7E]', '', company_name).upper().strip()
+        for suffix in [' INC', ' INC.', ' CORP', ' CORP.', ' LTD', ' LTD.', ' LLC', ' PLC', ' CO', ' CO.',
+                       ' GROUP', ' HOLDINGS', ' GLOBAL', ' K.K.', ' AG', ' SE', ' SA', ' LIMITED', ',']:
+            name_clean = name_clean.replace(suffix, '')
+        name_clean = name_clean.strip()
+        for row in result.data:
+            db_name = re.sub(r'[^\x20-\x7E]', '', (row.get('company', '') or '')).upper().strip()
+            for suffix in [' INC', ' INC.', ' CORP', ' CORP.', ' LTD', ' LTD.', ' LLC', ' PLC', ' CO', ' CO.',
+                           ' GROUP', ' HOLDINGS', ' GLOBAL', ' (MICROSTRATEGY)', ',']:
+                db_name = db_name.replace(suffix, '')
+            db_name = db_name.strip()
+            if name_clean == db_name:
+                return row['company'], row['ticker']
+            if name_clean and db_name and (name_clean in db_name or db_name in name_clean):
+                if min(len(name_clean), len(db_name)) / max(len(name_clean), len(db_name), 1) > 0.5:
+                    return row['company'], row['ticker']
+    except:
+        pass
+    return company_name, ""
+
+
+def _route_to_reconciler(filing):
+    """Route a filing with btc_amount > 0 through the purchase reconciler."""
+    if not HAS_RECONCILER:
+        return
+    btc = float(filing.get('btc_amount', 0))
+    if btc <= 0:
+        return
+    company = filing.get('company_name', '')
+    source = filing.get('source', '')
+    resolved_name, resolved_ticker = _resolve_ticker_for_reconciler(company)
+    usd = float(filing.get('usd_amount', 0))
+    purchase = {
+        "company": resolved_name or company,
+        "ticker": resolved_ticker or filing.get('ticker_cik', ''),
+        "btc_amount": btc,
+        "usd_amount": usd,
+        "price_per_btc": round(usd / btc) if btc > 0 and usd > 0 else 0,
+        "filing_date": filing.get('filing_date', datetime.now().strftime('%Y-%m-%d')),
+        "filing_url": filing.get('filing_url', ''),
+        "source": f"Global Filing: {source}",
+        "notes": f"Accession: {filing.get('accession_number', '')}",
+    }
+    try:
+        result = reconcile_and_save(purchase, source_type="global_filing", is_new_entrant=False)
+        logger.info(f"  {source} → Reconciler: {resolved_name or company} — {result['action']}")
+    except Exception as e:
+        logger.debug(f"  Reconciler routing error: {e}")
 
 
 # ═══════════════════════════════════════════════════════════
@@ -653,6 +717,7 @@ def scan_all_filings(days_back=1):
                 filing['btc_amount'] = filing.get('btc_amount', 0)
                 filing['usd_amount'] = filing.get('usd_amount', 0)
                 _store_filing(filing)
+                _route_to_reconciler(filing)
                 processed.add(acc)
                 new_count += 1
                 if filing.get('company_name') and filing.get('event_type') != 'holding':
@@ -676,6 +741,7 @@ def scan_all_filings(days_back=1):
             filing['btc_amount'] = _extract_btc(filing.get('company_name', ''))
             filing['usd_amount'] = 0
             _store_filing(filing)
+            _route_to_reconciler(filing)
             processed.add(acc)
             news_new += 1
         source_stats['Global News (15 langs)'] = news_new
@@ -695,6 +761,7 @@ def scan_all_filings(days_back=1):
             filing['btc_amount'] = _extract_btc(filing.get('company_name', ''))
             filing['usd_amount'] = 0
             _store_filing(filing)
+            _route_to_reconciler(filing)
             processed.add(acc)
             crypto_new += 1
         source_stats['Crypto News Wires'] = crypto_new
