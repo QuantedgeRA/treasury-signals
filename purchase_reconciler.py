@@ -104,37 +104,51 @@ def _dates_within_window(date1_str, date2_str):
         return False
 
 
-def _find_existing_match(ticker, btc_amount, filing_date):
+def _normalize_name_for_dedup(name):
+    """Normalize company name for deduplication matching."""
+    if not name:
+        return ""
+    n = name.upper().strip()
+    for suffix in [' INC', ' INC.', ' CORP', ' CORP.', ' LTD', ' LTD.', ' LLC', ' PLC', ' CO', ' CO.', 
+                   ' GROUP', ' HOLDINGS', ' GLOBAL', ' (MICROSTRATEGY)', ',', '.']:
+        n = n.replace(suffix, '')
+    return n.strip()
+
+
+def _find_existing_match(ticker, btc_amount, filing_date, company_name=""):
     """
     Search confirmed_purchases for a matching entry.
+    Matches by: (1) normalized ticker, or (2) normalized company name.
+    Plus: within date window AND BTC amounts within tolerance.
     Returns the matching row if found, None otherwise.
     """
     norm_ticker = _normalize_ticker_for_dedup(ticker)
+    norm_name = _normalize_name_for_dedup(company_name)
 
     try:
-        # Fetch recent confirmed purchases for comparison
         result = supabase.table("confirmed_purchases").select("*").order("filing_date", desc=True).limit(100).execute()
         if not result.data:
             return None
 
         for row in result.data:
             row_ticker = _normalize_ticker_for_dedup(row.get("ticker", ""))
+            row_name = _normalize_name_for_dedup(row.get("company", ""))
             row_date = row.get("filing_date", "")
             row_btc = float(row.get("btc_amount", 0))
 
-            # Same company (normalized ticker match)?
-            if row_ticker != norm_ticker:
+            # Same company? Match by ticker OR by name
+            ticker_match = norm_ticker and row_ticker and norm_ticker == row_ticker
+            name_match = norm_name and row_name and (norm_name == row_name or norm_name in row_name or row_name in norm_name)
+            
+            if not (ticker_match or name_match):
                 continue
 
-            # Within date window?
             if not _dates_within_window(filing_date, row_date):
                 continue
 
-            # BTC amounts match (within tolerance)?
             if not _btc_amounts_match(btc_amount, row_btc):
                 continue
 
-            # Match found
             return row
 
     except Exception as e:
@@ -221,7 +235,7 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
             return {"action": "duplicate_skipped", "purchase_id": existing_pending.get("pending_id"), "details": "Already in pending"}
 
         # Check if already confirmed (maybe another scanner already caught it)
-        existing_confirmed = _find_existing_match(ticker, btc_amount, filing_date)
+        existing_confirmed = _find_existing_match(ticker, btc_amount, filing_date, company)
         if existing_confirmed:
             logger.debug(f"Reconciler: {company} already confirmed — skipping pending")
             return {"action": "duplicate_skipped", "purchase_id": existing_confirmed.get("purchase_id"), "details": "Already confirmed"}
@@ -291,7 +305,7 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
             return {"action": "error", "purchase_id": None, "details": str(e)}
 
     # ─── STEP 3: Check for existing confirmed entry → upgrade or skip ───
-    existing = _find_existing_match(ticker, btc_amount, filing_date)
+    existing = _find_existing_match(ticker, btc_amount, filing_date, company)
     if existing:
         existing_id = existing.get("purchase_id", "")
         existing_source = existing.get("source", existing.get("filing_url", ""))
@@ -374,7 +388,7 @@ def promote_pending_purchases():
             detected_date = entry.get("detected_date", "")
 
             # Check if any confirmed purchase now matches this pending entry
-            match = _find_existing_match(ticker, btc_amount, detected_date)
+            match = _find_existing_match(ticker, btc_amount, detected_date, entry.get('company', ''))
             if match:
                 # Already confirmed by another scanner — mark pending as confirmed
                 try:

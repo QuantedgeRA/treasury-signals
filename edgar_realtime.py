@@ -73,6 +73,73 @@ HEADERS = {
 }
 
 
+def _resolve_ticker(edgar_name, edgar_cik=""):
+    """
+    Resolve an EDGAR entity name to the actual ticker in our treasury_companies table.
+    EDGAR returns names like 'MICROSTRATEGY INC' but we need 'MSTR'.
+    
+    Strategy:
+      1. Exact name match (case-insensitive)
+      2. Partial name match (EDGAR name contains or is contained in our name)
+      3. CIK-based lookup if available
+      4. Fallback: return the EDGAR name as-is
+    """
+    if not edgar_name:
+        return edgar_name, edgar_name
+    
+    try:
+        result = supabase.table("treasury_companies").select("company, ticker").gt("btc_holdings", 0).execute()
+        if not result.data:
+            return edgar_name, ""
+        
+        edgar_clean = edgar_name.upper().strip()
+        # Remove common suffixes for matching
+        for suffix in [' INC', ' INC.', ' CORP', ' CORP.', ' LTD', ' LTD.', ' LLC', ' PLC', ' CO', ' CO.', ' GROUP', ' HOLDINGS', ' GLOBAL', ',']:
+            edgar_clean = edgar_clean.replace(suffix, '')
+        edgar_clean = edgar_clean.strip()
+        
+        best_match = None
+        best_score = 0
+        
+        for row in result.data:
+            db_name = (row.get('company', '') or '').upper().strip()
+            db_ticker = row.get('ticker', '') or ''
+            
+            db_clean = db_name
+            for suffix in [' INC', ' INC.', ' CORP', ' CORP.', ' LTD', ' LTD.', ' LLC', ' PLC', ' CO', ' CO.', ' GROUP', ' HOLDINGS', ' GLOBAL', ' (MICROSTRATEGY)', ',']:
+                db_clean = db_clean.replace(suffix, '')
+            db_clean = db_clean.strip()
+            
+            # Exact match after cleaning
+            if edgar_clean == db_clean:
+                return row['company'], db_ticker
+            
+            # One contains the other
+            if edgar_clean in db_clean or db_clean in edgar_clean:
+                score = min(len(edgar_clean), len(db_clean)) / max(len(edgar_clean), len(db_clean), 1)
+                if score > best_score and score > 0.5:
+                    best_score = score
+                    best_match = row
+            
+            # First word match (e.g., "STRATEGY" matches "Strategy (MicroStrategy)")
+            edgar_first = edgar_clean.split()[0] if edgar_clean.split() else ''
+            db_first = db_clean.split()[0] if db_clean.split() else ''
+            if edgar_first and db_first and edgar_first == db_first and len(edgar_first) >= 4:
+                score = 0.7
+                if score > best_score:
+                    best_score = score
+                    best_match = row
+        
+        if best_match:
+            logger.debug(f"  EDGAR ticker resolved: '{edgar_name}' → '{best_match['company']}' ({best_match['ticker']})")
+            return best_match['company'], best_match['ticker']
+        
+    except Exception as e:
+        logger.debug(f"  EDGAR ticker resolution error: {e}")
+    
+    return edgar_name, ""
+
+
 def _search_edgar(query, days_back=1):
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
@@ -257,16 +324,19 @@ def check_edgar_filings(days_back=1):
 
             # Route purchase-type filings through the reconciler
             if event_type in ('purchase', 'acquisition') and btc_amount > 0:
+                # Resolve EDGAR entity name to our database ticker
+                resolved_name, resolved_ticker = _resolve_ticker(company_name, ticker_cik)
+                
                 purchase = {
-                    "company": company_name,
-                    "ticker": ticker_cik,
+                    "company": resolved_name or company_name,
+                    "ticker": resolved_ticker or ticker_cik,
                     "btc_amount": btc_amount,
                     "usd_amount": usd_amount,
-                    "price_per_btc": round(usd_amount / btc_amount) if btc_amount > 0 else 0,
+                    "price_per_btc": round(usd_amount / btc_amount) if btc_amount > 0 and usd_amount > 0 else 0,
                     "filing_date": filing_data['filing_date'],
                     "filing_url": filing_url,
                     "source": f"SEC EDGAR 8-K (real-time)",
-                    "notes": f"Accession: {accession}",
+                    "notes": f"Accession: {accession}. EDGAR entity: {company_name}",
                 }
                 result = reconcile_and_save(purchase, source_type="edgar", is_new_entrant=False)
                 logger.info(f"  EDGAR → Reconciler: {company_name} — {result['action']}")
