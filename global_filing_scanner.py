@@ -167,30 +167,61 @@ def _resolve_ticker_for_reconciler(company_name):
 
 
 def _route_to_reconciler(filing):
-    """Route a filing with btc_amount > 0 through the purchase reconciler."""
+    """
+    Route a filing with btc_amount > 0 through the purchase reconciler.
+    
+    Validation (matches EDGAR-level rigor):
+      1. Must have btc_amount > 0
+      2. Must have btc_amount >= 10 (filter noise)
+      3. Company must resolve to a known entity in treasury_companies
+      4. Event must look like a purchase (not just a mention)
+      5. Filing URL must be the original international source (not EDGAR)
+    """
     if not HAS_RECONCILER:
         return
     btc = float(filing.get('btc_amount', 0))
-    if btc <= 0:
+    if btc < 10:  # Filter noise — less than 10 BTC is likely a false positive
         return
+
     company = filing.get('company_name', '')
     source = filing.get('source', '')
+
+    # CRITICAL VALIDATION: Company must exist in our treasury_companies database
+    # This prevents false positives like "Peter Schiff" or random news mentions
     resolved_name, resolved_ticker = _resolve_ticker_for_reconciler(company)
+    if not resolved_ticker:
+        logger.debug(f"  {source}: '{company}' not found in treasury_companies — skipping reconciler")
+        return
+
+    # Validate event looks like a purchase (not sale, not just a mention)
+    text = f"{company} {filing.get('event_type', '')} {filing.get('form_type', '')}".lower()
+    sale_words = ['sold', 'sale', 'disposed', 'liquidated', 'reduced', 'divested']
+    if any(sw in text for sw in sale_words):
+        logger.debug(f"  {source}: '{company}' looks like a sale — skipping reconciler")
+        return
+
     usd = float(filing.get('usd_amount', 0))
+    filing_date = filing.get('filing_date', '')
+    filing_url = filing.get('filing_url', '')
+
+    # Ensure filing_url points to the international source, not EDGAR
+    if not filing_url or 'edgar' in filing_url.lower():
+        filing_url = ''  # Let the frontend handle the source link by entity type
+
     purchase = {
-        "company": resolved_name or company,
-        "ticker": resolved_ticker or filing.get('ticker_cik', ''),
+        "company": resolved_name,
+        "ticker": resolved_ticker,
         "btc_amount": btc,
         "usd_amount": usd,
         "price_per_btc": round(usd / btc) if btc > 0 and usd > 0 else 0,
-        "filing_date": filing.get('filing_date', datetime.now().strftime('%Y-%m-%d')),
-        "filing_url": filing.get('filing_url', ''),
+        "filing_date": filing_date or datetime.now().strftime('%Y-%m-%d'),
+        "filing_url": filing_url,
         "source": f"Global Filing: {source}",
-        "notes": f"Accession: {filing.get('accession_number', '')}",
+        "notes": f"Accession: {filing.get('accession_number', '')}. Source system: {source}",
     }
     try:
         result = reconcile_and_save(purchase, source_type="global_filing", is_new_entrant=False)
-        logger.info(f"  {source} → Reconciler: {resolved_name or company} — {result['action']}")
+        logger.info(f"  {source} → Reconciler: {resolved_name} ({resolved_ticker}) — {result['action']}")
     except Exception as e:
         logger.debug(f"  Reconciler routing error: {e}")
 
