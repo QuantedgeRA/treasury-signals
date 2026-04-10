@@ -43,41 +43,56 @@ BT_PAGES = [
 ]
 
 SOVEREIGN_FLAGS = {
-    "united states": ("🇺🇸 United States", "US-GOV", "US"),
-    "china": ("🇨🇳 China", "CN-GOV", "CN"),
-    "united kingdom": ("🇬🇧 United Kingdom", "UK-GOV", "GB"),
-    "ukraine": ("🇺🇦 Ukraine", "UA-GOV", "UA"),
-    "bhutan": ("🇧🇹 Bhutan", "BT-GOV", "BT"),
-    "el salvador": ("🇸🇻 El Salvador", "SV-GOV", "SV"),
-    "finland": ("🇫🇮 Finland", "FI-GOV", "FI"),
-    "germany": ("🇩🇪 Germany", "DE-GOV", "DE"),
-    "georgia": ("🇬🇪 Georgia", "GE-GOV", "GE"),
-    "czech": ("🇨🇿 Czech Republic", "CZ-GOV", "CZ"),
-    "north korea": ("🇰🇵 North Korea", "KP-GOV", "KP"),
-    "japan": ("🇯🇵 Japan", "JP-GOV", "JP"),
-    "switzerland": ("🇨🇭 Switzerland", "CH-GOV", "CH"),
-    "russia": ("🇷🇺 Russia", "RU-GOV", "RU"),
-    "brazil": ("🇧🇷 Brazil", "BR-GOV", "BR"),
-    "canada": ("🇨🇦 Canada", "CA-GOV", "CA"),
-    "australia": ("🇦🇺 Australia", "AU-GOV", "AU"),
-    "india": ("🇮🇳 India", "IN-GOV", "IN"),
-    "norway": ("🇳🇴 Norway", "NO-GOV", "NO"),
-    "poland": ("🇵🇱 Poland", "PL-GOV", "PL"),
-    "thailand": ("🇹🇭 Thailand", "TH-GOV", "TH"),
-    "singapore": ("🇸🇬 Singapore", "SG-GOV", "SG"),
-    "saudi": ("🇸🇦 Saudi Arabia", "SA-GOV", "SA"),
-    "venezuela": ("🇻🇪 Venezuela", "VE-GOV", "VE"),
-    "iran": ("🇮🇷 Iran", "IR-GOV", "IR"),
-    "turkey": ("🇹🇷 Turkey", "TR-GOV", "TR"),
-    "tonga": ("🇹🇴 Tonga", "TO-GOV", "TO"),
-    "kazakhstan": ("🇰🇿 Kazakhstan", "KZ-GOV", "KZ"),
-    "hong kong": ("🇭🇰 Hong Kong", "HK-GOV", "HK"),
-    "ethiopia": ("🇪🇹 Ethiopia", "ET-GOV", "ET"),
-    "myanmar": ("🇲🇲 Myanmar", "MM-GOV", "MM"),
-    "colombia": ("🇨🇴 Colombia", "CO-GOV", "CO"),
-    "liechtenstein": ("🇱🇮 Liechtenstein", "LI-GOV", "LI"),
-    "montenegro": ("🇲🇪 Montenegro", "ME-GOV", "ME"),
+    "united states": ("United States", "US.GOV", "US"),
+    "china": ("China", "CN.GOV", "CN"),
+    "united kingdom": ("United Kingdom", "GB.GOV", "GB"),
+    "ukraine": ("Ukraine", "UA.GOV", "UA"),
+    "bhutan": ("Bhutan", "BT.GOV", "BT"),
+    "el salvador": ("El Salvador", "SV.GOV", "SV"),
+    "finland": ("Finland", "FI.GOV", "FI"),
+    "germany": ("Germany", "DE.GOV", "DE"),
+    "georgia": ("Georgia", "GE.GOV", "GE"),
+    "czech": ("Czech Republic", "CZ.GOV", "CZ"),
+    "north korea": ("North Korea", "KP.GOV", "KP"),
+    "japan": ("Japan", "JP.GOV", "JP"),
+    "switzerland": ("Switzerland", "CH.GOV", "CH"),
+    "russia": ("Russia", "RU.GOV", "RU"),
+    "brazil": ("Brazil", "BR.GOV", "BR"),
+    "canada": ("Canada", "CA.GOV", "CA"),
+    "australia": ("Australia", "AU.GOV", "AU"),
+    "india": ("India", "IN.GOV", "IN"),
+    "norway": ("Norway", "NO.GOV", "NO"),
+    "poland": ("Poland", "PL.GOV", "PL"),
+    "thailand": ("Thailand", "TH.GOV", "TH"),
+    "singapore": ("Singapore", "SG.GOV", "SG"),
+    "saudi": ("Saudi Arabia", "SA.GOV", "SA"),
+    "venezuela": ("Venezuela", "VE.GOV", "VE"),
+    "iran": ("Iran", "IR.GOV", "IR"),
+    "turkey": ("Turkey", "TR.GOV", "TR"),
+    "tonga": ("Tonga", "TO.GOV", "TO"),
+    "kazakhstan": ("Kazakhstan", "KZ.GOV", "KZ"),
+    "hong kong": ("Hong Kong", "HK.GOV", "HK"),
+    "ethiopia": ("Ethiopia", "ET.GOV", "ET"),
+    "myanmar": ("Myanmar", "MM.GOV", "MM"),
+    "colombia": ("Colombia", "CO.GOV", "CO"),
+    "liechtenstein": ("Liechtenstein", "LI.GOV", "LI"),
+    "montenegro": ("Montenegro", "ME.GOV", "ME"),
+    "taiwan": ("Taiwan", "TW.GOV", "TW"),
+    "united arab": ("United Arab Emirates", "AE.GOV", "AE"),
+    "uae": ("United Arab Emirates", "AE.GOV", "AE"),
+    "bulgaria": ("Bulgaria", "BG.GOV", "BG"),
+    "roswell": ("Roswell, New Mexico", "ROSWE.GOV", "US"),
 }
+
+# Protected entities: always injected after scraping to survive wipe cycles.
+# These are entities whose names on source sites are entirely non-ASCII (flag emojis)
+# and would otherwise be stripped to nothing and lost.
+PROTECTED_ENTITIES = [
+    {"ticker": "US.GOV", "company": "United States", "btc_holdings": 198109,
+     "avg_purchase_price": 0, "total_cost_usd": 0, "country": "US",
+     "sector": "Government", "is_government": True, "entity_type": "government",
+     "data_source": "aggregator"},
+]
 
 # Which category wins when an entity appears on multiple pages
 # Higher number = more specific = wins
@@ -376,6 +391,17 @@ class TreasurySync:
         # ═══ POST-PROCESS: Apply correct entity types ═══
         store.apply_categories()
 
+        # ═══ PROTECTED ENTITIES: Ensure critical entities survive wipe cycles ═══
+        for pe in PROTECTED_ENTITIES:
+            if pe["ticker"] not in store._by_ticker:
+                store.add(pe.copy(), is_primary=False)
+                logger.info(f"  Protected entity injected: {pe['company']} ({pe['ticker']})")
+            else:
+                # Update BTC holdings if scraper found a newer value
+                existing = store._by_ticker[pe["ticker"]]
+                if existing.get("btc_holdings", 0) == 0:
+                    existing["btc_holdings"] = pe["btc_holdings"]
+
         all_entities = store.get_all()
         total = store.count()
 
@@ -501,20 +527,35 @@ class TreasurySync:
                 except:
                     pass
 
-            # Name: longest text starting with ASCII letter
-            name = ""
-            for t in texts:
-                stripped = t.strip()
-                if (len(stripped) > len(name) and
-                    stripped[0:1].isascii() and stripped[0:1].isalpha() and
-                    not stripped.replace(',', '').replace('.', '').replace(' ', '').isdigit()):
-                    name = stripped
+            # ═══ GOVERNMENT EARLY MATCH ═══
+            # Check raw text cells for government names BEFORE ASCII stripping
+            # This catches entries where the name is only flag emojis + non-Latin text
+            gov_matched = False
+            if is_gov:
+                raw_text = ' '.join(texts).lower()
+                for key, (display, gov_ticker, gov_country) in SOVEREIGN_FLAGS.items():
+                    if key in raw_text:
+                        name = display
+                        ticker = gov_ticker
+                        country = gov_country
+                        gov_matched = True
+                        break
 
-            # Clean name: strip ALL non-ASCII (flag emojis, garbled chars)
-            # then remove concatenated tickers
-            if name:
-                name = re.sub(r'[^\x20-\x7E]', '', name).strip()
-                name = re.sub(r'([a-z])\s*([A-Z]{2,6})$', r'\1', name).strip()
+            # Name: longest text starting with ASCII letter (skip if gov already matched)
+            if not gov_matched:
+                name = ""
+                for t in texts:
+                    stripped = t.strip()
+                    if (len(stripped) > len(name) and
+                        stripped[0:1].isascii() and stripped[0:1].isalpha() and
+                        not stripped.replace(',', '').replace('.', '').replace(' ', '').isdigit()):
+                        name = stripped
+
+                # Clean name: strip ALL non-ASCII (flag emojis, garbled chars)
+                # then remove concatenated tickers
+                if name:
+                    name = re.sub(r'[^\x20-\x7E]', '', name).strip()
+                    name = re.sub(r'([a-z])\s*([A-Z]{2,6})$', r'\1', name).strip()
 
             if not name or btc <= 0:
                 failed += 1
@@ -527,21 +568,23 @@ class TreasurySync:
                 failed += 1
                 continue
 
-            # Generate ticker
-            ticker = re.sub(r'[^A-Za-z0-9]', '', name.upper()[:10])
-            if not ticker:
-                ticker = f"UNK{parsed}"
+            # Generate ticker (skip if gov already matched)
+            if not gov_matched:
+                ticker = re.sub(r'[^A-Za-z0-9]', '', name.upper()[:10])
+                if not ticker:
+                    ticker = f"UNK{parsed}"
 
-            # Country: 2-letter uppercase code
-            country = ""
-            for t in texts[:4]:
-                t_stripped = t.strip()
-                if len(t_stripped) == 2 and t_stripped.isalpha() and t_stripped.isupper():
-                    country = t_stripped
-                    break
+            # Country: 2-letter uppercase code (skip if gov already matched)
+            if not gov_matched:
+                country = ""
+                for t in texts[:4]:
+                    t_stripped = t.strip()
+                    if len(t_stripped) == 2 and t_stripped.isalpha() and t_stripped.isupper():
+                        country = t_stripped
+                        break
 
-            # Handle government entities
-            if is_gov:
+            # Handle government entities (final check for ones not caught early)
+            if is_gov and not gov_matched:
                 for key, (display, gov_ticker, gov_country) in SOVEREIGN_FLAGS.items():
                     if key in name.lower():
                         name = display
@@ -549,8 +592,8 @@ class TreasurySync:
                         country = gov_country
                         break
                 else:
-                    if not ticker.endswith("-GOV"):
-                        ticker = f"{ticker[:5]}-GOV"
+                    if not ticker.endswith(".GOV"):
+                        ticker = f"{ticker[:5]}.GOV"
 
             if not country:
                 country = self._get_country(name, is_gov)
