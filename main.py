@@ -70,6 +70,7 @@ from exchange_flow_tracker import get_exchange_flow_report, format_flow_telegram
 from filing_parser import parse_and_update
 from sync_protector import snapshot_primary_data, protect_primary_data
 from ticker_validator import validate_all_tickers
+from shares_sync import sync_shares_outstanding
 
 logger = get_logger(__name__)
 
@@ -686,6 +687,14 @@ def main():
                 validate_all_tickers()
             except Exception as e:
                 logger.debug(f"Ticker validator: {e}")
+
+            # Sync shares outstanding from Yahoo Finance for all public companies
+            try:
+                shares_result = sync_shares_outstanding(limit=50)
+                if shares_result['updated'] > 0:
+                    logger.info(f"Shares sync: {shares_result['updated']} companies updated with shares outstanding")
+            except Exception as e:
+                logger.debug(f"Shares sync: {e}")
         else:
             logger.debug("Heavy maintenance tasks skipped (6am only)")
 
