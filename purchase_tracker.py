@@ -123,6 +123,25 @@ SALE_KEYWORDS_NEWS = [
     "disposed", "divested", "unloaded", "dumped", "reduced holdings",
 ]
 
+# ─── ETF & DeFi EXCLUSION ───
+# ETF inflows/outflows are customer fund flows, NOT corporate treasury purchases.
+# DeFi protocol BTC changes are driven by TVL/liquidity mechanics, NOT buy decisions.
+# These entities should NEVER appear as "purchases" or "sales" from the news scanner.
+ETF_DEFI_EXCLUDE_TICKERS = {
+    # ETFs
+    "IBIT", "FBTC", "GBTC", "ARKB", "BITB", "HODL", "BRRR", "EZBC", "BTCW", "BTCO",
+    "ETF", "BLK", "FNF", "ARKK",
+    # DeFi
+    "WBTC", "TBTC", "CBBTC", "LBTC", "SOLVBTC", "RBTC",
+}
+
+# Headlines with these terms are about ETF fund flows, not corporate treasury decisions
+ETF_FLOW_KEYWORDS = [
+    "etf inflow", "etf outflow", "etf flow", "fund flow", "net inflow",
+    "net outflow", "assets under management", "aum", "etf saw",
+    "spot etf", "bitcoin etf", "etf bought", "etf sold",
+]
+
 TICKER_SUFFIXES = [".US", ".L", ".TO", ".AX", ".DE", ".PA", ".SW", ".HK", ".KS", ".SS", ".SZ", ".SA", ".V", ".ST", ".CO", ".MI", ".BR", ".MC", ".OL", ".HE", ".IS"]
 
 
@@ -202,6 +221,15 @@ def scan_news_for_purchases():
                         matched_ticker = "UNKNOWN"
                     else:
                         continue
+                # Reject ETF/DeFi entities — their BTC changes are fund flows or
+                # protocol mechanics, not corporate treasury purchase decisions
+                if matched_ticker in ETF_DEFI_EXCLUDE_TICKERS:
+                    logger.debug(f"  News: skipping ETF/DeFi entity: {matched_company} ({matched_ticker}): {title[:80]}")
+                    continue
+                # Reject ETF fund flow headlines (even if entity isn't in exclusion set)
+                if any(k in title_lower for k in ETF_FLOW_KEYWORDS):
+                    logger.debug(f"  News: skipping ETF flow headline: {title[:80]}")
+                    continue
                 btc_amount = 0
                 usd_amount = 0
                 btc_match = re.search(r'([\d,]+)\s*(?:btc|bitcoin)', title_lower)
@@ -342,12 +370,29 @@ def detect_new_purchases(btc_price=None):
 
     GOVERNMENT_TICKERS = {t for t in current_holdings if t.endswith("-GOV")}
     GOVERNMENT_TICKERS.update(t for t in prev_holdings if t.endswith("-GOV"))
+
+    # Build ETF/DeFi exclusion set from database — these entity types have BTC
+    # changes driven by fund flows or protocol mechanics, not treasury decisions.
+    # Their deltas should NOT be treated as purchases or sales.
+    ETF_DEFI_DB_TICKERS = set()
+    try:
+        etf_defi = supabase.table("treasury_companies").select("ticker").in_("entity_type", ["etf", "defi", "ETFs & Exchanges", "DeFi Protocols"]).execute()
+        if etf_defi.data:
+            ETF_DEFI_DB_TICKERS = {r['ticker'] for r in etf_defi.data if r.get('ticker')}
+    except Exception as e:
+        logger.debug(f"ETF/DeFi exclusion lookup: {e}")
+    # Merge with hardcoded list
+    ETF_DEFI_DB_TICKERS.update(ETF_DEFI_EXCLUDE_TICKERS)
+
     prev_normalized = _build_normalized_lookup(prev_holdings)
 
     for ticker, current in current_holdings.items():
         current_btc = current["btc"]
         company_name = current["name"]
         if ticker in GOVERNMENT_TICKERS:
+            continue
+        # Skip ETF/DeFi entities — fund flows are not treasury purchases/sales
+        if ticker in ETF_DEFI_DB_TICKERS or _normalize_ticker(ticker) in ETF_DEFI_DB_TICKERS:
             continue
         # Skip garbled entities — non-ASCII names or tickers with BTC amounts
         if company_name and not (company_name[0].isascii() and company_name[0].isalpha()):
