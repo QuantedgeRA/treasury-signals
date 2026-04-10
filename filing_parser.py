@@ -24,6 +24,12 @@ from dotenv import load_dotenv
 from supabase import create_client
 from logger import get_logger
 
+try:
+    from purchase_reconciler import reconcile_and_save
+    HAS_RECONCILER = True
+except ImportError:
+    HAS_RECONCILER = False
+
 logger = get_logger(__name__)
 load_dotenv()
 
@@ -212,6 +218,35 @@ def _update_entity(extracted, data_source):
             old_btc = entity.get('btc_holdings', 0)
             new_btc = update_data.get('btc_holdings', old_btc)
             logger.info(f"  Parser: {entity['company']} ({entity.get('ticker', '')}) — {old_btc:,} → {new_btc:,} BTC [{data_source}]")
+
+            # Route purchase events through the reconciler so they appear in
+            # confirmed_purchases with proper source attribution. This also
+            # prevents snapshot comparison from later detecting the same delta
+            # as a separate unverified purchase.
+            if HAS_RECONCILER and btc_purchased and btc_purchased > 0 and extracted.get('event_type') in ('purchase', 'new_treasury'):
+                source_type_map = {
+                    'sec_filing': 'edgar',
+                    'regulatory_filing': 'global_filing',
+                    'etf_issuer': 'global_filing',
+                    'government_official': 'global_filing',
+                    'press_release': 'news',
+                }
+                reconciler_source = source_type_map.get(data_source, 'news')
+                try:
+                    reconcile_and_save({
+                        "company": entity.get('company', company),
+                        "ticker": entity.get('ticker', ticker),
+                        "btc_amount": int(btc_purchased),
+                        "usd_amount": int(extracted.get('purchase_price_usd', 0) or 0),
+                        "price_per_btc": int(extracted.get('avg_price_per_btc', 0) or 0),
+                        "filing_date": extracted.get('date', datetime.now().strftime('%Y-%m-%d')),
+                        "filing_url": "",
+                        "source": f"AI Filing Parser [{data_source}]",
+                        "notes": f"Extracted by Claude from {data_source} filing. Confidence: {confidence}",
+                    }, source_type=reconciler_source, is_new_entrant=False)
+                    logger.info(f"  Parser → Reconciler: {entity['company']} — {int(btc_purchased):,} BTC [{reconciler_source}]")
+                except Exception as e:
+                    logger.debug(f"  Parser → Reconciler error: {e}")
             return True
     else:
         # New entity — insert if we have BTC holdings data

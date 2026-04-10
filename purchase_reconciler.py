@@ -222,10 +222,13 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
     norm_ticker = _normalize_ticker_for_dedup(ticker)
     logger.debug(f"Reconciler: processing {company} ({ticker}), {btc_amount:,.0f} BTC, source: {source_type} (rank {source_rank})")
 
-    # ─── STEP 1: Check for new entrant → pending ───
-    if is_new_entrant and source_type == "snapshot":
-        # New entrants from snapshot go to pending, not confirmed
-        # They need corroboration from EDGAR, news, or global scanner
+    # ─── STEP 1: ALL snapshot detections → pending (never auto-confirm) ───
+    # Snapshot comparisons (BitcoinTreasuries.net deltas) are the least reliable
+    # source. Data corrections, rounding changes, and delayed reporting all
+    # produce false positives. Both new entrants AND existing entity increases
+    # must be corroborated by EDGAR, news, or global regulatory filings before
+    # they can be marked as confirmed purchases.
+    if source_type == "snapshot":
         pending_id = f"pending_{norm_ticker}_{filing_date}"
 
         # Check if already pending
@@ -240,7 +243,8 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
             logger.debug(f"Reconciler: {company} already confirmed — skipping pending")
             return {"action": "duplicate_skipped", "purchase_id": existing_confirmed.get("purchase_id"), "details": "Already confirmed"}
 
-        # Save to pending
+        # Save to pending — awaits corroboration from a higher-ranked source
+        entrant_label = "New entrant" if is_new_entrant else "Existing entity delta"
         try:
             supabase.table("pending_purchases").upsert({
                 "pending_id": pending_id,
@@ -254,9 +258,10 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
                 "source_rank": source_rank,
                 "notes": notes,
                 "status": "pending",
+                "is_new_entrant": is_new_entrant,
             }, on_conflict="pending_id").execute()
-            logger.info(f"Reconciler: ⏳ PENDING — {company} ({ticker}): {btc_amount:,.0f} BTC (awaiting confirmation)")
-            return {"action": "pending", "purchase_id": pending_id, "details": "New entrant, awaiting confirmation from EDGAR/News/Global"}
+            logger.info(f"Reconciler: ⏳ PENDING — {company} ({ticker}): {btc_amount:,.0f} BTC ({entrant_label}, awaiting confirmation)")
+            return {"action": "pending", "purchase_id": pending_id, "details": f"{entrant_label}, awaiting confirmation from EDGAR/News/Global"}
         except Exception as e:
             logger.error(f"Reconciler: failed to save pending: {e}")
             return {"action": "error", "purchase_id": None, "details": str(e)}

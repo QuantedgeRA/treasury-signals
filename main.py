@@ -42,7 +42,7 @@ from narrative_engine import narrator
 from accuracy_tracker import log_prediction
 from email_briefing import generate_and_send_briefing
 from treasury_leaderboard import get_leaderboard_with_live_price, format_leaderboard_telegram
-from purchase_tracker import detect_new_purchases, log_detected_purchases, format_purchase_telegram
+from purchase_tracker import detect_new_purchases, log_detected_purchases, format_purchase_telegram, scan_news_for_purchases
 from regulatory_scanner import run_full_scan as scan_regulatory
 from regulatory_tracker import format_regulatory_briefing
 from logger import get_logger, ScanContext
@@ -503,6 +503,17 @@ def main():
             send_daily_leaderboard()
 
         with ScanContext(logger, scan_number, "[8/10] Purchase detection"):
+            # Step 1: Scan news for real purchase announcements (feeds into reconciler)
+            # This runs FIRST so news-confirmed purchases are in the DB before
+            # snapshot comparison, allowing snapshot deltas to be deduped against them.
+            try:
+                news_purchases = scan_news_for_purchases()
+                if news_purchases:
+                    logger.info(f"News scanner: {len(news_purchases)} purchase(s) found in headlines")
+            except Exception as e:
+                logger.debug(f"News purchase scan: {e}")
+
+            # Step 2: Snapshot comparison (all deltas go to pending, never auto-confirmed)
             detected = detect_new_purchases()
             if detected:
                 log_detected_purchases(detected)

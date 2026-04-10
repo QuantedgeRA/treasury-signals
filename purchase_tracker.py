@@ -356,8 +356,8 @@ def detect_new_purchases(btc_price=None):
                 result = reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False)
                 if result["action"] in ("confirmed", "upgraded"):
                     detected.append(purchase)
-
-        # ─── Normalized ticker match ───
+                elif result["action"] == "pending":
+                    logger.info(f"  ⏳ Pending verification: {company_name} ({ticker}): +{increase:,} BTC")
         elif norm_ticker in prev_normalized:
             prev_data = prev_normalized[norm_ticker]
             prev_btc = prev_data["btc"]
@@ -379,8 +379,8 @@ def detect_new_purchases(btc_price=None):
                 result = reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False)
                 if result["action"] in ("confirmed", "upgraded"):
                     detected.append(purchase)
-
-        # ─── Truly new entity → PENDING (not confirmed) ───
+                elif result["action"] == "pending":
+                    logger.info(f"  ⏳ Pending verification: {company_name} ({ticker}): +{increase:,} BTC (normalized match)")
         else:
             if ticker in GOVERNMENT_TICKERS:
                 continue
