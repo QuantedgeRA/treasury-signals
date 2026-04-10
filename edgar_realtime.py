@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from supabase import create_client
 from logger import get_logger
-from purchase_reconciler import reconcile_and_save
+from purchase_reconciler import reconcile_and_save, reconcile_sale
 
 logger = get_logger(__name__)
 load_dotenv()
@@ -340,6 +340,24 @@ def check_edgar_filings(days_back=1):
                 }
                 result = reconcile_and_save(purchase, source_type="edgar", is_new_entrant=False)
                 logger.info(f"  EDGAR → Reconciler: {company_name} — {result['action']}")
+
+            # Route sale-type filings through the sale reconciler
+            elif event_type == 'sale' and btc_amount > 0:
+                resolved_name, resolved_ticker = _resolve_ticker(company_name, ticker_cik)
+                
+                sale = {
+                    "company": resolved_name or company_name,
+                    "ticker": resolved_ticker or ticker_cik,
+                    "btc_amount": btc_amount,
+                    "usd_amount": usd_amount,
+                    "price_per_btc": round(usd_amount / btc_amount) if btc_amount > 0 and usd_amount > 0 else 0,
+                    "filing_date": filing_data['filing_date'],
+                    "filing_url": filing_url,
+                    "source": f"SEC EDGAR 8-K (real-time)",
+                    "notes": f"Sale detected. Accession: {accession}. EDGAR entity: {company_name}",
+                }
+                result = reconcile_sale(sale, source_type="edgar")
+                logger.info(f"  EDGAR → Sale Reconciler: {company_name} — {result['action']}")
 
             # Send Telegram alert for purchases and sales
             if event_type in ('purchase', 'sale') and (btc_amount > 0 or usd_amount > 0):

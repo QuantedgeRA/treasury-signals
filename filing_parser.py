@@ -25,7 +25,7 @@ from supabase import create_client
 from logger import get_logger
 
 try:
-    from purchase_reconciler import reconcile_and_save
+    from purchase_reconciler import reconcile_and_save, reconcile_sale
     HAS_RECONCILER = True
 except ImportError:
     HAS_RECONCILER = False
@@ -65,17 +65,24 @@ Return ONLY valid JSON with these fields (use null if not found):
   "btc_purchased": BTC purchased in this transaction (number or null),
   "btc_sold": BTC sold in this transaction (number or null),
   "purchase_price_usd": total USD spent on this purchase (number or null),
-  "avg_price_per_btc": average price per BTC for this purchase (number or null),
+  "sale_price_usd": total USD received from this sale (number or null),
+  "avg_price_per_btc": average price per BTC for this transaction (number or null),
   "event_type": "purchase" or "sale" or "holding_update" or "new_treasury" or "other",
   "date": "YYYY-MM-DD of the event",
   "entity_type": "public_company" or "private_company" or "government" or "etf" or "defi",
   "confidence": 0.0 to 1.0 how confident you are in the extraction
 }
 
-RULES:
-- Only extract data explicitly stated in the text. Do NOT guess or infer.
+CRITICAL RULES:
+- Only extract data for COMPLETED transactions explicitly stated in the text. Do NOT guess or infer.
+- DISTINGUISH between TARGETS/GOALS and ACTUAL PURCHASES:
+  * "aims to acquire 100,000 BTC" → this is a TARGET, set btc_purchased to null
+  * "acquired 4,871 BTC for $330M" → this is an ACTUAL purchase, set btc_purchased to 4871
+  * "plans to buy", "targets", "goal of", "seeking to acquire" → these are NOT purchases
+  * Only set btc_purchased when the text confirms the transaction HAS BEEN COMPLETED
 - btc_holdings is the TOTAL held, not just the new purchase amount.
 - If the text only mentions a purchase amount but not total holdings, set btc_holdings to null.
+- If the text describes a SALE (sold, divested, liquidated, offloaded), set btc_sold and event_type to "sale".
 - If numbers are ambiguous, set confidence lower.
 - Return ONLY the JSON object, no other text.
 
@@ -177,6 +184,8 @@ def _update_entity(extracted, data_source):
     btc_purchased = extracted.get('btc_purchased')
     entity_type = extracted.get('entity_type', 'public_company')
 
+    btc_sold = extracted.get('btc_sold')
+
     # Find entity in database — try ticker first, then company name
     entity = None
     if ticker:
@@ -195,6 +204,14 @@ def _update_entity(extracted, data_source):
 
     if entity:
         current_source = entity.get('data_source', 'aggregator')
+        current_btc = entity.get('btc_holdings', 0) or 0
+
+        # ─── 3x SANITY CHECK: reject purchases that exceed current holdings by 3x+ ───
+        # This catches target numbers (e.g., "100,000 BTC target") being parsed as purchases
+        if btc_purchased and btc_purchased > 0 and current_btc > 0:
+            if btc_purchased > current_btc * 3:
+                logger.warning(f"  Parser: 🚫 REJECTED — {company}: {int(btc_purchased):,} BTC purchase exceeds current holdings ({current_btc:,}) by >3x — likely a target/goal, not a real purchase")
+                return False
 
         # Only update if new source is higher or equal priority
         if not _should_update(current_source, data_source):
@@ -209,26 +226,19 @@ def _update_entity(extracted, data_source):
         if btc_holdings and btc_holdings > 0:
             update_data['btc_holdings'] = int(btc_holdings)
         elif btc_purchased and btc_purchased > 0:
-            # Add to existing holdings
-            current_btc = entity.get('btc_holdings', 0) or 0
             update_data['btc_holdings'] = current_btc + int(btc_purchased)
 
         if update_data.get('btc_holdings'):
             supabase.table("treasury_companies").update(update_data).eq("id", entity["id"]).execute()
-            old_btc = entity.get('btc_holdings', 0)
+            old_btc = current_btc
             new_btc = update_data.get('btc_holdings', old_btc)
             logger.info(f"  Parser: {entity['company']} ({entity.get('ticker', '')}) — {old_btc:,} → {new_btc:,} BTC [{data_source}]")
 
-            # Route purchase events through the reconciler so they appear in
-            # confirmed_purchases with proper source attribution. This also
-            # prevents snapshot comparison from later detecting the same delta
-            # as a separate unverified purchase.
+            # Route purchase events through reconciler for proper confirmed_purchases tracking
             if HAS_RECONCILER and btc_purchased and btc_purchased > 0 and extracted.get('event_type') in ('purchase', 'new_treasury'):
                 source_type_map = {
-                    'sec_filing': 'edgar',
-                    'regulatory_filing': 'global_filing',
-                    'etf_issuer': 'global_filing',
-                    'government_official': 'global_filing',
+                    'sec_filing': 'edgar', 'regulatory_filing': 'global_filing',
+                    'etf_issuer': 'global_filing', 'government_official': 'global_filing',
                     'press_release': 'news',
                 }
                 reconciler_source = source_type_map.get(data_source, 'news')
@@ -244,9 +254,34 @@ def _update_entity(extracted, data_source):
                         "source": f"AI Filing Parser [{data_source}]",
                         "notes": f"Extracted by Claude from {data_source} filing. Confidence: {confidence}",
                     }, source_type=reconciler_source, is_new_entrant=False)
-                    logger.info(f"  Parser → Reconciler: {entity['company']} — {int(btc_purchased):,} BTC [{reconciler_source}]")
+                    logger.info(f"  Parser → Reconciler: {entity['company']} — {int(btc_purchased):,} BTC purchase [{reconciler_source}]")
                 except Exception as e:
                     logger.debug(f"  Parser → Reconciler error: {e}")
+
+            # Route sale events through sale reconciler
+            if HAS_RECONCILER and btc_sold and btc_sold > 0 and extracted.get('event_type') == 'sale':
+                source_type_map = {
+                    'sec_filing': 'edgar', 'regulatory_filing': 'global_filing',
+                    'etf_issuer': 'global_filing', 'government_official': 'global_filing',
+                    'press_release': 'news',
+                }
+                reconciler_source = source_type_map.get(data_source, 'news')
+                try:
+                    reconcile_sale({
+                        "company": entity.get('company', company),
+                        "ticker": entity.get('ticker', ticker),
+                        "btc_amount": int(btc_sold),
+                        "usd_amount": int(extracted.get('sale_price_usd', 0) or 0),
+                        "price_per_btc": int(extracted.get('avg_price_per_btc', 0) or 0),
+                        "filing_date": extracted.get('date', datetime.now().strftime('%Y-%m-%d')),
+                        "filing_url": "",
+                        "source": f"AI Filing Parser [{data_source}]",
+                        "notes": f"Sale extracted by Claude from {data_source} filing. Confidence: {confidence}",
+                    }, source_type=reconciler_source)
+                    logger.info(f"  Parser → Reconciler: {entity['company']} — {int(btc_sold):,} BTC sale [{reconciler_source}]")
+                except Exception as e:
+                    logger.debug(f"  Parser → Sale Reconciler error: {e}")
+
             return True
     else:
         # New entity — insert if we have BTC holdings data

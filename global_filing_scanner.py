@@ -35,7 +35,7 @@ from supabase import create_client
 from logger import get_logger
 
 try:
-    from purchase_reconciler import reconcile_and_save
+    from purchase_reconciler import reconcile_and_save, reconcile_sale
     HAS_RECONCILER = True
 except ImportError:
     HAS_RECONCILER = False
@@ -196,9 +196,7 @@ def _route_to_reconciler(filing):
     # Validate event looks like a purchase (not sale, not just a mention)
     text = f"{company} {filing.get('event_type', '')} {filing.get('form_type', '')}".lower()
     sale_words = ['sold', 'sale', 'disposed', 'liquidated', 'reduced', 'divested']
-    if any(sw in text for sw in sale_words):
-        logger.debug(f"  {source}: '{company}' looks like a sale — skipping reconciler")
-        return
+    is_sale = any(sw in text for sw in sale_words)
 
     usd = float(filing.get('usd_amount', 0))
     filing_date = filing.get('filing_date', '')
@@ -208,7 +206,7 @@ def _route_to_reconciler(filing):
     if not filing_url or 'edgar' in filing_url.lower():
         filing_url = ''  # Let the frontend handle the source link by entity type
 
-    purchase = {
+    transaction = {
         "company": resolved_name,
         "ticker": resolved_ticker,
         "btc_amount": btc,
@@ -220,8 +218,12 @@ def _route_to_reconciler(filing):
         "notes": f"Accession: {filing.get('accession_number', '')}. Source system: {source}",
     }
     try:
-        result = reconcile_and_save(purchase, source_type="global_filing", is_new_entrant=False)
-        logger.info(f"  {source} → Reconciler: {resolved_name} ({resolved_ticker}) — {result['action']}")
+        if is_sale:
+            result = reconcile_sale(transaction, source_type="global_filing")
+            logger.info(f"  {source} → Sale Reconciler: {resolved_name} ({resolved_ticker}) — {result['action']}")
+        else:
+            result = reconcile_and_save(transaction, source_type="global_filing", is_new_entrant=False)
+            logger.info(f"  {source} → Reconciler: {resolved_name} ({resolved_ticker}) — {result['action']}")
     except Exception as e:
         logger.debug(f"  Reconciler routing error: {e}")
 

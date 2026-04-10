@@ -30,7 +30,7 @@ from treasury_leaderboard import get_leaderboard_with_live_price, fetch_live_lea
 import yfinance as yf
 from logger import get_logger
 from freshness_tracker import freshness
-from purchase_reconciler import reconcile_and_save
+from purchase_reconciler import reconcile_and_save, reconcile_sale
 
 logger = get_logger(__name__)
 
@@ -108,6 +108,21 @@ PURCHASE_KEYWORDS = [
     "acquires", "scoops up", "loads up", "stacks",
 ]
 
+# Headlines containing these words near BTC amounts are likely about future
+# plans/targets, NOT completed transactions. Reject them.
+TARGET_REJECT_KEYWORDS = [
+    "target", "targets", "targeting", "goal", "goals",
+    "aim", "aims", "aiming", "plan", "plans", "planning",
+    "eyes", "eyeing", "seeks", "seeking", "intends",
+    "will buy", "will acquire", "wants to", "looking to",
+    "could buy", "may buy", "hopes to", "pledges",
+]
+
+SALE_KEYWORDS_NEWS = [
+    "sold", "sells", "selling", "sale", "liquidated", "offloaded",
+    "disposed", "divested", "unloaded", "dumped", "reduced holdings",
+]
+
 TICKER_SUFFIXES = [".US", ".L", ".TO", ".AX", ".DE", ".PA", ".SW", ".HK", ".KS", ".SS", ".SZ", ".SA", ".V", ".ST", ".CO", ".MI", ".BR", ".MC", ".OL", ".HE", ".IS"]
 
 
@@ -168,6 +183,11 @@ def scan_news_for_purchases():
                 title_lower = title.lower()
                 has_purchase = any(k in title_lower for k in PURCHASE_KEYWORDS)
                 if not has_purchase:
+                    continue
+                # Reject headlines about future targets/goals, not completed purchases
+                has_target_language = any(k in title_lower for k in TARGET_REJECT_KEYWORDS)
+                if has_target_language:
+                    logger.debug(f"  News: skipping target/goal headline: {title[:80]}")
                     continue
                 matched_company = None
                 matched_ticker = None
@@ -358,6 +378,22 @@ def detect_new_purchases(btc_price=None):
                     detected.append(purchase)
                 elif result["action"] == "pending":
                     logger.info(f"  ⏳ Pending verification: {company_name} ({ticker}): +{increase:,} BTC")
+            # ─── Sale detection: holdings decreased ───
+            elif increase < -50:
+                decrease = abs(increase)
+                sale = {
+                    "company": company_name, "ticker": ticker, "btc_amount": decrease,
+                    "usd_amount": round(decrease * current_btc_price),
+                    "price_per_btc": round(current_btc_price),
+                    "filing_date": datetime.now().strftime("%Y-%m-%d"),
+                    "source": "Auto-Detected (Snapshot Comparison — Holdings Decrease)",
+                    "notes": f"Holdings: {prev_btc:,} → {current_btc:,} BTC since {prev_date}",
+                }
+                result = reconcile_sale(sale, source_type="snapshot")
+                if result["action"] == "pending":
+                    logger.info(f"  ⏳ Pending sale verification: {company_name} ({ticker}): -{decrease:,} BTC")
+
+        # ─── Normalized ticker match ───
         elif norm_ticker in prev_normalized:
             prev_data = prev_normalized[norm_ticker]
             prev_btc = prev_data["btc"]
@@ -381,6 +417,22 @@ def detect_new_purchases(btc_price=None):
                     detected.append(purchase)
                 elif result["action"] == "pending":
                     logger.info(f"  ⏳ Pending verification: {company_name} ({ticker}): +{increase:,} BTC (normalized match)")
+            # ─── Sale detection: holdings decreased (normalized) ───
+            elif increase < -50:
+                decrease = abs(increase)
+                sale = {
+                    "company": company_name, "ticker": ticker, "btc_amount": decrease,
+                    "usd_amount": round(decrease * current_btc_price),
+                    "price_per_btc": round(current_btc_price),
+                    "filing_date": datetime.now().strftime("%Y-%m-%d"),
+                    "source": "Auto-Detected (Snapshot Comparison — Holdings Decrease)",
+                    "notes": f"Holdings: {prev_btc:,} → {current_btc:,} BTC since {prev_date} (ticker: {prev_data['original_ticker']}→{ticker})",
+                }
+                result = reconcile_sale(sale, source_type="snapshot")
+                if result["action"] == "pending":
+                    logger.info(f"  ⏳ Pending sale verification: {company_name} ({ticker}): -{decrease:,} BTC (normalized match)")
+
+        # ─── Truly new entity → PENDING (not confirmed) ───
         else:
             if ticker in GOVERNMENT_TICKERS:
                 continue

@@ -1,17 +1,20 @@
 """
-purchase_reconciler.py — v1.0
+purchase_reconciler.py — v2.0
 ------------------------------
-Central reconciliation engine for all purchase detections.
+Central reconciliation engine for all purchase AND sale detections.
 
 Every scanner (EDGAR, Global Filing, News, Snapshot) calls
-reconcile_and_save() instead of writing directly to confirmed_purchases.
+reconcile_and_save() or reconcile_sale() instead of writing directly
+to confirmed_purchases or confirmed_sales.
 
 This module ensures:
-1. No duplicate purchases (same company, ±3 days, ±20% BTC)
+1. No duplicate purchases/sales (same company, ±3 days, ±20% BTC)
 2. Source hierarchy (EDGAR > Global Filing > News > Snapshot)
-3. Pending verification for snapshot "new entrants"
+3. ALL snapshot detections → pending (never auto-confirmed)
 4. Confirmation bridge (pending → confirmed when corroborated)
 5. Expiry of unconfirmed pending entries after 7 days
+6. Target/goal sanity gate — rejects round "target" numbers without filing proof
+7. Sale tracking with same verification pipeline as purchases
 
 Source Hierarchy:
     Rank 1 — SEC EDGAR 8-K filing (exact numbers, legal documents)
@@ -56,6 +59,33 @@ def _get_source_rank(source_string):
         return SOURCE_RANKS["news"]
     else:
         return SOURCE_RANKS["snapshot"]
+
+
+# ============================================
+# TARGET/GOAL SANITY GATE
+# ============================================
+# Known "target" BTC amounts that companies announce as goals, NOT purchases.
+# These get picked up by news/filing parsers and recorded as fake purchases.
+SUSPICIOUS_TARGET_AMOUNTS = {100000, 210000, 1000000, 500000, 50000, 21000}
+
+
+def _is_suspicious_target(btc_amount, filing_url="", source_type=""):
+    """
+    Reject purchases that look like corporate target announcements rather
+    than actual completed transactions.
+
+    A purchase is suspicious if:
+    1. The BTC amount is a known round "target" number, AND
+    2. There's no direct filing URL to prove the purchase actually happened
+    
+    EDGAR filings (source_type="edgar") are exempt — if an 8-K says 100,000 BTC
+    was purchased, we trust the legal document.
+    """
+    if source_type == "edgar":
+        return False  # SEC filings are legal documents — trust them
+    if int(btc_amount) in SUSPICIOUS_TARGET_AMOUNTS and not filing_url:
+        return True
+    return False
 
 
 # ============================================
@@ -221,6 +251,11 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
 
     norm_ticker = _normalize_ticker_for_dedup(ticker)
     logger.debug(f"Reconciler: processing {company} ({ticker}), {btc_amount:,.0f} BTC, source: {source_type} (rank {source_rank})")
+
+    # ─── STEP 0: Target/goal sanity gate ───
+    if _is_suspicious_target(btc_amount, filing_url, source_type):
+        logger.warning(f"Reconciler: 🚫 REJECTED — {company} ({ticker}): {btc_amount:,.0f} BTC looks like a target/goal, not a real purchase (no filing URL)")
+        return {"action": "rejected_target", "purchase_id": None, "details": f"{btc_amount:,.0f} BTC is a known target amount with no filing proof"}
 
     # ─── STEP 1: ALL snapshot detections → pending (never auto-confirm) ───
     # Snapshot comparisons (BitcoinTreasuries.net deltas) are the least reliable
@@ -460,45 +495,266 @@ def expire_stale_pending():
 
 
 # ============================================
+# SALE RECONCILIATION (mirrors purchase pipeline)
+# ============================================
+
+def _find_existing_sale_match(ticker, btc_amount, filing_date, company_name=""):
+    """Search confirmed_sales for a matching entry."""
+    norm_ticker = _normalize_ticker_for_dedup(ticker)
+    norm_name = _normalize_name_for_dedup(company_name)
+    try:
+        result = supabase.table("confirmed_sales").select("*").order("filing_date", desc=True).limit(100).execute()
+        if not result.data:
+            return None
+        for row in result.data:
+            row_ticker = _normalize_ticker_for_dedup(row.get("ticker", ""))
+            row_name = _normalize_name_for_dedup(row.get("company", ""))
+            row_date = row.get("filing_date", "")
+            row_btc = float(row.get("btc_amount", 0))
+            ticker_match = norm_ticker and row_ticker and norm_ticker == row_ticker
+            name_match = norm_name and row_name and (norm_name == row_name or norm_name in row_name or row_name in norm_name)
+            if not (ticker_match or name_match):
+                continue
+            if not _dates_within_window(filing_date, row_date):
+                continue
+            if not _btc_amounts_match(btc_amount, row_btc):
+                continue
+            return row
+    except Exception as e:
+        logger.error(f"Reconciler: error searching confirmed_sales: {e}")
+    return None
+
+
+def _find_pending_sale_match(ticker, btc_amount, detected_date):
+    """Search pending_purchases for a matching sale entry."""
+    norm_ticker = _normalize_ticker_for_dedup(ticker)
+    try:
+        result = supabase.table("pending_purchases").select("*").eq("status", "pending").eq("transaction_type", "sale").order("detected_date", desc=True).limit(100).execute()
+        if not result.data:
+            return None
+        for row in result.data:
+            row_ticker = _normalize_ticker_for_dedup(row.get("ticker", ""))
+            row_date = row.get("detected_date", "")
+            row_btc = float(row.get("btc_amount", 0))
+            if row_ticker != norm_ticker:
+                continue
+            if not _dates_within_window(detected_date, row_date):
+                continue
+            if not _btc_amounts_match(btc_amount, row_btc):
+                continue
+            return row
+    except Exception as e:
+        logger.error(f"Reconciler: error searching pending sales: {e}")
+    return None
+
+
+def reconcile_sale(sale, source_type="snapshot"):
+    """
+    Central entry point for all sale detections.
+    Mirrors reconcile_and_save() but writes to confirmed_sales.
+
+    Args:
+        sale: dict with keys: company, ticker, btc_amount, usd_amount,
+              price_per_btc, filing_date, source, notes, filing_url
+        source_type: "edgar", "global_filing", "news", or "snapshot"
+
+    Returns:
+        dict with: action, sale_id, details
+    """
+    company = sale.get("company", "Unknown")
+    ticker = sale.get("ticker", "")
+    btc_amount = float(sale.get("btc_amount", 0))
+    usd_amount = float(sale.get("usd_amount", 0))
+    price_per_btc = float(sale.get("price_per_btc", 0))
+    filing_date = sale.get("filing_date", datetime.now().strftime("%Y-%m-%d"))
+    source = sale.get("source", source_type)
+    notes = sale.get("notes", "")
+    filing_url = sale.get("filing_url", "")
+    source_rank = _get_source_rank(source)
+
+    norm_ticker = _normalize_ticker_for_dedup(ticker)
+    logger.debug(f"Reconciler (sale): processing {company} ({ticker}), {btc_amount:,.0f} BTC sold, source: {source_type} (rank {source_rank})")
+
+    # ─── ALL snapshot sale detections → pending ───
+    if source_type == "snapshot":
+        pending_id = f"pending_sale_{norm_ticker}_{filing_date}"
+
+        existing_pending = _find_pending_sale_match(ticker, btc_amount, filing_date)
+        if existing_pending:
+            return {"action": "duplicate_skipped", "sale_id": existing_pending.get("pending_id"), "details": "Already in pending"}
+
+        existing_confirmed = _find_existing_sale_match(ticker, btc_amount, filing_date, company)
+        if existing_confirmed:
+            return {"action": "duplicate_skipped", "sale_id": existing_confirmed.get("sale_id"), "details": "Already confirmed"}
+
+        try:
+            supabase.table("pending_purchases").upsert({
+                "pending_id": pending_id,
+                "company": company,
+                "ticker": ticker,
+                "btc_amount": btc_amount,
+                "usd_amount": usd_amount,
+                "price_per_btc": price_per_btc,
+                "detected_date": filing_date,
+                "source": source,
+                "source_rank": source_rank,
+                "notes": notes,
+                "status": "pending",
+                "transaction_type": "sale",
+            }, on_conflict="pending_id").execute()
+            logger.info(f"Reconciler: ⏳ PENDING SALE — {company} ({ticker}): {btc_amount:,.0f} BTC (awaiting confirmation)")
+            return {"action": "pending", "sale_id": pending_id, "details": "Sale awaiting confirmation"}
+        except Exception as e:
+            logger.error(f"Reconciler: failed to save pending sale: {e}")
+            return {"action": "error", "sale_id": None, "details": str(e)}
+
+    # ─── Check for matching pending sale → confirm it ───
+    pending_match = _find_pending_sale_match(ticker, btc_amount, filing_date)
+    if pending_match:
+        pending_id = pending_match.get("pending_id")
+        best_btc = btc_amount if source_rank < pending_match.get("source_rank", 4) else float(pending_match.get("btc_amount", 0))
+        best_usd = usd_amount if source_rank < pending_match.get("source_rank", 4) else float(pending_match.get("usd_amount", 0))
+        best_date = filing_date if source_rank < pending_match.get("source_rank", 4) else pending_match.get("detected_date", filing_date)
+        best_url = filing_url if filing_url else ""
+
+        sale_id = f"sale_{norm_ticker}_{best_date}"
+        try:
+            supabase.table("confirmed_sales").upsert({
+                "sale_id": sale_id,
+                "company": company,
+                "ticker": ticker,
+                "btc_amount": best_btc,
+                "usd_amount": best_usd,
+                "price_per_btc": price_per_btc,
+                "filing_date": best_date,
+                "filing_url": best_url,
+                "source": f"Confirmed: {source_type} (rank {source_rank})",
+            }, on_conflict="sale_id").execute()
+            supabase.table("pending_purchases").update({
+                "status": "confirmed",
+                "confirmed_at": datetime.now().isoformat(),
+                "confirmed_by": source_type,
+            }).eq("pending_id", pending_id).execute()
+            logger.info(f"Reconciler: ✅ CONFIRMED SALE — {company} ({ticker}): {best_btc:,.0f} BTC (was pending, confirmed by {source_type})")
+            return {"action": "confirmed", "sale_id": sale_id, "details": f"Sale confirmed by {source_type}"}
+        except Exception as e:
+            logger.error(f"Reconciler: failed to confirm pending sale: {e}")
+            return {"action": "error", "sale_id": None, "details": str(e)}
+
+    # ─── Check for existing confirmed sale → upgrade or skip ───
+    existing = _find_existing_sale_match(ticker, btc_amount, filing_date, company)
+    if existing:
+        existing_rank = _get_source_rank(existing.get("source", ""))
+        if source_rank < existing_rank:
+            sale_id = f"sale_{norm_ticker}_{filing_date}"
+            try:
+                old_id = existing.get("sale_id", "")
+                if old_id:
+                    supabase.table("confirmed_sales").delete().eq("sale_id", old_id).execute()
+                supabase.table("confirmed_sales").upsert({
+                    "sale_id": sale_id, "company": company, "ticker": ticker,
+                    "btc_amount": btc_amount, "usd_amount": usd_amount,
+                    "price_per_btc": price_per_btc, "filing_date": filing_date,
+                    "filing_url": filing_url,
+                    "source": f"Upgraded: {source_type} (rank {source_rank})",
+                }, on_conflict="sale_id").execute()
+                logger.info(f"Reconciler: ⬆️ UPGRADED SALE — {company}: {source_type} replaced rank {existing_rank}")
+                return {"action": "upgraded", "sale_id": sale_id, "details": f"Upgraded from rank {existing_rank}"}
+            except Exception as e:
+                return {"action": "error", "sale_id": None, "details": str(e)}
+        else:
+            return {"action": "duplicate_skipped", "sale_id": existing.get("sale_id"), "details": f"Already confirmed with rank {existing_rank}"}
+
+    # ─── New confirmed sale (non-snapshot sources) ───
+    sale_id = f"sale_{norm_ticker}_{filing_date}"
+    try:
+        supabase.table("confirmed_sales").upsert({
+            "sale_id": sale_id, "company": company, "ticker": ticker,
+            "btc_amount": btc_amount, "usd_amount": usd_amount,
+            "price_per_btc": price_per_btc, "filing_date": filing_date,
+            "filing_url": filing_url,
+            "source": f"{source_type} (rank {source_rank})",
+        }, on_conflict="sale_id").execute()
+        logger.info(f"Reconciler: 🔴 CONFIRMED SALE — {company} ({ticker}): {btc_amount:,.0f} BTC via {source_type}")
+        return {"action": "confirmed", "sale_id": sale_id, "details": f"Sale confirmed via {source_type}"}
+    except Exception as e:
+        logger.error(f"Reconciler: failed to save confirmed sale: {e}")
+        return {"action": "error", "sale_id": None, "details": str(e)}
+
+
+def promote_pending_sales():
+    """Check pending sales against confirmed_sales — promote if matched."""
+    try:
+        pending = supabase.table("pending_purchases").select("*").eq("status", "pending").eq("transaction_type", "sale").execute()
+        if not pending.data:
+            return 0
+        promoted = 0
+        for entry in pending.data:
+            match = _find_existing_sale_match(entry.get("ticker", ""), float(entry.get("btc_amount", 0)), entry.get("detected_date", ""), entry.get("company", ""))
+            if match:
+                try:
+                    supabase.table("pending_purchases").update({
+                        "status": "confirmed", "confirmed_at": datetime.now().isoformat(), "confirmed_by": "auto_match",
+                    }).eq("pending_id", entry["pending_id"]).execute()
+                    promoted += 1
+                    logger.info(f"Reconciler: ⏳→✅ Promoted pending sale: {entry['company']} ({entry['ticker']})")
+                except Exception as e:
+                    logger.error(f"Reconciler: promote sale failed: {e}")
+        if promoted:
+            logger.info(f"Reconciler: {promoted} pending sale(s) promoted to confirmed")
+        return promoted
+    except Exception as e:
+        logger.error(f"Reconciler: promote_pending_sales error: {e}")
+        return 0
+
+
+# ============================================
 # STATUS REPORT
 # ============================================
 def get_reconciler_stats():
     """Get current reconciler statistics for logging/dashboard."""
     try:
         confirmed = supabase.table("confirmed_purchases").select("purchase_id", count="exact").execute()
-        pending = supabase.table("pending_purchases").select("pending_id", count="exact").eq("status", "pending").execute()
+        pending_buys = supabase.table("pending_purchases").select("pending_id", count="exact").eq("status", "pending").neq("transaction_type", "sale").execute()
+        pending_sales = supabase.table("pending_purchases").select("pending_id", count="exact").eq("status", "pending").eq("transaction_type", "sale").execute()
         discarded = supabase.table("pending_purchases").select("pending_id", count="exact").eq("status", "discarded").execute()
         promoted = supabase.table("pending_purchases").select("pending_id", count="exact").eq("status", "confirmed").execute()
+        confirmed_sales = supabase.table("confirmed_sales").select("sale_id", count="exact").execute()
 
         return {
             "confirmed_total": confirmed.count if confirmed.count else 0,
-            "pending_count": pending.count if pending.count else 0,
+            "pending_buys": pending_buys.count if pending_buys.count else 0,
+            "pending_sales": pending_sales.count if pending_sales.count else 0,
             "discarded_count": discarded.count if discarded.count else 0,
             "promoted_count": promoted.count if promoted.count else 0,
+            "confirmed_sales": confirmed_sales.count if confirmed_sales.count else 0,
         }
     except Exception as e:
         logger.error(f"Reconciler stats error: {e}")
-        return {"confirmed_total": 0, "pending_count": 0, "discarded_count": 0, "promoted_count": 0}
+        return {"confirmed_total": 0, "pending_buys": 0, "pending_sales": 0, "discarded_count": 0, "promoted_count": 0, "confirmed_sales": 0}
 
 
 # ============================================
 # QUICK TEST
 # ============================================
 if __name__ == "__main__":
-    logger.info("Purchase Reconciler v1.0 — self-test")
+    logger.info("Purchase Reconciler v2.0 — self-test")
     logger.info("=" * 60)
 
     stats = get_reconciler_stats()
     logger.info(f"Confirmed purchases: {stats['confirmed_total']}")
-    logger.info(f"Pending verification: {stats['pending_count']}")
+    logger.info(f"Confirmed sales: {stats['confirmed_sales']}")
+    logger.info(f"Pending buys: {stats['pending_buys']}")
+    logger.info(f"Pending sales: {stats['pending_sales']}")
     logger.info(f"Previously promoted: {stats['promoted_count']}")
     logger.info(f"Previously discarded: {stats['discarded_count']}")
 
-    # Test promotion
     promoted = promote_pending_purchases()
-    logger.info(f"Promotion check: {promoted} promoted")
+    logger.info(f"Purchase promotion check: {promoted} promoted")
 
-    # Test expiry
+    promoted_sales = promote_pending_sales()
+    logger.info(f"Sale promotion check: {promoted_sales} promoted")
+
     expired = expire_stale_pending()
     logger.info(f"Expiry check: {expired} expired")
 

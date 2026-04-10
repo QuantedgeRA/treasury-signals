@@ -61,7 +61,7 @@ from shares_updater import update_shares
 from entity_classifier import fix_entity_types
 from entity_name_fixer import fix_entity_names
 from edgar_realtime import check_edgar_filings as check_edgar_realtime
-from purchase_reconciler import promote_pending_purchases, expire_stale_pending, get_reconciler_stats
+from purchase_reconciler import promote_pending_purchases, expire_stale_pending, get_reconciler_stats, promote_pending_sales
 from global_filing_scanner import scan_all_filings
 from etf_holdings_scraper import update_etf_holdings
 from defi_tracker import update_defi_holdings
@@ -502,10 +502,10 @@ def main():
         with ScanContext(logger, scan_number, "[7/10] Daily leaderboard"):
             send_daily_leaderboard()
 
-        with ScanContext(logger, scan_number, "[8/10] Purchase detection"):
+        with ScanContext(logger, scan_number, "[8/10] Purchase & sale detection"):
             # Step 1: Scan news for real purchase announcements (feeds into reconciler)
-            # This runs FIRST so news-confirmed purchases are in the DB before
-            # snapshot comparison, allowing snapshot deltas to be deduped against them.
+            # Runs FIRST so news-confirmed purchases are in the DB before snapshot
+            # comparison, allowing snapshot deltas to be deduped against them.
             try:
                 news_purchases = scan_news_for_purchases()
                 if news_purchases:
@@ -514,6 +514,7 @@ def main():
                 logger.debug(f"News purchase scan: {e}")
 
             # Step 2: Snapshot comparison (all deltas go to pending, never auto-confirmed)
+            # Also detects holdings decreases as pending sales
             detected = detect_new_purchases()
             if detected:
                 log_detected_purchases(detected)
@@ -555,19 +556,27 @@ def main():
             except Exception as e:
                 logger.debug(f"Reconciler promote: {e}")
 
+            # Reconciler: promote pending sales confirmed by other scanners
+            try:
+                promoted_sales = promote_pending_sales()
+                if promoted_sales:
+                    logger.info(f"Reconciler: {promoted_sales} pending sale(s) promoted to confirmed")
+            except Exception as e:
+                logger.debug(f"Reconciler promote sales: {e}")
+
             # Reconciler: expire stale pending entries (once per day, morning only)
             if morning:
                 try:
                     expired = expire_stale_pending()
                     if expired:
-                        logger.info(f"Reconciler: {expired} stale pending purchase(s) discarded")
+                        logger.info(f"Reconciler: {expired} stale pending entries discarded")
                 except Exception as e:
                     logger.debug(f"Reconciler expire: {e}")
 
             # Log reconciler stats
             try:
                 rstats = get_reconciler_stats()
-                logger.info(f"Reconciler: {rstats['confirmed_total']} confirmed | {rstats['pending_count']} pending | {rstats['promoted_count']} promoted | {rstats['discarded_count']} discarded")
+                logger.info(f"Reconciler: {rstats['confirmed_total']} confirmed purchases | {rstats.get('confirmed_sales', 0)} confirmed sales | {rstats.get('pending_buys', 0)} pending buys | {rstats.get('pending_sales', 0)} pending sales | {rstats['promoted_count']} promoted | {rstats['discarded_count']} discarded")
             except Exception as e:
                 logger.debug(f"Reconciler stats: {e}")
 
