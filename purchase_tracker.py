@@ -216,16 +216,23 @@ def _parse_usd_value(amount_str, unit_str):
 def _extract_prices_from_article(url):
     """
     Fetch a news article and extract real purchase price data.
-    Returns dict with btc_amount, usd_amount, price_per_btc (any can be 0 if not found).
+    Follows Google News redirects to reach the actual article.
+    Returns dict with btc_amount, usd_amount, price_per_btc, resolved_url.
     """
-    result = {"btc_amount": 0, "usd_amount": 0, "price_per_btc": 0}
-    if not url or 'news.google.com' in url:
+    result = {"btc_amount": 0, "usd_amount": 0, "price_per_btc": 0, "resolved_url": ""}
+    if not url:
         return result
     try:
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         resp = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
         if not resp.ok:
             return result
+
+        # Capture the final URL after redirects (Google News → actual article)
+        final_url = resp.url
+        if final_url and 'news.google.com' not in final_url:
+            result["resolved_url"] = final_url
+
         # Strip HTML tags
         text = re.sub(r'<[^>]+>', ' ', resp.text)
         text = re.sub(r'\s+', ' ', text)[:20000]
@@ -374,6 +381,7 @@ def scan_news_for_purchases():
 
                 # Fetch article text for real price data (headline amounts are often incomplete)
                 article_data = _extract_prices_from_article(link)
+                article_url = article_data.get("resolved_url", "")
                 if article_data["price_per_btc"] > 0:
                     price_per_btc = article_data["price_per_btc"]
                 if article_data["usd_amount"] > 0 and usd_amount == 0:
@@ -406,7 +414,7 @@ def scan_news_for_purchases():
                         "source": f"News: {title[:100]}",
                         "notes": f"Auto-detected. Source: {link[:150]}",
                         "detected": True,
-                        "filing_url": link if link and 'news.google.com' not in link else "",
+                        "filing_url": article_url or (link if link and 'news.google.com' not in link else ""),
                     })
         except Exception as e:
             logger.debug(f"News query failed for '{query}': {e}")
