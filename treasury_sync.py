@@ -122,9 +122,20 @@ class EntityStore:
         name = entity["company"]
         # Strip non-ASCII characters (flag emojis, invisible Unicode) from entity names
         clean_name = re.sub(r'[^\x20-\x7E]', '', name).strip()
-        if clean_name:
-            entity["company"] = clean_name
-            name = clean_name
+        # Strip non-ASCII from ticker too
+        clean_ticker = re.sub(r'[^\x20-\x7E]', '', ticker).strip()
+        clean_ticker = re.sub(r'[^A-Za-z0-9.\-]', '', clean_ticker).upper()
+        if clean_ticker:
+            entity["ticker"] = clean_ticker
+            ticker = clean_ticker
+        # Reject entity if ticker is empty or garbled after cleaning
+        if not ticker or not re.match(r'^[A-Za-z0-9]', ticker):
+            return False
+        # Reject entity if name is empty, too short, or doesn't start with alphanumeric
+        if not clean_name or len(clean_name) < 2 or not re.match(r'^[A-Za-z0-9]', clean_name):
+            return False
+        entity["company"] = clean_name
+        name = clean_name
         norm = normalize_name(name)
         category = entity.get("entity_type", "public_company")
 
@@ -570,16 +581,20 @@ class TreasurySync:
     def _parse_b(self, texts, page):
         if len(texts) < 5:
             return None
-        name = texts[1]
-        ticker = texts[3] if len(texts) > 3 else ""
-        if not name:
+        name = re.sub(r'[^\x20-\x7E]', '', texts[1] or '').strip()
+        ticker = re.sub(r'[^\x20-\x7E]', '', texts[3] if len(texts) > 3 else '').strip()
+        ticker = re.sub(r'[^A-Za-z0-9.\-]', '', ticker).upper()
+        # Reject if name is empty, too short, or doesn't start with alphanumeric
+        if not name or len(name) < 2 or not re.match(r'^[A-Za-z0-9]', name):
             return None
         btc_clean = re.sub(r'[^\d.]', '', texts[4].replace(",", "") if len(texts) > 4 else "0")
         btc = int(float(btc_clean)) if btc_clean else 0
         if btc <= 0:
             return None
-        if not ticker:
+        if not ticker or len(ticker) < 1:
             ticker = re.sub(r'[^A-Za-z0-9]', '', name.upper()[:10])
+        if not ticker:
+            return None
         return {
             "ticker": ticker.upper(), "company": name[:200], "btc_holdings": btc,
             "avg_purchase_price": 0, "total_cost_usd": 0, "country": "",
@@ -605,8 +620,16 @@ class TreasurySync:
         except Exception as e:
             logger.warning(f"Could not clear table: {e}")
 
-        count = errors = 0
+        count = errors = skipped = 0
         for ticker, entity in all_entities.items():
+            # Final guard: skip entities with garbled names or tickers
+            name = entity.get("company", "")
+            if not name or len(name) < 2 or not re.match(r'^[A-Za-z0-9]', name):
+                skipped += 1
+                continue
+            if not re.match(r'^[A-Za-z0-9]', ticker):
+                skipped += 1
+                continue
             try:
                 supabase.table("treasury_companies").insert({
                     "ticker": ticker, "company": entity["company"][:200],
@@ -627,6 +650,8 @@ class TreasurySync:
                     logger.debug(f"Insert error {ticker}: {e}")
         if errors > 0:
             logger.warning(f"Treasury Sync: {errors} insert errors")
+        if skipped > 0:
+            logger.info(f"Treasury Sync: {skipped} garbled entities skipped")
         return count
 
     def _update_snapshot(self, all_entities):
