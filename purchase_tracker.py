@@ -162,6 +162,127 @@ def _build_normalized_lookup(holdings):
     return lookup
 
 
+def _get_current_btc_price():
+    """Get live BTC price for fallback calculations. Returns 72000 if fetch fails."""
+    try:
+        btc = yf.Ticker("BTC-USD")
+        hist = btc.history(period="1d")
+        if not hist.empty:
+            return float(hist["Close"].iloc[-1])
+    except:
+        pass
+    return 72000
+
+
+# Regex patterns for extracting prices from article text
+_ARTICLE_USD_PATTERNS = [
+    r'\$\s*([\d,]+(?:\.\d+)?)\s*(billion|million|B|M)',
+    r'([\d,]+(?:\.\d+)?)\s*(billion|million)\s*(?:dollars|\$|USD|worth)',
+    r'for\s+(?:approximately\s+)?\$\s*([\d,]+(?:\.\d+)?)\s*(billion|million|B|M)',
+    r'spent\s+(?:approximately\s+)?\$\s*([\d,]+(?:\.\d+)?)\s*(billion|million|B|M)',
+    r'total\s+(?:of\s+)?(?:approximately\s+)?\$\s*([\d,]+(?:\.\d+)?)\s*(billion|million|B|M)',
+]
+
+_ARTICLE_PRICE_PER_BTC_PATTERNS = [
+    r'(?:average|avg|mean)\s+(?:price|cost)\s+(?:of\s+)?(?:approximately\s+)?(?:about\s+)?\$\s*([\d,]+(?:\.\d+)?)',
+    r'\$\s*([\d,]+(?:\.\d+)?)\s+per\s+(?:bitcoin|btc|coin)',
+    r'at\s+(?:approximately\s+)?(?:about\s+)?\$\s*([\d,]+(?:\.\d+)?)\s+per',
+    r'(?:at|for)\s+(?:an\s+)?(?:average|avg)\s+(?:of\s+)?\$\s*([\d,]+(?:\.\d+)?)',
+    r'average\s+(?:purchase\s+)?price\s+(?:of\s+)?(?:approximately\s+)?(?:about\s+)?\$?\s*([\d,]+(?:\.\d+)?)',
+]
+
+_ARTICLE_BTC_PATTERNS = [
+    r'(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:BTC|bitcoin|bitcoins)',
+    r'approximately\s+(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:BTC|bitcoin)',
+    r'acquired\s+(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:BTC|bitcoin)',
+    r'purchased\s+(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:BTC|bitcoin)',
+]
+
+
+def _parse_usd_value(amount_str, unit_str):
+    """Convert extracted amount + unit to integer USD value."""
+    try:
+        val = float(amount_str.replace(',', ''))
+        unit = unit_str.lower()
+        if unit in ('b', 'billion'):
+            return int(val * 1_000_000_000)
+        elif unit in ('m', 'million'):
+            return int(val * 1_000_000)
+        return int(val)
+    except:
+        return 0
+
+
+def _extract_prices_from_article(url):
+    """
+    Fetch a news article and extract real purchase price data.
+    Returns dict with btc_amount, usd_amount, price_per_btc (any can be 0 if not found).
+    """
+    result = {"btc_amount": 0, "usd_amount": 0, "price_per_btc": 0}
+    if not url or 'news.google.com' in url:
+        return result
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        resp = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+        if not resp.ok:
+            return result
+        # Strip HTML tags
+        text = re.sub(r'<[^>]+>', ' ', resp.text)
+        text = re.sub(r'\s+', ' ', text)[:20000]
+        text_lower = text.lower()
+
+        # Extract price per BTC (most specific — try first)
+        for pattern in _ARTICLE_PRICE_PER_BTC_PATTERNS:
+            matches = re.findall(pattern, text_lower)
+            if matches:
+                for m in matches:
+                    try:
+                        price = float(m.replace(',', ''))
+                        # Sanity: BTC price should be between $10k and $500k
+                        if 10000 <= price <= 500000:
+                            result["price_per_btc"] = int(price)
+                            break
+                    except:
+                        pass
+                if result["price_per_btc"] > 0:
+                    break
+
+        # Extract total USD spent
+        usd_amounts = []
+        for pattern in _ARTICLE_USD_PATTERNS:
+            for m in re.finditer(pattern, text_lower):
+                groups = m.groups()
+                if len(groups) >= 2:
+                    val = _parse_usd_value(groups[0], groups[1])
+                    if val > 0:
+                        usd_amounts.append(val)
+        if usd_amounts:
+            # Pick the amount that's most consistent with other data
+            # Prefer amounts in the $1M-$50B range for corporate purchases
+            valid = [u for u in usd_amounts if 1_000_000 <= u <= 50_000_000_000]
+            if valid:
+                result["usd_amount"] = valid[0]
+
+        # Extract BTC amount from article (may be more precise than headline)
+        for pattern in _ARTICLE_BTC_PATTERNS:
+            matches = re.findall(pattern, text_lower)
+            if matches:
+                amounts = []
+                for m in matches:
+                    try:
+                        amounts.append(float(m.replace(',', '')))
+                    except:
+                        pass
+                if amounts:
+                    result["btc_amount"] = int(max(amounts))
+                    break
+
+    except Exception as e:
+        logger.debug(f"  Article price extraction failed for {url[:60]}: {e}")
+
+    return result
+
+
 def scan_news_for_purchases():
     logger.info("Scanning news for recent BTC purchases...")
     queries = [
@@ -232,6 +353,7 @@ def scan_news_for_purchases():
                     continue
                 btc_amount = 0
                 usd_amount = 0
+                price_per_btc = 0
                 btc_match = re.search(r'([\d,]+)\s*(?:btc|bitcoin)', title_lower)
                 if btc_match:
                     try:
@@ -249,19 +371,42 @@ def scan_news_for_purchases():
                             usd_amount = int(amount * 1_000_000)
                     except ValueError:
                         pass
-                if usd_amount > 0 and btc_amount == 0:
-                    btc_amount = int(usd_amount / 72000)
-                if btc_amount > 0 and usd_amount == 0:
-                    usd_amount = btc_amount * 72000
+
+                # Fetch article text for real price data (headline amounts are often incomplete)
+                article_data = _extract_prices_from_article(link)
+                if article_data["price_per_btc"] > 0:
+                    price_per_btc = article_data["price_per_btc"]
+                if article_data["usd_amount"] > 0 and usd_amount == 0:
+                    usd_amount = article_data["usd_amount"]
+                if article_data["btc_amount"] > 0 and btc_amount == 0:
+                    btc_amount = article_data["btc_amount"]
+
+                # If we have price_per_btc from article, calculate missing values from it
+                if price_per_btc > 0:
+                    if btc_amount > 0 and usd_amount == 0:
+                        usd_amount = btc_amount * price_per_btc
+                    elif usd_amount > 0 and btc_amount == 0:
+                        btc_amount = int(usd_amount / price_per_btc)
+                else:
+                    # Last resort: use live BTC price (not hardcoded)
+                    live_price = _get_current_btc_price()
+                    if usd_amount > 0 and btc_amount == 0:
+                        btc_amount = int(usd_amount / live_price)
+                    if btc_amount > 0 and usd_amount == 0:
+                        usd_amount = int(btc_amount * live_price)
+                    if btc_amount > 0 and usd_amount > 0:
+                        price_per_btc = round(usd_amount / btc_amount)
+
                 if btc_amount > 0 or usd_amount > 0:
                     detected.append({
                         "company": matched_company, "ticker": matched_ticker,
                         "btc_amount": btc_amount, "usd_amount": usd_amount,
-                        "price_per_btc": round(usd_amount / btc_amount) if btc_amount > 0 else 0,
+                        "price_per_btc": price_per_btc if price_per_btc > 0 else (round(usd_amount / btc_amount) if btc_amount > 0 else 0),
                         "filing_date": date_str,
                         "source": f"News: {title[:100]}",
                         "notes": f"Auto-detected. Source: {link[:150]}",
                         "detected": True,
+                        "filing_url": link if link and 'news.google.com' not in link else "",
                     })
         except Exception as e:
             logger.debug(f"News query failed for '{query}': {e}")
