@@ -256,7 +256,7 @@ def scan_usa_edgar(days_back=1):
                     })
             time.sleep(0.5)
         except Exception as e:
-            logger.debug(f"    EDGAR error: {e}")
+            logger.warning(f"    EDGAR error: {e}")
     return filings
 
 def scan_canada_sedar(days_back=1):
@@ -277,7 +277,7 @@ def scan_canada_sedar(days_back=1):
                     'filing_url': f"https://www.sedarplus.ca/csa-party/records/{item.get('id', '')}",
                 })
     except Exception as e:
-        logger.debug(f"    SEDAR error: {e}")
+        logger.warning(f"    SEDAR error: {e}")
     return filings
 
 def scan_japan_tdnet():
@@ -297,7 +297,7 @@ def scan_japan_tdnet():
                         'filing_url': f"https://disclosure.edinet-fsa.go.jp/E01EW/BLMainController.jsp?uji.verb=W0EZA226CXP001003Action&docID={doc.get('docID', '')}",
                     })
     except Exception as e:
-        logger.debug(f"    EDINET error: {e}")
+        logger.warning(f"    EDINET error: {e}")
     return filings
 
 def scan_korea_dart():
@@ -321,7 +321,7 @@ def scan_korea_dart():
                         'filing_url': f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={item.get('rcept_no', '')}",
                     })
     except Exception as e:
-        logger.debug(f"    DART error: {e}")
+        logger.warning(f"    DART error: {e}")
     return filings
 
 def scan_france_amf():
@@ -342,7 +342,7 @@ def scan_france_amf():
                         'filing_url': f"https://www.amf-france.org{link['href']}" if link else '',
                     })
     except Exception as e:
-        logger.debug(f"    AMF error: {e}")
+        logger.warning(f"    AMF error: {e}")
     return filings
 
 def scan_uk_rns():
@@ -363,7 +363,7 @@ def scan_uk_rns():
                         'filing_url': f"https://www.londonstockexchange.com{link['href']}" if link else '',
                     })
     except Exception as e:
-        logger.debug(f"    RNS error: {e}")
+        logger.warning(f"    RNS error: {e}")
     return filings
 
 def scan_germany_bafin():
@@ -384,7 +384,7 @@ def scan_germany_bafin():
                         'filing_url': '',
                     })
     except Exception as e:
-        logger.debug(f"    BaFin error: {e}")
+        logger.warning(f"    BaFin error: {e}")
     return filings
 
 def scan_hk_hkex():
@@ -405,7 +405,7 @@ def scan_hk_hkex():
                         'filing_url': link['href'] if link else '',
                     })
     except Exception as e:
-        logger.debug(f"    HKEX error: {e}")
+        logger.warning(f"    HKEX error: {e}")
     return filings
 
 def scan_australia_asx():
@@ -428,7 +428,7 @@ def scan_australia_asx():
                         'filing_url': f"https://www.asx.com.au{link['href']}" if link else '',
                     })
     except Exception as e:
-        logger.debug(f"    ASX error: {e}")
+        logger.warning(f"    ASX error: {e}")
     return filings
 
 def scan_brazil_cvm():
@@ -448,7 +448,7 @@ def scan_brazil_cvm():
                         'filing_url': '',
                     })
     except Exception as e:
-        logger.debug(f"    CVM error: {e}")
+        logger.warning(f"    CVM error: {e}")
     return filings
 
 def scan_india_sebi():
@@ -468,7 +468,7 @@ def scan_india_sebi():
                         'filing_url': '',
                     })
     except Exception as e:
-        logger.debug(f"    BSE error: {e}")
+        logger.warning(f"    BSE error: {e}")
     return filings
 
 def scan_singapore_sgx():
@@ -488,7 +488,7 @@ def scan_singapore_sgx():
                         'filing_url': '',
                     })
     except Exception as e:
-        logger.debug(f"    SGX error: {e}")
+        logger.warning(f"    SGX error: {e}")
     return filings
 
 def scan_israel_tase():
@@ -508,7 +508,7 @@ def scan_israel_tase():
                         'filing_url': '',
                     })
     except Exception as e:
-        logger.debug(f"    TASE error: {e}")
+        logger.warning(f"    TASE error: {e}")
     return filings
 
 def scan_norway_oslo():
@@ -529,7 +529,7 @@ def scan_norway_oslo():
                         'filing_url': f"https://newsweb.oslobors.no{link['href']}" if link else '',
                     })
     except Exception as e:
-        logger.debug(f"    Oslo error: {e}")
+        logger.warning(f"    Oslo error: {e}")
     return filings
 
 def scan_sweden_fi():
@@ -549,7 +549,7 @@ def scan_sweden_fi():
                         'filing_url': '',
                     })
     except Exception as e:
-        logger.debug(f"    FI Sweden error: {e}")
+        logger.warning(f"    FI Sweden error: {e}")
     return filings
 
 def scan_turkey_kap():
@@ -569,7 +569,7 @@ def scan_turkey_kap():
                         'filing_url': '',
                     })
     except Exception as e:
-        logger.debug(f"    KAP error: {e}")
+        logger.warning(f"    KAP error: {e}")
     return filings
 
 def scan_el_salvador():
@@ -587,7 +587,7 @@ def scan_el_salvador():
                     'source': 'bitcoin.gob.sv', 'filing_url': 'https://bitcoin.gob.sv',
                 })
     except Exception as e:
-        logger.debug(f"    El Salvador error: {e}")
+        logger.warning(f"    El Salvador error: {e}")
     return filings
 
 
@@ -759,8 +759,8 @@ def scan_all_filings(days_back=1):
             source_stats[country] = new_count
             total_new += new_count
         except Exception as e:
-            logger.debug(f"  {country} error: {e}")
-            source_stats[country] = 0
+            logger.warning(f"  ⚠️ {country} adapter FAILED: {e}")
+            source_stats[country] = -1  # Mark as failed, not just empty
 
     # Mechanism 2: Multi-language global news
     logger.info("  [2/3] Multi-language news (15 languages)...")
@@ -807,6 +807,13 @@ def scan_all_filings(days_back=1):
     for src, count in source_stats.items():
         if count > 0:
             logger.info(f"  ✅ {src}: {count} new")
+    # Log failed and empty adapters so issues are visible
+    failed = [src for src, count in source_stats.items() if count == -1]
+    empty = [src for src, count in source_stats.items() if count == 0 and src not in ('Global News (15 langs)', 'Crypto News Wires')]
+    if failed:
+        logger.warning(f"  ❌ FAILED adapters ({len(failed)}): {', '.join(failed)}")
+    if empty:
+        logger.info(f"  ⓘ Empty adapters ({len(empty)}): {', '.join(empty)}")
 
     return {'new_filings': total_new, 'alerts': total_alerts, 'sources': source_stats}
 
