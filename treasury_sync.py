@@ -658,6 +658,21 @@ class TreasurySync:
     # ═══════════════════════════════════════════════════════════
 
     def _wipe_and_rewrite(self, all_entities):
+        # Snapshot ticker -> shares_outstanding before wipe so Yahoo data survives.
+        # sync_protector only preserves btc_holdings/data_source, not Yahoo-sourced fields.
+        shares_snapshot = {}
+        try:
+            existing = supabase.table("treasury_companies").select("ticker, shares_outstanding").execute()
+            for row in (existing.data or []):
+                t = row.get("ticker")
+                s = row.get("shares_outstanding")
+                if t and s:
+                    shares_snapshot[t] = s
+            if shares_snapshot:
+                logger.debug(f"Treasury Sync: snapshotted shares_outstanding for {len(shares_snapshot)} tickers")
+        except Exception as e:
+            logger.debug(f"Shares snapshot pre-wipe failed: {e}")
+
         try:
             supabase.table("treasury_companies").delete().gte("id", 0).execute()
         except Exception as e:
@@ -674,7 +689,7 @@ class TreasurySync:
                 skipped += 1
                 continue
             try:
-                supabase.table("treasury_companies").insert({
+                payload = {
                     "ticker": ticker, "company": entity["company"][:200],
                     "btc_holdings": entity.get("btc_holdings", 0),
                     "avg_purchase_price": entity.get("avg_purchase_price", 0),
@@ -685,7 +700,10 @@ class TreasurySync:
                     "entity_type": entity.get("entity_type", "public_company"),
                     "data_source": entity.get("data_source", "aggregator"),
                     "last_updated": datetime.now().isoformat(),
-                }).execute()
+                }
+                if ticker in shares_snapshot:
+                    payload["shares_outstanding"] = shares_snapshot[ticker]
+                supabase.table("treasury_companies").insert(payload).execute()
                 count += 1
             except Exception as e:
                 errors += 1

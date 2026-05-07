@@ -275,25 +275,41 @@ def check_edgar_filings(days_back=1):
 
         for hit in hits:
             source = hit.get('_source', {})
-            accession = source.get('file_num', '') or source.get('accession_no', '')
+            # EDGAR FTS hit shape: _id = "accession:filename", _source.adsh = accession,
+            # _source.ciks = [cik], _source.form = "8-K", _source.display_names = ["NAME (TICKER) (CIK ...)"]
+            accession = source.get('adsh', '') or hit.get('_id', '').split(':')[0]
             if not accession or accession in processed:
                 continue
 
-            company_name = source.get('display_names', [''])[0] if source.get('display_names') else source.get('entity_name', '')
-            ticker_cik = source.get('entity_name', '')
+            display_names = source.get('display_names', []) or []
+            display = display_names[0] if display_names else ''
+            company_name = display.split('(')[0].strip() if display else ''
+
+            ticker_match = re.search(r'\(([A-Z][A-Z0-9.\-]{0,5})\)', display)
+            ticker_cik = ticker_match.group(1) if ticker_match else ''
+
+            ciks = source.get('ciks', []) or []
+            cik = ciks[0] if ciks else ''
             filing_date = source.get('file_date', '')
-            form_type = source.get('form_type', '8-K')
+            form_type = source.get('form', '8-K')
 
-            filing_url = ''
-            if source.get('file_num'):
-                filing_url = f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&filenum={source['file_num']}&type=8-K&dateb=&owner=include&count=10"
-
-            primary_doc = source.get('file_url', '')
-            if primary_doc:
-                text = _fetch_filing_text(f"https://efts.sec.gov{primary_doc}")
+            # Reconstruct the primary document URL from CIK + accession + filename
+            hit_id = hit.get('_id', '')
+            filename = hit_id.split(':', 1)[1] if ':' in hit_id else ''
+            if cik and accession and filename:
+                accession_clean = accession.replace('-', '')
+                try:
+                    cik_int = int(cik)
+                    primary_doc_url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession_clean}/{filename}"
+                    filing_url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession_clean}/"
+                except ValueError:
+                    primary_doc_url = ''
+                    filing_url = ''
             else:
-                text = source.get('text', '')
+                primary_doc_url = ''
+                filing_url = ''
 
+            text = _fetch_filing_text(primary_doc_url) if primary_doc_url else ''
             if not text:
                 continue
 

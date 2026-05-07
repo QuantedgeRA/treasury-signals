@@ -232,6 +232,50 @@ def _route_to_reconciler(filing):
 # MECHANISM 1: COUNTRY-SPECIFIC REGULATORY FILING SYSTEMS
 # ═══════════════════════════════════════════════════════════
 
+def scan_usa_edgar_atom(days_back=1):
+    """USA — SEC EDGAR latest-filings Atom feed (8-K). Catches filings before
+    they're indexed by the full-text search API, which has a delay."""
+    filings = []
+    try:
+        resp = requests.get(
+            "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&output=atom",
+            headers=HEADERS, timeout=30,
+        )
+        if not resp.ok:
+            return filings
+        soup = BeautifulSoup(resp.text, 'xml')
+        cutoff = datetime.now() - timedelta(days=max(days_back, 1))
+        for entry in soup.find_all('entry'):
+            title = (entry.find('title').get_text() if entry.find('title') else '').strip()
+            updated = (entry.find('updated').get_text() if entry.find('updated') else '').strip()
+            link_tag = entry.find('link')
+            href = link_tag.get('href') if link_tag else ''
+            summary = (entry.find('summary').get_text() if entry.find('summary') else '').strip()
+            combined = f"{title} {summary}".lower()
+            if not _has_btc_keywords(combined):
+                continue
+            try:
+                ts = datetime.fromisoformat(updated.replace('Z', '+00:00')).replace(tzinfo=None)
+                if ts < cutoff:
+                    continue
+            except Exception:
+                pass
+            company = title.split(' - ')[1].strip() if ' - ' in title else title[:200]
+            filings.append({
+                'accession_number': f"edgar_atom_{_hash_id(href or title)}",
+                'company_name': company[:200],
+                'ticker_cik': '',
+                'filing_date': (ts.strftime('%Y-%m-%d') if 'ts' in dir() else datetime.now().strftime('%Y-%m-%d')),
+                'form_type': '8-K',
+                'event_type': 'filing',
+                'source': 'SEC EDGAR Atom (USA)',
+                'filing_url': href,
+            })
+    except Exception as e:
+        logger.warning(f"    EDGAR atom error: {e}")
+    return filings
+
+
 def scan_usa_edgar(days_back=1):
     """USA — SEC EDGAR full-text search API."""
     filings = []
@@ -281,11 +325,21 @@ def scan_canada_sedar(days_back=1):
     return filings
 
 def scan_japan_tdnet():
-    """Japan — TDnet + EDINET."""
+    """Japan — EDINET. Requires EDINET_API_KEY (FSA started enforcing in 2024).
+    Register for a free key at https://disclosure2.edinet-fsa.go.jp/weee0010.aspx"""
     filings = []
+    edinet_key = os.getenv("EDINET_API_KEY", "")
+    if not edinet_key:
+        logger.debug("    EDINET skipped: EDINET_API_KEY not set")
+        return filings
     try:
         today = datetime.now().strftime('%Y-%m-%d')
-        resp = requests.get(f"https://disclosure.edinet-fsa.go.jp/api/v2/documents.json?date={today}&type=2", headers=HEADERS, timeout=30)
+        # FSA requires Subscription-Key header AND key in query for v2
+        url = f"https://disclosure.edinet-fsa.go.jp/api/v2/documents.json?date={today}&type=2&Subscription-Key={edinet_key}"
+        resp = requests.get(url, headers={**HEADERS, 'Subscription-Key': edinet_key}, timeout=30)
+        if resp.status_code == 401:
+            logger.warning("    EDINET 401: subscription key invalid or expired")
+            return filings
         if resp.ok:
             for doc in resp.json().get('results', []):
                 title = (doc.get('docDescription', '') or '').lower()
@@ -701,23 +755,34 @@ def scan_crypto_news():
 # MAIN SCANNER — ORCHESTRATES ALL MECHANISMS
 # ═══════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════
+# ACTIVE ADAPTERS — verified to produce output (probe_feeds.py 2026-05)
+# ═══════════════════════════════════════════════════════════
+#
+# RETIRED ADAPTERS (functions kept above for future revival when sites change):
+#   - scan_canada_sedar:   SEDAR+ now serves Radware captcha to all bot traffic
+#   - scan_france_amf:     RSS endpoints retired (404 → "page no longer exists")
+#   - scan_uk_rns:         LSE migrated to Angular SPA; Investegate RSS redirects
+#   - scan_germany_bafin:  Bundesanzeiger search returns error redirect; no public RSS
+#   - scan_hk_hkex:        XHTML SPA, 0 items in static HTML
+#   - scan_australia_asx:  /asx-announcements.xml 404; today-anns is HTML SPA
+#   - scan_brazil_cvm:     ASPX form requires viewstate POST; no public feed
+#   - scan_india_sebi:     BSE 403 anti-bot on /xml-data/* and /data/xml/*
+#   - scan_singapore_sgx:  api.sgx.com 403; /wcm/.../rss returns SPA HTML
+#   - scan_israel_tase:    Maya RSS endpoint returns 404
+#   - scan_norway_oslo:    Newsweb is a 537-byte SPA; api3.oslo 404
+#   - scan_sweden_fi:      /sv/rss/marknadsinformation 404
+#   - scan_turkey_kap:     /en/rss/general and /tr/rss both 404
+#
+# To revive any of the above: investigate whether the site now offers a JSON
+# API, an authenticated feed, or a 3rd-party aggregator with stable access.
+# Mechanism 2 (Google News in 15 langs) and Mechanism 3 (crypto news wires)
+# already provide best-effort international coverage for retired sources.
 REGULATORY_ADAPTERS = [
-    ('USA', scan_usa_edgar),
-    ('Canada', scan_canada_sedar),
-    ('Japan', scan_japan_tdnet),
-    ('South Korea', scan_korea_dart),
-    ('France', scan_france_amf),
-    ('UK', scan_uk_rns),
-    ('Germany', scan_germany_bafin),
-    ('Hong Kong', scan_hk_hkex),
-    ('Australia', scan_australia_asx),
-    ('Brazil', scan_brazil_cvm),
-    ('India', scan_india_sebi),
-    ('Singapore', scan_singapore_sgx),
-    ('Israel', scan_israel_tase),
-    ('Norway', scan_norway_oslo),
-    ('Sweden', scan_sweden_fi),
-    ('Turkey', scan_turkey_kap),
+    ('USA-FTS', scan_usa_edgar),
+    ('USA-Atom', scan_usa_edgar_atom),
+    ('Japan-EDINET', scan_japan_tdnet),       # conditional on EDINET_API_KEY
+    ('South Korea-DART', scan_korea_dart),    # conditional on DART_API_KEY
     ('El Salvador', scan_el_salvador),
 ]
 
