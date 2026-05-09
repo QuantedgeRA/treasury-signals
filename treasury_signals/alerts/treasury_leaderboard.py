@@ -1,0 +1,754 @@
+"""
+treasury_leaderboard.py — v2.1
+-------------------------------
+BTC Treasury Company Leaderboard — LIVE DATA
+
+Data source cascade:
+1. CoinGecko API (primary — 148 public companies)
+2. BitcoinTreasuries.net scraping (fallback — 300+ entities)
+3. Supabase snapshot (cached — last successful snapshot from DB)
+4. Dynamic fallback (auto-updated — saved every time a live source succeeds)
+5. Hardcoded fallback (last resort — static numbers, rarely used)
+
+v2.1 changes:
+- Fixed Source 3: Supabase snapshot parsing now handles dict format correctly
+- Added Source 4: Dynamic fallback that auto-updates from Supabase on every successful fetch
+- Hardcoded fallback demoted to Source 5 (should almost never be reached)
+"""
+
+import json
+import os
+import re
+import requests
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from dotenv import load_dotenv
+from supabase import create_client
+from bs4 import BeautifulSoup
+from treasury_signals.logger import get_logger
+from treasury_signals.freshness_tracker import freshness
+
+logger = get_logger(__name__)
+
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+# ============================================
+# SOURCE 5: HARDCODED FALLBACK (absolute last resort)
+# These numbers are static and only used if ALL other sources fail.
+# ============================================
+FALLBACK_COMPANIES = [
+    {"company": "Strategy (MicroStrategy)", "ticker": "MSTR", "btc_holdings": 499096, "avg_purchase_price": 66357, "total_cost_usd": 33100000000, "country": "USA", "sector": "Software / BTC Treasury"},
+    {"company": "Marathon Digital (MARA)", "ticker": "MARA", "btc_holdings": 46374, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "USA", "sector": "Bitcoin Mining"},
+    {"company": "Twenty One Capital", "ticker": "CEP", "btc_holdings": 31500, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "USA", "sector": "BTC Treasury / Fintech"},
+    {"company": "Riot Platforms", "ticker": "RIOT", "btc_holdings": 19223, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "USA", "sector": "Bitcoin Mining"},
+    {"company": "CleanSpark", "ticker": "CLSK", "btc_holdings": 11869, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "USA", "sector": "Bitcoin Mining"},
+    {"company": "Tesla", "ticker": "TSLA", "btc_holdings": 11509, "avg_purchase_price": 32700, "total_cost_usd": 1500000000, "country": "USA", "sector": "Automotive / EV"},
+    {"company": "Hut 8 Mining", "ticker": "HUT", "btc_holdings": 10208, "avg_purchase_price": 24484, "total_cost_usd": 250000000, "country": "Canada", "sector": "Bitcoin Mining"},
+    {"company": "Coinbase Global", "ticker": "COIN", "btc_holdings": 9480, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "USA", "sector": "Crypto Exchange"},
+    {"company": "Block (Square)", "ticker": "XYZ", "btc_holdings": 8211, "avg_purchase_price": 34600, "total_cost_usd": 284000000, "country": "USA", "sector": "Fintech / Payments"},
+    {"company": "Semler Scientific", "ticker": "SMLR", "btc_holdings": 3192, "avg_purchase_price": 81000, "total_cost_usd": 258600000, "country": "USA", "sector": "Healthcare / BTC Treasury"},
+    {"company": "Metaplanet", "ticker": "3350.T", "btc_holdings": 3050, "avg_purchase_price": 75000, "total_cost_usd": 228000000, "country": "Japan", "sector": "Investment / BTC Treasury"},
+    {"company": "Bitfarms", "ticker": "BITF", "btc_holdings": 1147, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "Canada", "sector": "Bitcoin Mining"},
+    {"company": "KULR Technology", "ticker": "KULR", "btc_holdings": 610, "avg_purchase_price": 97000, "total_cost_usd": 59200000, "country": "USA", "sector": "Energy / Battery Tech"},
+    {"company": "MercadoLibre", "ticker": "MELI", "btc_holdings": 412, "avg_purchase_price": 48000, "total_cost_usd": 19800000, "country": "Argentina", "sector": "E-commerce"},
+    {"company": "GameStop", "ticker": "GME", "btc_holdings": 0, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "USA", "sector": "Retail / Gaming"},
+    {"company": "Core Scientific", "ticker": "CORZ", "btc_holdings": 0, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "USA", "sector": "Bitcoin Mining / AI"},
+]
+
+SOVEREIGN_HOLDERS = [
+    {"company": "🇺🇸 United States Government", "ticker": "US-GOV", "btc_holdings": 328372, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "US", "sector": "Government (Seized + Strategic Reserve)", "is_government": True, "notes": "Fallback data"},
+    {"company": "🇨🇳 China Government", "ticker": "CN-GOV", "btc_holdings": 194000, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "CN", "sector": "Government (Seized Assets)", "is_government": True, "notes": "Fallback data"},
+    {"company": "🇬🇧 United Kingdom Government", "ticker": "UK-GOV", "btc_holdings": 61000, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "GB", "sector": "Government (Seized Assets)", "is_government": True, "notes": "Fallback data"},
+    {"company": "🇺🇦 Ukraine Government", "ticker": "UA-GOV", "btc_holdings": 46351, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "UA", "sector": "Government (Donations)", "is_government": True, "notes": "Fallback data"},
+    {"company": "🇧🇹 Bhutan (Druk Holding)", "ticker": "BT-GOV", "btc_holdings": 13029, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "BT", "sector": "Government (Sovereign Mining)", "is_government": True, "notes": "Fallback data"},
+    {"company": "🇸🇻 El Salvador Government", "ticker": "SV-GOV", "btc_holdings": 6089, "avg_purchase_price": 44300, "total_cost_usd": 269700000, "country": "SV", "sector": "Government (Legal Tender)", "is_government": True, "notes": "Fallback data"},
+    {"company": "🇫🇮 Finland Government", "ticker": "FI-GOV", "btc_holdings": 90, "avg_purchase_price": 0, "total_cost_usd": 0, "country": "FI", "sector": "Government (Seized Assets)", "is_government": True, "notes": "Fallback data"},
+]
+
+_live_data_cache = {"data": None, "fetched_at": None}
+
+
+# ============================================
+# SOURCE 4: DYNAMIC FALLBACK (auto-updated)
+# Saved to Supabase every time a live source succeeds.
+# ============================================
+DYNAMIC_FALLBACK_KEY = "last_known_good_leaderboard"
+
+
+def _save_dynamic_fallback(companies):
+    """
+    Save current live data as the dynamic fallback.
+    Called every time Source 1 or Source 2 succeeds.
+    
+    Validation safeguard (checks ALL entities):
+    - Large holders (>1000 BTC): block if ANY drops >50%
+    - Medium holders (100-1000 BTC): block if 3+ drop >50%
+    - Small holders (10-100 BTC): block if 5+ drop >50%
+    - Entity count: block if total drops by >30%
+    - Total BTC: block if aggregate BTC drops by >20%
+    
+    One company selling is normal. Many companies dropping simultaneously = bad data.
+    """
+    try:
+        # Build new fallback data
+        fallback_data = []
+        for c in companies:
+            fallback_data.append({
+                "company": c.get("company", ""),
+                "ticker": c.get("ticker", ""),
+                "btc_holdings": c.get("btc_holdings", 0),
+                "avg_purchase_price": c.get("avg_purchase_price", 0),
+                "total_cost_usd": c.get("total_cost_usd", 0),
+                "country": c.get("country", "Unknown"),
+                "sector": c.get("sector", "BTC Treasury"),
+            })
+
+        # Validation: compare ALL entities against existing fallback
+        existing = _load_dynamic_fallback()
+        if existing and len(existing) > 10:
+            existing_map = {c["ticker"]: c for c in existing if c.get("btc_holdings", 0) > 0}
+            new_map = {c["ticker"]: c for c in fallback_data if c.get("btc_holdings", 0) > 0}
+
+            # Check every entity for suspicious drops
+            suspicious_large = []   # >1000 BTC holders
+            suspicious_medium = []  # 100-1000 BTC holders
+            suspicious_small = []   # 10-100 BTC holders
+
+            for ticker, old_data in existing_map.items():
+                old_btc = old_data.get("btc_holdings", 0)
+                new_data = new_map.get(ticker)
+                new_btc = new_data.get("btc_holdings", 0) if new_data else 0
+                company_name = old_data.get("company", ticker)
+
+                # Only flag drops (not increases or disappearances from API)
+                if old_btc > 0 and new_btc > 0 and new_btc < (old_btc * 0.5):
+                    drop_pct = (1 - new_btc / old_btc) * 100
+                    entry = f"{company_name} ({ticker}): {old_btc:,} → {new_btc:,} (-{drop_pct:.0f}%)"
+
+                    if old_btc > 1000:
+                        suspicious_large.append(entry)
+                    elif old_btc > 100:
+                        suspicious_medium.append(entry)
+                    elif old_btc > 10:
+                        suspicious_small.append(entry)
+
+            # Decision logic — tiered thresholds
+            block_save = False
+            block_reasons = []
+
+            # ANY large holder dropping >50% is suspicious (Strategy going from 762K to 300K = bad data)
+            if suspicious_large:
+                block_save = True
+                block_reasons.append(f"{len(suspicious_large)} large holder(s) (>1000 BTC) dropped >50%")
+                for s in suspicious_large[:5]:
+                    block_reasons.append(f"  ⚠️ {s}")
+
+            # 3+ medium holders dropping simultaneously = bad data
+            if len(suspicious_medium) >= 3:
+                block_save = True
+                block_reasons.append(f"{len(suspicious_medium)} medium holders (100-1000 BTC) dropped >50%")
+                for s in suspicious_medium[:3]:
+                    block_reasons.append(f"  ⚠️ {s}")
+
+            # 5+ small holders dropping simultaneously = bad data
+            if len(suspicious_small) >= 5:
+                block_save = True
+                block_reasons.append(f"{len(suspicious_small)} small holders (10-100 BTC) dropped >50%")
+
+            # Total entity count dropped by >30% (API returned partial data)
+            if len(fallback_data) < len(existing) * 0.7:
+                block_save = True
+                block_reasons.append(f"Entity count dropped: {len(existing)} → {len(fallback_data)} ({len(fallback_data)/len(existing)*100:.0f}%)")
+
+            # Total BTC across all entities dropped by >20% (massive data corruption)
+            old_total = sum(c.get("btc_holdings", 0) for c in existing)
+            new_total = sum(c.get("btc_holdings", 0) for c in fallback_data)
+            if old_total > 0 and new_total < (old_total * 0.8):
+                block_save = True
+                block_reasons.append(f"Total BTC dropped: {old_total:,} → {new_total:,} (-{(1-new_total/old_total)*100:.0f}%)")
+
+            if block_save:
+                logger.warning(f"Dynamic fallback SKIPPED — data validation failed:")
+                for reason in block_reasons:
+                    logger.warning(f"  {reason}")
+                logger.warning("Keeping previous fallback to protect data integrity.")
+                return
+            else:
+                # Log minor changes for transparency
+                all_suspicious = len(suspicious_large) + len(suspicious_medium) + len(suspicious_small)
+                if all_suspicious > 0:
+                    logger.debug(f"Dynamic fallback: {all_suspicious} entity drop(s) detected but within normal thresholds — saving")
+
+        supabase.table("leaderboard_snapshots").upsert({
+            "snapshot_date": DYNAMIC_FALLBACK_KEY,
+            "btc_price": 0,
+            "total_btc": sum(c["btc_holdings"] for c in fallback_data),
+            "total_value_b": 0,
+            "companies_json": json.dumps(fallback_data),
+        }, on_conflict="snapshot_date").execute()
+
+        logger.debug(f"Dynamic fallback saved: {len(fallback_data)} companies (validated)")
+    except Exception as e:
+        logger.debug(f"Dynamic fallback save failed: {e}")
+
+
+def _load_dynamic_fallback():
+    """
+    Load the last known good leaderboard data from Supabase.
+    Returns list of company dicts or None.
+    """
+    try:
+        result = supabase.table("leaderboard_snapshots").select("*").eq("snapshot_date", DYNAMIC_FALLBACK_KEY).execute()
+        if result.data:
+            snapshot = result.data[0]
+            companies_raw = snapshot.get("companies_json", "[]")
+
+            # Parse JSON string
+            if isinstance(companies_raw, str):
+                companies_data = json.loads(companies_raw)
+            else:
+                companies_data = companies_raw
+
+            # Handle list format (correct format from dynamic fallback)
+            if isinstance(companies_data, list) and len(companies_data) > 0:
+                # Verify it's a list of company dicts
+                if isinstance(companies_data[0], dict) and "company" in companies_data[0]:
+                    logger.info(f"Dynamic fallback loaded: {len(companies_data)} companies (last known good)")
+                    freshness.set_provenance("leaderboard_corporate", "Dynamic fallback (last known good)", "cached")
+                    return companies_data
+
+            # Handle dict format (old snapshot format: {ticker: {name, btc, country}})
+            if isinstance(companies_data, dict):
+                companies = []
+                for ticker, data in companies_data.items():
+                    if isinstance(data, dict) and data.get("btc", 0) > 0:
+                        companies.append({
+                            "company": data.get("name", ticker),
+                            "ticker": ticker,
+                            "btc_holdings": data.get("btc", 0),
+                            "avg_purchase_price": 0,
+                            "total_cost_usd": 0,
+                            "country": data.get("country", "Unknown"),
+                            "sector": "BTC Treasury",
+                        })
+                if companies:
+                    companies.sort(key=lambda x: x["btc_holdings"], reverse=True)
+                    logger.info(f"Dynamic fallback loaded (dict format): {len(companies)} companies")
+                    freshness.set_provenance("leaderboard_corporate", "Dynamic fallback (dict format)", "cached")
+                    return companies
+
+    except Exception as e:
+        logger.debug(f"Dynamic fallback load failed: {e}")
+    return None
+
+
+# ============================================
+# SOURCE 3: SUPABASE SNAPSHOT (most recent daily snapshot)
+# ============================================
+def _load_supabase_snapshot():
+    """
+    Load the most recent daily snapshot from Supabase.
+    Handles both old format (dict of tickers) and new format (list of companies).
+    """
+    try:
+        # Get the most recent snapshot that isn't the dynamic fallback
+        result = supabase.table("leaderboard_snapshots").select("*").neq("snapshot_date", DYNAMIC_FALLBACK_KEY).order("snapshot_date", desc=True).limit(1).execute()
+
+        if not result.data:
+            return None
+
+        snapshot = result.data[0]
+        snapshot_date = snapshot.get("snapshot_date", "unknown")
+        companies_raw = snapshot.get("companies_json", "[]")
+
+        # Parse JSON string
+        if isinstance(companies_raw, str):
+            companies_data = json.loads(companies_raw)
+        else:
+            companies_data = companies_raw
+
+        # Format 1: List of company dicts [{company, ticker, btc_holdings, ...}]
+        if isinstance(companies_data, list) and len(companies_data) > 0:
+            if isinstance(companies_data[0], dict) and "company" in companies_data[0]:
+                logger.warning(f"Using Supabase snapshot from {snapshot_date} (list format, {len(companies_data)} companies)")
+                freshness.set_provenance("leaderboard_corporate", f"Supabase snapshot ({snapshot_date})", "cached")
+                return companies_data
+
+            # Old format: list of {ticker, btc_holdings, rank} — needs enrichment from fallback
+            if isinstance(companies_data[0], dict) and "ticker" in companies_data[0]:
+                fallback_map = {c["ticker"]: c for c in FALLBACK_COMPANIES}
+                companies = []
+                for sc in companies_data:
+                    ticker = sc.get("ticker", "")
+                    btc = sc.get("btc_holdings", 0)
+                    if ticker in fallback_map:
+                        company = fallback_map[ticker].copy()
+                        company["btc_holdings"] = btc
+                        companies.append(company)
+                    elif btc > 0:
+                        companies.append({
+                            "company": ticker,
+                            "ticker": ticker,
+                            "btc_holdings": btc,
+                            "avg_purchase_price": 0,
+                            "total_cost_usd": 0,
+                            "country": "Unknown",
+                            "sector": "BTC Treasury",
+                        })
+                if companies:
+                    companies.sort(key=lambda x: x["btc_holdings"], reverse=True)
+                    logger.warning(f"Using Supabase snapshot from {snapshot_date} (old list format, {len(companies)} companies)")
+                    freshness.set_provenance("leaderboard_corporate", f"Supabase snapshot ({snapshot_date})", "cached")
+                    return companies
+
+        # Format 2: Dict of {ticker: {name, btc, country}} — snapshot comparison format
+        if isinstance(companies_data, dict) and len(companies_data) > 0:
+            companies = []
+            for ticker, data in companies_data.items():
+                if isinstance(data, dict):
+                    btc = data.get("btc", data.get("btc_holdings", 0))
+                    if btc > 0:
+                        companies.append({
+                            "company": data.get("name", data.get("company", ticker)),
+                            "ticker": ticker,
+                            "btc_holdings": btc,
+                            "avg_purchase_price": 0,
+                            "total_cost_usd": 0,
+                            "country": data.get("country", "Unknown"),
+                            "sector": "BTC Treasury",
+                        })
+                elif isinstance(data, (int, float)) and data > 0:
+                    # Simplest format: {ticker: btc_amount}
+                    companies.append({
+                        "company": ticker,
+                        "ticker": ticker,
+                        "btc_holdings": int(data),
+                        "avg_purchase_price": 0,
+                        "total_cost_usd": 0,
+                        "country": "Unknown",
+                        "sector": "BTC Treasury",
+                    })
+
+            if companies:
+                companies.sort(key=lambda x: x["btc_holdings"], reverse=True)
+                logger.warning(f"Using Supabase snapshot from {snapshot_date} (dict format, {len(companies)} companies)")
+                freshness.set_provenance("leaderboard_corporate", f"Supabase snapshot ({snapshot_date})", "cached")
+                return companies
+
+        logger.warning(f"Supabase snapshot from {snapshot_date} has unrecognized format")
+        return None
+
+    except Exception as e:
+        logger.warning(f"Supabase snapshot failed: {e}")
+        return None
+
+
+# ============================================
+# MAIN FETCH FUNCTION
+# ============================================
+def fetch_live_leaderboard():
+    """Fetch live BTC treasury data. Tries each source in order."""
+    global _live_data_cache
+
+    # Check cache first (1 hour TTL)
+    if _live_data_cache["data"] and _live_data_cache["fetched_at"]:
+        age_seconds = (datetime.now() - _live_data_cache["fetched_at"]).total_seconds()
+        if age_seconds < 3600:
+            logger.debug("Using cached leaderboard data (less than 1 hour old)")
+            return _live_data_cache["data"]
+
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+    # ─── SOURCE 1: CoinGecko API ───
+    try:
+        logger.debug("Trying CoinGecko public companies API...")
+        cg_headers = headers.copy()
+        cg_api_key = os.getenv("COINGECKO_API_KEY", "")
+        if cg_api_key:
+            cg_headers["x-cg-demo-api-key"] = cg_api_key
+        response = requests.get(
+            "https://api.coingecko.com/api/v3/companies/public_treasury/bitcoin",
+            headers=cg_headers, timeout=15
+        )
+        if response.status_code == 200:
+            data = response.json()
+            companies_raw = data.get("companies", [])
+            companies = []
+            for item in companies_raw:
+                try:
+                    company = {
+                        "company": item.get("name", "Unknown"),
+                        "ticker": item.get("symbol", ""),
+                        "btc_holdings": int(item.get("total_holdings", 0)),
+                        "avg_purchase_price": int(float(item.get("total_entry_value_usd", 0)) / max(int(item.get("total_holdings", 1)), 1)) if item.get("total_entry_value_usd") else 0,
+                        "total_cost_usd": int(float(item.get("total_entry_value_usd", 0))) if item.get("total_entry_value_usd") else 0,
+                        "country": item.get("country", "Unknown"),
+                        "sector": "BTC Treasury",
+                    }
+                    if company["btc_holdings"] > 0:
+                        companies.append(company)
+                except Exception as e:
+                    logger.debug(f"Skipping CoinGecko company entry: {e}")
+                    continue
+
+            if companies:
+                companies.sort(key=lambda x: x["btc_holdings"], reverse=True)
+                _live_data_cache["data"] = companies
+                _live_data_cache["fetched_at"] = datetime.now()
+                logger.info(f"CoinGecko LIVE: {len(companies)} companies fetched")
+                freshness.record_success("coingecko", detail=f"{len(companies)} companies fetched")
+                freshness.set_provenance("leaderboard_corporate", "CoinGecko API", "live")
+
+                # Auto-update dynamic fallback with fresh data
+                _save_dynamic_fallback(companies)
+
+                return companies
+        else:
+            logger.warning(f"CoinGecko returned status {response.status_code}")
+            freshness.record_failure("coingecko", error=f"HTTP {response.status_code}")
+    except Exception as e:
+        logger.warning(f"CoinGecko failed: {e}")
+        freshness.record_failure("coingecko", error=str(e))
+
+    # ─── SOURCE 2: BitcoinTreasuries.net scraping ───
+    try:
+        logger.debug("Trying BitcoinTreasuries.net scraping...")
+        response = requests.get("https://bitcointreasuries.net/", headers=headers, timeout=15)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "lxml")
+            tables = soup.find_all("table")
+            if tables:
+                companies = []
+                for row in tables[0].find_all("tr")[1:]:
+                    cols = row.find_all("td")
+                    if len(cols) >= 4:
+                        try:
+                            name = cols[0].get_text(strip=True)
+                            ticker = cols[1].get_text(strip=True) if len(cols) > 1 else ""
+                            btc_text = cols[2].get_text(strip=True).replace(",", "").replace(" ", "") if len(cols) > 2 else "0"
+                            btc_holdings = int(float(btc_text)) if btc_text.replace(".", "").isdigit() else 0
+                            if name and btc_holdings > 0:
+                                companies.append({
+                                    "company": name, "ticker": ticker,
+                                    "btc_holdings": btc_holdings, "avg_purchase_price": 0,
+                                    "total_cost_usd": 0, "country": "Unknown", "sector": "BTC Treasury",
+                                })
+                        except Exception as e:
+                            logger.debug(f"Skipping BitcoinTreasuries row: {e}")
+                            continue
+                if companies:
+                    companies.sort(key=lambda x: x["btc_holdings"], reverse=True)
+                    _live_data_cache["data"] = companies
+                    _live_data_cache["fetched_at"] = datetime.now()
+                    logger.info(f"BitcoinTreasuries LIVE: {len(companies)} companies scraped")
+                    freshness.record_success("bitcointreasuries", detail=f"{len(companies)} companies scraped")
+                    freshness.set_provenance("leaderboard_corporate", "BitcoinTreasuries.net", "live")
+
+                    # Auto-update dynamic fallback with fresh data
+                    _save_dynamic_fallback(companies)
+
+                    return companies
+            logger.warning("Could not parse BitcoinTreasuries.net tables")
+    except Exception as e:
+        logger.warning(f"BitcoinTreasuries.net scraping failed: {e}")
+
+    # ─── SOURCE 3: Supabase daily snapshot ───
+    snapshot_data = _load_supabase_snapshot()
+    if snapshot_data:
+        return snapshot_data
+
+    # ─── SOURCE 4: Dynamic fallback (last known good) ───
+    dynamic_data = _load_dynamic_fallback()
+    if dynamic_data:
+        return dynamic_data
+
+    # ─── SOURCE 5: Hardcoded fallback (absolute last resort) ───
+    logger.warning("ALL sources unavailable — using hardcoded fallback data")
+    freshness.set_provenance("leaderboard_corporate", "Hardcoded fallback", "fallback")
+    return None
+
+
+# ============================================
+# SOVEREIGN HOLDINGS
+# ============================================
+def fetch_sovereign_holdings():
+    """Fetch government BTC holdings from Supabase (already fixed by gov_entities.py)."""
+    # Source 1: Supabase — government entities with correct names and BTC from gov_entities.py
+    try:
+        result = supabase.table("treasury_companies").select(
+            "company, ticker, btc_holdings, country, is_government"
+        ).eq("is_government", True).gt("btc_holdings", 0).order(
+            "btc_holdings", desc=True
+        ).execute()
+
+        if result.data and len(result.data) > 0:
+            sovereigns = []
+            for item in result.data:
+                sovereigns.append({
+                    "company": item.get("company", "Unknown"),
+                    "ticker": item.get("ticker", ""),
+                    "btc_holdings": item.get("btc_holdings", 0),
+                    "avg_purchase_price": 0,
+                    "total_cost_usd": 0,
+                    "country": item.get("country", ""),
+                    "sector": "Government",
+                    "is_government": True,
+                    "notes": "LIVE from Supabase (gov_entities.py)",
+                })
+            logger.info(f"Sovereign holdings: {len(sovereigns)} governments from Supabase")
+            freshness.set_provenance("leaderboard_sovereign", "Supabase (gov_entities)", "live")
+            return sovereigns
+    except Exception as e:
+        logger.warning(f"Supabase sovereign query failed: {e}")
+
+    # Source 2: Scan news for sovereign updates (supplement)
+    try:
+        news_sovereigns = scan_sovereign_news()
+        if news_sovereigns:
+            return news_sovereigns
+    except Exception as e:
+        logger.warning(f"Sovereign news scan failed: {e}")
+
+    logger.warning("All sovereign sources failed, using fallback")
+    freshness.set_provenance("leaderboard_sovereign", "Hardcoded fallback", "fallback")
+    return None
+
+
+def scan_sovereign_news():
+    """Scan news for latest government BTC holding updates."""
+    queries = [
+        "US government bitcoin holdings 2026",
+        "government bitcoin reserve 2026",
+        "country bitcoin holdings 2026",
+        "strategic bitcoin reserve holdings 2026",
+        "El Salvador bitcoin holdings 2026",
+        "Bhutan bitcoin holdings 2026",
+    ]
+
+    headers = {"User-Agent": "Mozilla/5.0"}
+    updates = {}
+
+    country_patterns = {
+        "united states": ("🇺🇸 United States Government", "US-GOV", "US"),
+        "us government": ("🇺🇸 United States Government", "US-GOV", "US"),
+        "us strategic": ("🇺🇸 United States Government", "US-GOV", "US"),
+        "china": ("🇨🇳 China Government", "CN-GOV", "CN"),
+        "united kingdom": ("🇬🇧 United Kingdom Government", "UK-GOV", "GB"),
+        "uk government": ("🇬🇧 United Kingdom Government", "UK-GOV", "GB"),
+        "el salvador": ("🇸🇻 El Salvador Government", "SV-GOV", "SV"),
+        "bhutan": ("🇧🇹 Bhutan (Druk Holding)", "BT-GOV", "BT"),
+        "ukraine": ("🇺🇦 Ukraine Government", "UA-GOV", "UA"),
+        "germany": ("🇩🇪 Germany Government", "DE-GOV", "DE"),
+    }
+
+    for query in queries:
+        try:
+            url = f"https://news.google.com/rss/search?q={requests.utils.quote(query)}&hl=en-US&gl=US&ceid=US:en"
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code != 200:
+                continue
+            root = ET.fromstring(response.content)
+
+            for item in root.findall(".//item")[:3]:
+                title = item.findtext("title", "").lower()
+                btc_match = re.search(r'([\d,]+)\s*(?:btc|bitcoin)', title)
+                if not btc_match:
+                    continue
+
+                try:
+                    btc_amount = int(btc_match.group(1).replace(",", ""))
+                except ValueError:
+                    continue
+
+                if btc_amount < 100:
+                    continue
+
+                for key, (display, ticker, country) in country_patterns.items():
+                    if key in title and ticker not in updates:
+                        updates[ticker] = {
+                            "company": display, "ticker": ticker,
+                            "btc_holdings": btc_amount,
+                            "avg_purchase_price": 0, "total_cost_usd": 0,
+                            "country": country, "sector": "Government",
+                            "is_government": True, "notes": "Auto-detected from news",
+                        }
+                        break
+        except Exception as e:
+            logger.debug(f"Sovereign news query failed for '{query}': {e}")
+            continue
+
+    if updates:
+        result = sorted(updates.values(), key=lambda x: x["btc_holdings"], reverse=True)
+        logger.info(f"Found {len(result)} sovereign updates from news")
+        freshness.set_provenance("leaderboard_sovereign", "Google News (auto-detected)", "live")
+        return result
+    return None
+
+
+# ============================================
+# PUBLIC API
+# ============================================
+def get_treasury_companies():
+    """Get the best available treasury company data."""
+    live_data = fetch_live_leaderboard()
+    if live_data:
+        return live_data
+    return FALLBACK_COMPANIES
+
+
+TREASURY_COMPANIES = FALLBACK_COMPANIES  # For backward compatibility
+
+
+def get_leaderboard(sort_by="btc_holdings"):
+    """Get the treasury leaderboard sorted by the given field."""
+    companies = get_treasury_companies()
+    companies = sorted(companies, key=lambda x: x.get(sort_by, 0), reverse=True)
+    for i, company in enumerate(companies):
+        company["rank"] = i + 1
+        company["btc_value_usd"] = company["btc_holdings"] * 72000
+    return companies
+
+
+def get_leaderboard_with_live_price(btc_price, include_governments=True):
+    """Get leaderboard with live BTC price. All data from live APIs."""
+    companies = get_treasury_companies()
+
+    if include_governments:
+        live_sovereigns = fetch_sovereign_holdings()
+        sovereigns = live_sovereigns if live_sovereigns else SOVEREIGN_HOLDERS
+
+        for gov in sovereigns:
+            if gov["btc_holdings"] > 0:
+                existing = [c for c in companies if c.get("ticker") == gov["ticker"]]
+                if not existing:
+                    companies.append(gov.copy())
+
+    companies = sorted(companies, key=lambda x: x.get("btc_holdings", 0), reverse=True)
+
+    total_btc = 0
+    total_value = 0
+    total_corporate = 0
+    total_sovereign = 0
+
+    for i, company in enumerate(companies):
+        company["rank"] = i + 1
+        company["btc_value_usd"] = round(company["btc_holdings"] * btc_price, 2)
+        company["btc_value_b"] = round(company["btc_value_usd"] / 1_000_000_000, 2)
+
+        if company.get("total_cost_usd", 0) > 0:
+            company["unrealized_pnl"] = round(company["btc_value_usd"] - company["total_cost_usd"], 2)
+            company["unrealized_pnl_pct"] = round((company["unrealized_pnl"] / company["total_cost_usd"]) * 100, 1)
+        else:
+            company["unrealized_pnl"] = 0
+            company["unrealized_pnl_pct"] = 0
+
+        total_btc += company["btc_holdings"]
+        total_value += company["btc_value_usd"]
+
+        if company.get("is_government"):
+            total_sovereign += company["btc_holdings"]
+        else:
+            total_corporate += company["btc_holdings"]
+
+    summary = {
+        "total_companies": len(companies),
+        "total_btc": total_btc,
+        "total_value_usd": total_value,
+        "total_value_b": round(total_value / 1_000_000_000, 2),
+        "btc_price_used": btc_price,
+        "updated_at": datetime.now().isoformat(),
+        "data_source": "live" if _live_data_cache["data"] else "fallback",
+        "total_corporate_btc": total_corporate,
+        "total_sovereign_btc": total_sovereign,
+        "corporate_count": len([c for c in companies if not c.get("is_government")]),
+        "sovereign_count": len([c for c in companies if c.get("is_government")]),
+    }
+
+    return companies, summary
+
+
+# ============================================
+# FORMATTING
+# ============================================
+def format_leaderboard_text(companies, summary):
+    source = "LIVE" if summary.get("data_source") == "live" else "CACHED"
+    lines = []
+    lines.append("=" * 70)
+    lines.append(f"  BTC TREASURY LEADERBOARD [{source}]")
+    lines.append(f"  BTC Price: ${summary['btc_price_used']:,.0f} | Updated: {summary['updated_at'][:19]}")
+    lines.append("=" * 70)
+    lines.append("")
+    lines.append(f"  {'#':<4} {'Entity':<30} {'BTC':>10} {'Value ($B)':>12} {'Type':>10}")
+    lines.append(f"  {'-'*4} {'-'*30} {'-'*10} {'-'*12} {'-'*10}")
+    for c in companies:
+        if c["btc_holdings"] > 0:
+            entity_type = "GOV" if c.get("is_government") else "CORP"
+            lines.append(f"  {c['rank']:<4} {c['company'][:30]:<30} {c['btc_holdings']:>10,} ${c['btc_value_b']:>10.2f} {entity_type:>10}")
+    lines.append("")
+    lines.append(f"  TOTAL: {summary['total_btc']:,} BTC = ${summary['total_value_b']:.2f}B across {summary['total_companies']} entities")
+    lines.append("=" * 70)
+    return "\n".join(lines)
+
+
+def format_leaderboard_telegram(companies, summary, top_n=10):
+    """Format the leaderboard for Telegram."""
+    source = "LIVE" if summary.get("data_source") == "live" else "CACHED"
+    lines = []
+    lines.append(f"🏆 BTC TREASURY LEADERBOARD [{source}]\n")
+    lines.append(f"BTC: ${summary['btc_price_used']:,.0f}")
+    lines.append(f"Total: {summary['total_btc']:,} BTC (${summary['total_value_b']:.1f}B)\n")
+
+    medals = ["🥇", "🥈", "🥉"]
+
+    for c in companies[:top_n]:
+        if c["btc_holdings"] > 0:
+            rank = c["rank"]
+            medal = medals[rank - 1] if rank <= 3 else f"#{rank}"
+            lines.append(f"{medal} {c['company'][:25]}")
+            lines.append(f"   {c['btc_holdings']:,} BTC (${c['btc_value_b']:.2f}B)")
+            if c.get("unrealized_pnl_pct"):
+                pnl_emoji = "📈" if c["unrealized_pnl_pct"] > 0 else "📉"
+                lines.append(f"   {pnl_emoji} P&L: {c['unrealized_pnl_pct']:+.1f}%")
+            lines.append("")
+
+    lines.append("---")
+    lines.append("Treasury Signal Intelligence")
+    lines.append("BTC Treasury Leaderboard™")
+
+    return "\n".join(lines)
+
+
+def save_leaderboard_to_db(companies, summary):
+    """Save leaderboard snapshot to Supabase."""
+    try:
+        row = {
+            "snapshot_date": datetime.now().strftime("%Y-%m-%d"),
+            "btc_price": summary["btc_price_used"],
+            "total_btc": summary["total_btc"],
+            "total_value_b": summary["total_value_b"],
+            "companies_json": json.dumps([{
+                "ticker": c["ticker"], "btc_holdings": c["btc_holdings"], "rank": c["rank"],
+            } for c in companies[:20]]),
+        }
+        supabase.table("leaderboard_snapshots").upsert(row, on_conflict="snapshot_date").execute()
+        logger.info(f"Leaderboard snapshot saved for {row['snapshot_date']}")
+        return True
+    except Exception as e:
+        logger.error(f"Could not save leaderboard snapshot: {e}", exc_info=True)
+        return False
+
+
+# ============================================
+# QUICK TEST
+# ============================================
+if __name__ == "__main__":
+    logger.info("BTC Treasury Leaderboard v2.1 — testing...")
+    btc_price = 72456
+    companies, summary = get_leaderboard_with_live_price(btc_price)
+    logger.info(f"Source: {summary.get('data_source', 'unknown').upper()} | Companies: {summary['total_companies']} | Total: {summary['total_btc']:,} BTC (${summary['total_value_b']:.2f}B)")
+    print(format_leaderboard_text(companies, summary))
+    logger.info("Leaderboard test complete")

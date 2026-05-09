@@ -33,50 +33,50 @@ from dotenv import load_dotenv
 
 # Initialize Sentry BEFORE any other imports so module-level exceptions are captured
 load_dotenv()
-from observability import init_sentry
+from treasury_signals.observability import init_sentry
 init_sentry()
 
-from twitter_client import get_user_tweets, extract_tweet_info
-from database import save_tweet, get_new_tweets, mark_processed
-from classifier import classify_tweet, get_signal_label, get_dimension_breakdown
-from telegram_bot import send_alert, send_scan_summary, send_strc_alert, send_edgar_alert, send_to_paid, send_to_free
-from strc_tracker import get_strc_volume_data, analyze_strc_signal, format_strc_alert
-from correlation_engine import CorrelationEngineV2
-from pattern_analyzer import pattern_engine
-from feedback_loop import feedback_engine
-from narrative_engine import narrator
-from accuracy_tracker import log_prediction
-from email_briefing import generate_and_send_briefing
-from treasury_leaderboard import get_leaderboard_with_live_price, format_leaderboard_telegram
-from purchase_tracker import detect_new_purchases, log_detected_purchases, format_purchase_telegram, scan_news_for_purchases
-from regulatory_scanner import run_full_scan as scan_regulatory
-from regulatory_tracker import format_regulatory_briefing
-from logger import get_logger, ScanContext
-from freshness_tracker import freshness
-from subscriber_manager import subscribers
-from watchlist_manager import get_watchlist_activity, format_watchlist_telegram
+from treasury_signals.scanners.twitter_client import get_user_tweets, extract_tweet_info
+from treasury_signals.storage.database import save_tweet, get_new_tweets, mark_processed
+from treasury_signals.pipelines.classifier import classify_tweet, get_signal_label, get_dimension_breakdown
+from treasury_signals.alerts.telegram_bot import send_alert, send_scan_summary, send_strc_alert, send_edgar_alert, send_to_paid, send_to_free
+from treasury_signals.scanners.strc_tracker import get_strc_volume_data, analyze_strc_signal, format_strc_alert
+from treasury_signals.pipelines.correlation_engine import CorrelationEngineV2
+from treasury_signals.pipelines.pattern_analyzer import pattern_engine
+from treasury_signals.pipelines.feedback_loop import feedback_engine
+from treasury_signals.pipelines.narrative_engine import narrator
+from treasury_signals.pipelines.accuracy_tracker import log_prediction
+from treasury_signals.alerts.email_briefing import generate_and_send_briefing
+from treasury_signals.alerts.treasury_leaderboard import get_leaderboard_with_live_price, format_leaderboard_telegram
+from treasury_signals.pipelines.purchase_tracker import detect_new_purchases, log_detected_purchases, format_purchase_telegram, scan_news_for_purchases
+from treasury_signals.scanners.regulatory_scanner import run_full_scan as scan_regulatory
+from treasury_signals.pipelines.regulatory_tracker import format_regulatory_briefing
+from treasury_signals.logger import get_logger, ScanContext
+from treasury_signals.freshness_tracker import freshness
+from treasury_signals.storage.subscriber_manager import subscribers
+from treasury_signals.alerts.watchlist_manager import get_watchlist_activity, format_watchlist_telegram
 import yfinance as yf
 import requests as req
-from price_predictor import predictor
-from treasury_sync import sync as treasury_sync
-from competitor_alerts import check_competitor_purchase
-from pro_briefing import send_pro_briefings
-from telegram_alerts import alerts as telegram_alerts
-from gov_entities import fix_government_entities
-from shares_updater import update_shares
-from entity_classifier import fix_entity_types
-from entity_name_fixer import fix_entity_names
-from edgar_realtime import check_edgar_filings as check_edgar_realtime
-from purchase_reconciler import promote_pending_purchases, expire_stale_pending, get_reconciler_stats, promote_pending_sales
-from global_filing_scanner import scan_all_filings
-from etf_holdings_scraper import update_etf_holdings
-from defi_tracker import update_defi_holdings
-from whale_monitor import check_whale_transactions
-from exchange_flow_tracker import get_exchange_flow_report, format_flow_telegram
-from filing_parser import parse_and_update
-from sync_protector import snapshot_primary_data, protect_primary_data
-from ticker_validator import validate_all_tickers
-from shares_sync import sync_shares_outstanding
+from treasury_signals.pipelines.price_predictor import predictor
+from treasury_signals.sync.treasury_sync import sync as treasury_sync
+from treasury_signals.alerts.competitor_alerts import check_competitor_purchase
+from treasury_signals.alerts.pro_briefing import send_pro_briefings
+from treasury_signals.alerts.telegram_alerts import alerts as telegram_alerts
+from treasury_signals.sync.gov_entities import fix_government_entities
+from treasury_signals.sync.shares_updater import update_shares
+from treasury_signals.sync.entity_classifier import fix_entity_types
+from treasury_signals.sync.entity_name_fixer import fix_entity_names
+from treasury_signals.scanners.edgar_realtime import check_edgar_filings as check_edgar_realtime
+from treasury_signals.pipelines.purchase_reconciler import promote_pending_purchases, expire_stale_pending, get_reconciler_stats, promote_pending_sales
+from treasury_signals.scanners.global_filing_scanner import scan_all_filings
+from treasury_signals.scanners.etf_holdings_scraper import update_etf_holdings
+from treasury_signals.scanners.defi_tracker import update_defi_holdings
+from treasury_signals.scanners.whale_monitor import check_whale_transactions
+from treasury_signals.scanners.exchange_flow_tracker import get_exchange_flow_report, format_flow_telegram
+from treasury_signals.pipelines.filing_parser import parse_and_update
+from treasury_signals.sync.sync_protector import snapshot_primary_data, protect_primary_data
+from treasury_signals.sync.ticker_validator import validate_all_tickers
+from treasury_signals.sync.shares_sync import sync_shares_outstanding
 
 logger = get_logger(__name__)
 
@@ -331,7 +331,7 @@ def send_daily_email():
         try:
             # Reuse BTC price from market intelligence to avoid redundant API calls
             try:
-                from market_intelligence import get_risk_dashboard
+                from treasury_signals.scanners.market_intelligence import get_risk_dashboard
                 _risk = get_risk_dashboard()
                 _btc_price = _risk.get("btc_price", 0)
             except Exception:
@@ -390,8 +390,8 @@ def main():
 
     # Auto-seed database if tables are empty (first run)
     try:
-        from seed_database import run_full_seed
-        from database import supabase as db
+        from treasury_signals.sync.seed_database import run_full_seed
+        from treasury_signals.storage.database import supabase as db
         check = db.table("treasury_companies").select("ticker").limit(1).execute()
         if not check.data:
             logger.info("Database appears empty — running auto-seed...")
@@ -441,7 +441,7 @@ def main():
                 if edgar_result and edgar_result.get("new_filings", 0) > 0:
                     # Query recent edgar_filings from DB to get details
                     try:
-                        from database import supabase as db
+                        from treasury_signals.storage.database import supabase as db
                         recent_filings = db.table("edgar_filings").select("*").order("processed_at", desc=True).limit(5).execute()
                         if recent_filings.data:
                             for f in recent_filings.data:
@@ -468,7 +468,7 @@ def main():
         with ScanContext(logger, scan_number, "[5/10] Correlation Engine v2"):
             # Feed market context into the engine before calculating
             try:
-                from market_intelligence import get_risk_dashboard
+                from treasury_signals.scanners.market_intelligence import get_risk_dashboard
                 risk_data = get_risk_dashboard()
                 fg_value = risk_data.get("fear_greed_value", 50)
                 btc_weekly = risk_data.get("btc_7d_change", 0)
@@ -601,7 +601,7 @@ def main():
 
         # Save freshness snapshot to Supabase
         try:
-            from database import supabase as db_client
+            from treasury_signals.storage.database import supabase as db_client
             freshness.save_to_supabase(db_client)
         except Exception as e:
             logger.debug(f"Freshness save: {e}")
@@ -674,7 +674,7 @@ def main():
 
         # Record daily snapshots + detect new entrants (AFTER fixers so names are clean)
         try:
-            from velocity_tracker import velocity
+            from treasury_signals.sync.velocity_tracker import velocity
             velocity.run()
         except Exception as e:
             logger.debug(f"Velocity tracker: {e}")
@@ -813,7 +813,7 @@ def main():
                 if high_priority:
                     tg_msg = format_watchlist_telegram(high_priority, sub.get("name", ""))
                     if tg_msg and sub.get("telegram_chat_id"):
-                        from telegram_bot import send_to_channel
+                        from treasury_signals.alerts.telegram_bot import send_to_channel
                         send_to_channel(sub["telegram_chat_id"], tg_msg)
                         logger.info(f"Watchlist alert sent to {sub['name']} ({len(high_priority)} items)")
                     elif tg_msg:
