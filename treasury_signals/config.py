@@ -1,5 +1,20 @@
 """Centralized config — single source of truth for env vars + hardcoded constants.
 
+═════════════════════════════════════════════════════════════════════════
+POLICY: NEW CODE MUST USE THIS MODULE
+
+Any new module that needs an env var MUST add a field to Settings + the
+matching `_required(...)` or `_optional(...)` call in get_settings(),
+then access via `get_settings().my_field`. Do NOT reach for `os.getenv`
+in business logic — every env var lives here.
+
+EXISTING CODE migrates "as touched": when you edit a module that still
+calls `os.getenv("FOO")` directly, swap it for `get_settings().foo` in
+the same PR. Never open a file solely to migrate.
+
+Modules already migrated: main.py, scheduler/helpers.py.
+═════════════════════════════════════════════════════════════════════════
+
 Two layers:
 
   1. Module-level constants (SCAN_HOURS, FALLBACK_EMAIL_RECIPIENTS, etc.) —
