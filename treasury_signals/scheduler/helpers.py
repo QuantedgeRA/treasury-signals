@@ -15,6 +15,7 @@ from datetime import datetime
 import yfinance as yf
 
 from treasury_signals.logger import get_logger
+from treasury_signals.config import FALLBACK_EMAIL_RECIPIENTS
 from treasury_signals.scheduler import engine
 from treasury_signals.scanners.twitter_client import get_user_tweets, extract_tweet_info
 from treasury_signals.storage.database import save_tweet, get_new_tweets, mark_processed
@@ -40,10 +41,8 @@ sent_tweet_ids = set()
 sent_strc_status = None
 sent_correlation_score = 0
 
-# Fallback email list — used only if subscribers table is empty
-FALLBACK_EMAIL_RECIPIENTS = [
-    "contact@quantedgeriskadvisory.com",
-]
+# FALLBACK_EMAIL_RECIPIENTS is now sourced from treasury_signals.config
+# (single source of truth — change there, not here).
 
 
 # ─── is-morning helper (used by phases AND main loop for the scan-type log) ─

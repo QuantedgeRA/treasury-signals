@@ -25,6 +25,7 @@ from treasury_signals.observability import init_sentry
 init_sentry()
 
 from treasury_signals.logger import get_logger
+from treasury_signals.config import SCAN_HOURS
 from treasury_signals.scheduler.state import ScanState
 from treasury_signals.scheduler.helpers import is_morning_scan
 from treasury_signals.scheduler.phases import (
@@ -77,8 +78,8 @@ def _auto_seed_if_empty():
 
 
 def _sleep_until_next_scan():
-    """Sleep until the next 6/12/18 UTC mark. Returns True normally, False on Ctrl+C."""
-    SCAN_HOURS = [6, 12, 18]
+    """Sleep until the next scheduled scan hour (from config.SCAN_HOURS).
+    Returns True normally, False on Ctrl+C."""
     now = datetime.now()
     next_times = []
     for h in SCAN_HOURS:
