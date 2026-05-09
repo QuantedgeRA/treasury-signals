@@ -412,7 +412,7 @@ class TreasurySync:
             return 0
 
         # ═══ WIPE + REWRITE ═══
-        count = self._wipe_and_rewrite(all_entities)
+        count = self._upsert_entities(all_entities)
         self._last_sync = datetime.now()
         self._entity_count = count
         self._update_snapshot(all_entities)
@@ -658,28 +658,36 @@ class TreasurySync:
     # DATABASE
     # ═══════════════════════════════════════════════════════════
 
-    def _wipe_and_rewrite(self, all_entities):
-        # Snapshot ticker -> shares_outstanding before wipe so Yahoo data survives.
-        # sync_protector only preserves btc_holdings/data_source, not Yahoo-sourced fields.
-        shares_snapshot = {}
-        try:
-            existing = supabase.table("treasury_companies").select("ticker, shares_outstanding").execute()
-            for row in (existing.data or []):
-                t = row.get("ticker")
-                s = row.get("shares_outstanding")
-                if t and s:
-                    shares_snapshot[t] = s
-            if shares_snapshot:
-                logger.debug(f"Treasury Sync: snapshotted shares_outstanding for {len(shares_snapshot)} tickers")
-        except Exception as e:
-            logger.debug(f"Shares snapshot pre-wipe failed: {e}")
+    def _upsert_entities(self, all_entities):
+        """Upsert all entities into treasury_companies.
 
-        try:
-            supabase.table("treasury_companies").delete().gte("id", 0).execute()
-        except Exception as e:
-            logger.warning(f"Could not clear table: {e}")
-            capture_exception(e, context={"where": "treasury_sync._wipe_and_rewrite.delete"})
+        Replaces the prior delete-then-insert pattern. Three safety wins:
 
+          1. No window where the table is empty or partial. The old wipe step
+             left the dashboard reading from an empty table for the duration
+             of the re-insert loop (~5-10s for 300 entities, 3x daily).
+          2. Field-level preservation: Postgres ON CONFLICT only updates the
+             columns present in the payload. shares_outstanding (populated by
+             shares_sync from Yahoo Finance, NOT by us) is intentionally
+             OMITTED from the payload below — its existing value persists
+             across syncs without the snapshot-and-restore dance the prior
+             implementation required.
+          3. Dropping the snapshot eliminates a class of latent bugs: every
+             new column added to the schema would have needed its own
+             snapshot/restore step. Now any field we don't actively manage
+             is preserved by default.
+
+        sync_protector still runs after this to restore primary-source
+        data_source and btc_holdings for entities where the aggregator value
+        is lower priority than a previously-recorded primary source
+        (EDGAR/news/etc.). That behavior is unchanged.
+
+        Trade-off: entities that disappear from CoinGecko + BitcoinTreasuries
+        are NOT cleaned up — they retain their last-known state. Dashboard
+        queries already filter by btc_holdings > 0, so stale entries don't
+        leak into UI. A future cleanup task could prune entities whose
+        last_updated has fallen behind the most recent sync.
+        """
         count = errors = skipped = 0
         for ticker, entity in all_entities.items():
             # Final guard: skip entities with garbled names or tickers
@@ -691,6 +699,7 @@ class TreasurySync:
                 skipped += 1
                 continue
             try:
+                # shares_outstanding intentionally absent — preserved by ON CONFLICT.
                 payload = {
                     "ticker": ticker, "company": entity["company"][:200],
                     "btc_holdings": entity.get("btc_holdings", 0),
@@ -703,21 +712,19 @@ class TreasurySync:
                     "data_source": entity.get("data_source", "aggregator"),
                     "last_updated": datetime.now().isoformat(),
                 }
-                if ticker in shares_snapshot:
-                    payload["shares_outstanding"] = shares_snapshot[ticker]
-                supabase.table("treasury_companies").insert(payload).execute()
+                supabase.table("treasury_companies").upsert(payload, on_conflict="ticker").execute()
                 count += 1
             except Exception as e:
                 errors += 1
                 if errors <= 3:
-                    logger.warning(f"Insert error {ticker}: {e}")
+                    logger.warning(f"Upsert error {ticker}: {e}")
                     capture_exception(e, context={
-                        "where": "treasury_sync._wipe_and_rewrite.insert",
+                        "where": "treasury_sync._upsert_entities",
                         "ticker": ticker,
                         "company": entity.get("company", "")[:80],
                     })
         if errors > 0:
-            logger.warning(f"Treasury Sync: {errors} insert errors")
+            logger.warning(f"Treasury Sync: {errors} upsert errors")
         if skipped > 0:
             logger.info(f"Treasury Sync: {skipped} garbled entities skipped")
         return count
