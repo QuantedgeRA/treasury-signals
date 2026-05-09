@@ -411,10 +411,13 @@ class TreasurySync:
             self._staleness.check_and_alert(0)
             return 0
 
-        # ═══ WIPE + REWRITE ═══
+        # ═══ UPSERT + PRUNE STALE ═══
         count = self._upsert_entities(all_entities)
         self._last_sync = datetime.now()
         self._entity_count = count
+        # Best-effort cleanup: delete entities not seen in source for 30+ days
+        # AND with btc_holdings = 0. Conservative — never destroys BTC history.
+        self._prune_stale_entities(threshold_days=30)
         self._update_snapshot(all_entities)
         self._staleness.check_and_alert(count)
 
@@ -700,6 +703,10 @@ class TreasurySync:
                 continue
             try:
                 # shares_outstanding intentionally absent — preserved by ON CONFLICT.
+                # last_seen_in_source distinguishes "actually appeared in source data
+                # this cycle" from last_updated which fires on every upsert. Used by
+                # _prune_stale_entities to detect entities gone from sources.
+                now_iso = datetime.now().isoformat()
                 payload = {
                     "ticker": ticker, "company": entity["company"][:200],
                     "btc_holdings": entity.get("btc_holdings", 0),
@@ -710,7 +717,8 @@ class TreasurySync:
                     "is_government": entity.get("is_government", False),
                     "entity_type": entity.get("entity_type", "public_company"),
                     "data_source": entity.get("data_source", "aggregator"),
-                    "last_updated": datetime.now().isoformat(),
+                    "last_updated": now_iso,
+                    "last_seen_in_source": now_iso,
                 }
                 supabase.table("treasury_companies").upsert(payload, on_conflict="ticker").execute()
                 count += 1
@@ -728,6 +736,46 @@ class TreasurySync:
         if skipped > 0:
             logger.info(f"Treasury Sync: {skipped} garbled entities skipped")
         return count
+
+    def _prune_stale_entities(self, threshold_days=30):
+        """Delete entities not seen in source for `threshold_days` AND with no BTC.
+
+        Conservative: only prunes empty entities. An entity that disappeared
+        from sources WITH btc_holdings > 0 stays in the DB indefinitely,
+        because we have no way to know if it truly liquidated or just got
+        dropped from BitcoinTreasuries for unrelated reasons (rename,
+        acquisition, source-side data correction, etc.).
+
+        last_seen_in_source is updated by _upsert_entities on every
+        appearance in source data; an entity not present in source data
+        for 30+ days has its column frozen in the past while every other
+        entity moves forward.
+
+        Failure mode: if the column doesn't exist yet (migration 0004 not
+        applied), the query errors out — caught and logged, not raised.
+        Sync continues normally.
+        """
+        from datetime import timedelta, timezone
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=threshold_days)).isoformat()
+        try:
+            result = supabase.table("treasury_companies") \
+                .delete() \
+                .lt("last_seen_in_source", cutoff) \
+                .eq("btc_holdings", 0) \
+                .execute()
+            deleted = len(result.data or [])
+            if deleted:
+                logger.info(f"Treasury Sync: pruned {deleted} stale empty entities (last seen >{threshold_days}d ago)")
+            return deleted
+        except Exception as e:
+            # Common failure: migration 0004 hasn't been applied yet, so the
+            # last_seen_in_source column doesn't exist. Log and continue.
+            logger.warning(f"Stale prune failed (continuing): {e}")
+            capture_exception(e, context={
+                "where": "treasury_sync._prune_stale_entities",
+                "threshold_days": threshold_days,
+            })
+            return 0
 
     def _update_snapshot(self, all_entities):
         try:
