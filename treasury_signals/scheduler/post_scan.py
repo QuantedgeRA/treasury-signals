@@ -1,0 +1,301 @@
+"""scheduler/post_scan — work that runs after the 10 numbered phases.
+
+Each function corresponds to one section of the previous post-scan inline
+block in main.py. Functions take ScanState only when they actually need
+per-cycle data (state.morning gating, state.signals/detected for the
+watchlist, state.correlation/tweets_new/signals for the summary).
+
+Order matters: callers should invoke these in the sequence laid out by
+the comment headers below — entity sync MUST run before name/type
+fixers, fixers MUST run before velocity tracker, and the watchlist
+alert MUST run after the primary source collection so its data is
+fresh.
+
+Verbatim behavior preservation from the previous inline code: same
+try/except patterns, same logger.debug swallow, same morning-only
+gates. No logic changes.
+"""
+
+import json
+
+import yfinance as yf
+
+from treasury_signals.logger import get_logger
+from treasury_signals.freshness_tracker import freshness
+from treasury_signals.scheduler import engine
+from treasury_signals.scheduler.state import ScanState
+
+# Imports per section — kept inline rather than top-of-file to mirror the
+# original inline-block structure. Could be hoisted later.
+from treasury_signals.pipelines.feedback_loop import feedback_engine
+from treasury_signals.pipelines.price_predictor import predictor
+from treasury_signals.pipelines.filing_parser import parse_and_update
+from treasury_signals.sync.treasury_sync import sync as treasury_sync
+from treasury_signals.sync.gov_entities import fix_government_entities
+from treasury_signals.sync.shares_updater import update_shares
+from treasury_signals.sync.entity_classifier import fix_entity_types
+from treasury_signals.sync.entity_name_fixer import fix_entity_names
+from treasury_signals.sync.sync_protector import snapshot_primary_data, protect_primary_data
+from treasury_signals.sync.ticker_validator import validate_all_tickers
+from treasury_signals.sync.shares_sync import sync_shares_outstanding
+from treasury_signals.scanners.global_filing_scanner import scan_all_filings
+from treasury_signals.scanners.etf_holdings_scraper import update_etf_holdings
+from treasury_signals.scanners.defi_tracker import update_defi_holdings
+from treasury_signals.scanners.whale_monitor import check_whale_transactions
+from treasury_signals.scanners.exchange_flow_tracker import get_exchange_flow_report, format_flow_telegram
+from treasury_signals.alerts.telegram_bot import send_scan_summary, send_to_paid, send_to_channel
+from treasury_signals.alerts.watchlist_manager import get_watchlist_activity, format_watchlist_telegram
+from treasury_signals.storage.subscriber_manager import subscribers
+
+logger = get_logger(__name__)
+
+
+# ─── Freshness + system health ─────────────────────────────────────────────
+
+def save_freshness_snapshot():
+    """Persist the in-memory freshness tracker to Supabase + log health."""
+    try:
+        from treasury_signals.storage.database import supabase as db_client
+        freshness.save_to_supabase(db_client)
+    except Exception as e:
+        logger.debug(f"Freshness save: {e}")
+
+    health = freshness.get_overall_health()
+    logger.info(f"System Health: {health['emoji']} {health['health'].upper()} — {health['message']}")
+
+
+# ─── Daily-only learning tasks (morning gate) ──────────────────────────────
+
+def run_daily_only_tasks(state: ScanState):
+    """Morning-only learning loop: classifier feedback + price predictor.
+    Both no-op silently outside the morning window."""
+    if not state.morning:
+        return
+
+    try:
+        feedback_engine.learn()
+        feedback_engine.load_from_db()
+        report = feedback_engine.get_learning_report()
+        if "No learning data" not in report:
+            logger.info("Feedback loop: learning cycle complete")
+    except Exception as e:
+        logger.debug(f"Feedback loop: {e}")
+
+    try:
+        predictor.analyze()
+    except Exception as e:
+        logger.debug(f"Price predictor: {e}")
+
+
+# ─── Entity sync (every scan): snapshot → CoinGecko/BT pull → protect ──────
+
+def run_entity_sync():
+    """Three-step pattern: snapshot primary data, run aggregator sync,
+    then restore primary data the aggregator may have downgraded."""
+    try:
+        snapshot_primary_data()
+    except Exception as e:
+        logger.debug(f"Sync snapshot: {e}")
+
+    try:
+        treasury_sync.run()
+    except Exception as e:
+        logger.debug(f"Treasury sync: {e}")
+
+    try:
+        protect_primary_data()
+    except Exception as e:
+        logger.debug(f"Sync protector: {e}")
+
+
+# ─── Name/type fixers + velocity (every scan, must run after entity_sync) ──
+
+def run_name_type_fixers():
+    """Fix garbled emoji names from BitcoinTreasuries.net + run velocity
+    tracker. Must run after entity_sync so the fixers see fresh data;
+    velocity must run after fixers so its snapshots use clean names."""
+    try:
+        fix_government_entities()
+    except Exception as e:
+        logger.debug(f"Gov fix: {e}")
+
+    try:
+        fix_entity_types()
+    except Exception as e:
+        logger.debug(f"Entity fix: {e}")
+
+    try:
+        fix_entity_names()
+    except Exception as e:
+        logger.debug(f"Name fix: {e}")
+
+    try:
+        from treasury_signals.sync.velocity_tracker import velocity
+        velocity.run()
+    except Exception as e:
+        logger.debug(f"Velocity tracker: {e}")
+
+
+# ─── Heavy maintenance (morning only) — Yahoo-heavy work ───────────────────
+
+def run_heavy_maintenance(state: ScanState):
+    """Morning-only Yahoo-Finance-heavy work: ~225 shares calls, ticker
+    validation against SEC + Yahoo, shares_outstanding sync. No-op outside
+    the morning window."""
+    if not state.morning:
+        logger.debug("Heavy maintenance tasks skipped (6am only)")
+        return
+
+    try:
+        update_shares()
+    except Exception as e:
+        logger.debug(f"Shares update: {e}")
+
+    try:
+        validate_all_tickers()
+    except Exception as e:
+        logger.debug(f"Ticker validator: {e}")
+
+    try:
+        shares_result = sync_shares_outstanding(limit=50)
+        if shares_result['updated'] > 0:
+            logger.info(f"Shares sync: {shares_result['updated']} companies updated with shares outstanding")
+    except Exception as e:
+        logger.debug(f"Shares sync: {e}")
+
+
+# ─── Primary source data collection ────────────────────────────────────────
+
+def run_primary_source_collection(state: ScanState):
+    """Global filings (US EDGAR + news in 15 langs + crypto wires), AI
+    filing parser, whale monitor, exchange flow tracker. ETF + DeFi
+    holdings only on morning scans."""
+
+    # Global filing scanner — feeds correlation engine
+    try:
+        filing_result = scan_all_filings(days_back=1)
+        if filing_result and isinstance(filing_result, dict):
+            alerts = filing_result.get("alerts", [])
+            if isinstance(alerts, list):
+                for alert in alerts[:10]:
+                    engine.add_global_filing(
+                        company=alert.get("company", "Unknown"),
+                        ticker=alert.get("ticker", ""),
+                        country=alert.get("country", ""),
+                        filing_type=alert.get("source", "Global"),
+                        detail_text=alert.get("title", alert.get("description", ""))[:150],
+                    )
+    except Exception as e:
+        logger.debug(f"Global filing scanner: {e}")
+
+    # AI filing parser: extract structured BTC data from detected filings
+    try:
+        parse_and_update(max_filings=15)
+    except Exception as e:
+        logger.debug(f"Filing parser: {e}")
+
+    # Whale monitor: large BTC transactions on-chain → feeds correlation engine
+    try:
+        whale_result = check_whale_transactions()
+        if whale_result and hasattr(whale_result, '__iter__'):
+            for w in (whale_result if isinstance(whale_result, list) else []):
+                btc_amt = w.get("btc_amount", w.get("amount", 0))
+                if btc_amt >= 500:
+                    engine.add_whale_movement(
+                        btc_amount=btc_amt,
+                        from_entity=w.get("from_entity"),
+                        to_entity=w.get("to_entity"),
+                        from_ticker=w.get("from_ticker"),
+                        to_ticker=w.get("to_ticker"),
+                    )
+    except Exception as e:
+        logger.debug(f"Whale monitor: {e}")
+
+    # Exchange flow tracker: BTC exchange inflows/outflows/reserves
+    try:
+        try:
+            btc = yf.Ticker("BTC-USD")
+            hist = btc.history(period="2d")
+            current_btc_price = float(hist["Close"].iloc[-1]) if not hist.empty else 67000
+        except Exception:
+            current_btc_price = 67000
+
+        flow_report = get_exchange_flow_report(btc_price=current_btc_price)
+        if flow_report and flow_report.get("has_exchange_data"):
+            signal = flow_report.get("signal", "NEUTRAL")
+            netflow = flow_report.get("netflow_btc", 0)
+            logger.info(f"Exchange Flow: {signal} | Net: {netflow:+,.0f} BTC | Reserve trend: {flow_report.get('reserve_trend', 'unknown')}")
+
+            if signal in ("STRONG_ACCUMULATION", "STRONG_DISTRIBUTION", "ACCUMULATION", "DISTRIBUTION"):
+                tg_msg = format_flow_telegram(flow_report)
+                if tg_msg:
+                    send_to_paid(tg_msg)
+                    logger.info(f"Exchange flow alert sent to PAID channel ({signal})")
+        elif flow_report and flow_report.get("has_network_data"):
+            logger.info(f"Exchange Flow: No exchange data (add CRYPTOQUANT_API_KEY) | Network: {flow_report.get('network_transactions_24h', 0):,} txns")
+        else:
+            logger.debug("Exchange Flow: No data available")
+    except Exception as e:
+        logger.debug(f"Exchange flow tracker: {e}")
+
+    # ETF holdings: direct from issuer websites (morning only)
+    if state.morning:
+        try:
+            update_etf_holdings()
+        except Exception as e:
+            logger.debug(f"ETF scraper: {e}")
+
+    # DeFi holdings: DeFi Llama on-chain data (morning only)
+    if state.morning:
+        try:
+            update_defi_holdings()
+        except Exception as e:
+            logger.debug(f"DeFi tracker: {e}")
+
+
+# ─── Watchlist alerts (per-subscriber, uses state.signals + state.detected) ─
+
+def run_watchlist_alerts(state: ScanState):
+    """For each subscriber with a configured watchlist, find high-priority
+    activity in this scan's signals + detected purchases. Send to the
+    subscriber's personal channel if set, else fall back to the paid channel."""
+    try:
+        all_subscribers = subscribers.get_active_subscribers()
+        for sub in all_subscribers:
+            watchlist = sub.get("watchlist", [])
+            if isinstance(watchlist, str):
+                watchlist = json.loads(watchlist) if watchlist else []
+            if not watchlist:
+                continue
+
+            w_activity = get_watchlist_activity(
+                watchlist=watchlist,
+                signals=state.signals,
+                purchases=state.detected,
+            )
+            high_priority = [a for a in w_activity if a["priority"] == "high"]
+            if high_priority:
+                tg_msg = format_watchlist_telegram(high_priority, sub.get("name", ""))
+                if tg_msg and sub.get("telegram_chat_id"):
+                    send_to_channel(sub["telegram_chat_id"], tg_msg)
+                    logger.info(f"Watchlist alert sent to {sub['name']} ({len(high_priority)} items)")
+                elif tg_msg:
+                    send_to_paid(tg_msg)
+                    logger.info(f"Watchlist alert for {sub['name']} sent to PAID channel ({len(high_priority)} items)")
+    except Exception as e:
+        logger.debug(f"Watchlist alert check: {e}")
+
+
+# ─── Scan summary (final log line + Telegram summary) ──────────────────────
+
+def send_scan_summary_log(state: ScanState, accounts):
+    """Send the cycle's summary to Telegram + log the final scan stats."""
+    cor_score = state.correlation.get("market_score", 0) if state.correlation else 0
+    cor_streams = state.correlation.get("total_streams", 0) if state.correlation else 0
+    cor_level = state.correlation.get("alert_level", "NONE") if state.correlation else "NONE"
+
+    send_scan_summary(state.scan_number, len(accounts), state.tweets_new, len(state.signals))
+    logger.info(
+        f"Tweets: {state.tweets_new} | Signals: {len(state.signals)} | "
+        f"Correlation v2: Market {cor_score}/100 ({cor_streams}/6 streams, {cor_level})"
+    )
