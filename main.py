@@ -383,6 +383,225 @@ def is_morning_scan():
     return datetime.now().hour < 9
 
 
+# ═════════════════════════════════════════════════════════════════════════
+# SCAN PHASES — each numbered phase from the 10-step cycle is a function.
+# The orchestrator (main loop) reads as a clear outline; bodies are testable
+# in isolation. Phases that share data return values for the next phase to
+# consume; phases that just trigger I/O return None.
+#
+# Helpers (scan_all_accounts, process_and_alert, check_strc_volume,
+# check_correlation, send_daily_email, send_daily_leaderboard) stay above
+# in their existing locations — phases call them and add the ScanContext
+# wrapper + cross-phase glue (correlation feeds, fallback handling).
+# ═════════════════════════════════════════════════════════════════════════
+
+
+def phase_1_tweets(scan_number, accounts):
+    """[1/10] Fetch tweets from monitored accounts."""
+    with ScanContext(logger, scan_number, "[1/10] Fetching tweets"):
+        new_count, skip_count = scan_all_accounts(accounts)
+        logger.info(f"Tweets: {new_count} new, {skip_count} duplicates")
+        return new_count, skip_count
+
+
+def phase_2_classify(scan_number):
+    """[2/10] Classify tweets and send signal alerts."""
+    with ScanContext(logger, scan_number, "[2/10] Classifying + alerting"):
+        return process_and_alert()
+
+
+def phase_3_strc(scan_number):
+    """[3/10] STRC issuance volume tracker (Strategy-specific)."""
+    with ScanContext(logger, scan_number, "[3/10] STRC issuance volume"):
+        check_strc_volume()
+
+
+def phase_4_edgar(scan_number):
+    """[4/10] SEC EDGAR realtime 8-K scanner + correlation feed."""
+    with ScanContext(logger, scan_number, "[4/10] SEC EDGAR realtime"):
+        try:
+            edgar_result = check_edgar_realtime(days_back=1)
+            if edgar_result and edgar_result.get("new_filings", 0) > 0:
+                # Pull the most recent stored filings and feed them to the
+                # correlation engine. Done here (not in edgar_realtime) so
+                # the engine instance stays a main.py concern.
+                try:
+                    from treasury_signals.storage.database import supabase as db
+                    recent_filings = db.table("edgar_filings").select("*").order("processed_at", desc=True).limit(5).execute()
+                    if recent_filings.data:
+                        for f in recent_filings.data:
+                            if f.get("event_type") == "purchase" and f.get("btc_amount", 0) > 0:
+                                engine.add_edgar_filing(
+                                    company=f.get("company_name", ""),
+                                    ticker=f.get("ticker_cik", ""),
+                                    is_btc_related=True,
+                                    filing_date=f.get("filing_date", ""),
+                                    btc_amount=f.get("btc_amount", 0),
+                                )
+                            elif f.get("event_type") in ("purchase", "holding"):
+                                engine.add_edgar_filing(
+                                    company=f.get("company_name", ""),
+                                    ticker=f.get("ticker_cik", ""),
+                                    is_btc_related=True,
+                                    filing_date=f.get("filing_date", ""),
+                                )
+                except Exception as e:
+                    logger.debug(f"EDGAR → correlation feed: {e}")
+        except Exception as e:
+            logger.debug(f"EDGAR realtime: {e}")
+
+
+def phase_5_correlation(scan_number, signals):
+    """[5/10] Correlation engine v2 + historical pattern matching.
+    Returns (correlation, pattern_match, fg_value, btc_weekly) so later
+    code (post-scan summary, watchlist) can read the cross-phase data."""
+    with ScanContext(logger, scan_number, "[5/10] Correlation Engine v2"):
+        try:
+            from treasury_signals.scanners.market_intelligence import get_risk_dashboard
+            risk_data = get_risk_dashboard()
+            fg_value = risk_data.get("fear_greed_value", 50)
+            btc_weekly = risk_data.get("btc_7d_change", 0)
+            engine.update_market_context(
+                fear_greed=fg_value,
+                btc_weekly_change=btc_weekly,
+                btc_price=risk_data.get("btc_price", 0)
+            )
+        except Exception as e:
+            logger.debug(f"Market context update: {e}")
+            fg_value = 50
+            btc_weekly = 0
+
+        correlation = check_correlation()
+
+        try:
+            strc_data = get_strc_volume_data()
+            strc_r = strc_data.get("volume_ratio", 0) if strc_data else 0
+
+            pattern_match = pattern_engine.match_current_conditions(
+                recent_signals=signals or [],
+                strc_ratio=strc_r,
+                fear_greed=fg_value,
+                btc_change_pct=btc_weekly,
+            )
+            logger.info(f"Pattern Match: {pattern_match['score']}/100 ({pattern_match['matched_count']}/{pattern_match['total_patterns']} patterns)")
+            if pattern_match['matching_patterns']:
+                for p in pattern_match['matching_patterns'][:3]:
+                    logger.info(f"  ✅ {p['name']}: {p['match_detail']}")
+        except Exception as e:
+            logger.debug(f"Pattern analysis skipped: {e}")
+            pattern_match = {"score": 0, "matched_count": 0, "total_patterns": 0, "matching_patterns": [], "narrative": ""}
+
+        return correlation, pattern_match, fg_value, btc_weekly
+
+
+def phase_6_email(scan_number):
+    """[6/10] Daily email briefing (sends only when due)."""
+    with ScanContext(logger, scan_number, "[6/10] Daily email briefing"):
+        send_daily_email()
+
+
+def phase_7_leaderboard(scan_number):
+    """[7/10] Daily leaderboard Telegram (sends only when due)."""
+    with ScanContext(logger, scan_number, "[7/10] Daily leaderboard"):
+        send_daily_leaderboard()
+
+
+def phase_8_purchase_detection(scan_number, morning):
+    """[8/10] Purchase + sale detection: news scan, snapshot diffs,
+    reconciler promotions/expiry, stats. Returns the `detected` list so
+    later code (watchlist, scan summary) can use it."""
+    with ScanContext(logger, scan_number, "[8/10] Purchase & sale detection"):
+        try:
+            news_purchases = scan_news_for_purchases()
+            if news_purchases:
+                logger.info(f"News scanner: {len(news_purchases)} purchase(s) found in headlines")
+        except Exception as e:
+            logger.debug(f"News purchase scan: {e}")
+
+        detected = detect_new_purchases()
+        if detected:
+            log_detected_purchases(detected)
+            for d in detected[:3]:
+                msg = format_purchase_telegram(d)
+                send_to_paid(msg)
+                if d["btc_amount"] >= 1000:
+                    send_to_free(msg)
+            logger.info(f"{len(detected)} purchase(s) detected and logged")
+
+            # Feed detected purchases into correlation engine as news signals
+            for d in detected[:10]:
+                engine.add_news_signal(
+                    company=d.get("company", ""),
+                    ticker=d.get("ticker", ""),
+                    is_confirmed_purchase=True,
+                    headline=f"{d.get('company', '')} acquired {d.get('btc_amount', 0):,} BTC",
+                )
+
+            # LLM purchase analysis
+            try:
+                for d in detected[:2]:
+                    analysis = narrator.analyze_purchase(d, market_context={
+                        "btc_price": 70000,
+                        "fear_greed": 50,
+                    }, was_predicted=d.get("was_predicted", False))
+                    if analysis:
+                        logger.info(f"LLM Purchase Analysis: {analysis[:100]}...")
+            except Exception as e:
+                logger.debug(f"LLM purchase analysis skipped: {e}")
+        else:
+            logger.info("No new purchases detected")
+
+        # Reconciler: promote pending purchases confirmed by other scanners
+        try:
+            promoted = promote_pending_purchases()
+            if promoted:
+                logger.info(f"Reconciler: {promoted} pending purchase(s) promoted to confirmed")
+        except Exception as e:
+            logger.debug(f"Reconciler promote: {e}")
+
+        # Reconciler: promote pending sales confirmed by other scanners
+        try:
+            promoted_sales = promote_pending_sales()
+            if promoted_sales:
+                logger.info(f"Reconciler: {promoted_sales} pending sale(s) promoted to confirmed")
+        except Exception as e:
+            logger.debug(f"Reconciler promote sales: {e}")
+
+        # Reconciler: expire stale pending entries (once per day, morning only)
+        if morning:
+            try:
+                expired = expire_stale_pending()
+                if expired:
+                    logger.info(f"Reconciler: {expired} stale pending entries discarded")
+            except Exception as e:
+                logger.debug(f"Reconciler expire: {e}")
+
+        # Log reconciler stats
+        try:
+            rstats = get_reconciler_stats()
+            logger.info(f"Reconciler: {rstats['confirmed_total']} confirmed purchases | {rstats.get('confirmed_sales', 0)} confirmed sales | {rstats.get('pending_buys', 0)} pending buys | {rstats.get('pending_sales', 0)} pending sales | {rstats['promoted_count']} promoted | {rstats['discarded_count']} discarded")
+        except Exception as e:
+            logger.debug(f"Reconciler stats: {e}")
+
+        return detected
+
+
+def phase_9_regulatory(scan_number):
+    """[9/10] Regulatory news + statements scan."""
+    with ScanContext(logger, scan_number, "[9/10] Regulatory scan"):
+        scan_regulatory()
+
+
+def phase_10_dashboard_ping(scan_number):
+    """[10/10] Keep the legacy Streamlit dashboard warm (cron warmer)."""
+    with ScanContext(logger, scan_number, "[10/10] Dashboard ping"):
+        try:
+            response = req.get("https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/", timeout=30)
+            logger.debug(f"Dashboard ping: {response.status_code}")
+        except Exception as e:
+            logger.debug(f"Dashboard ping failed: {e}")
+
+
 def main():
     logger.info("=" * 60)
     logger.info("TREASURY PURCHASE SIGNAL INTELLIGENCE v2.2")
@@ -422,180 +641,17 @@ def main():
         scan_type = "FULL (maintenance + detection)" if morning else "DETECTION"
         logger.info(f"{'='*50} SCAN #{scan_number} [{scan_type}] {'='*50}")
 
-        with ScanContext(logger, scan_number, "[1/10] Fetching tweets"):
-            new_count, skip_count = scan_all_accounts(accounts)
-            logger.info(f"Tweets: {new_count} new, {skip_count} duplicates")
-
-        with ScanContext(logger, scan_number, "[2/10] Classifying + alerting"):
-            signals, alerts_sent = process_and_alert()
-
-        with ScanContext(logger, scan_number, "[3/10] STRC issuance volume"):
-            check_strc_volume()
-
-        with ScanContext(logger, scan_number, "[4/10] SEC EDGAR realtime"):
-            # Searches ALL 8-K filings for bitcoin keywords, extracts BTC/USD amounts,
-            # bridges purchases to confirmed_purchases, sends Telegram alerts
-            try:
-                edgar_result = check_edgar_realtime(days_back=1)
-                # Feed EDGAR findings into correlation engine
-                if edgar_result and edgar_result.get("new_filings", 0) > 0:
-                    # Query recent edgar_filings from DB to get details
-                    try:
-                        from treasury_signals.storage.database import supabase as db
-                        recent_filings = db.table("edgar_filings").select("*").order("processed_at", desc=True).limit(5).execute()
-                        if recent_filings.data:
-                            for f in recent_filings.data:
-                                if f.get("event_type") == "purchase" and f.get("btc_amount", 0) > 0:
-                                    engine.add_edgar_filing(
-                                        company=f.get("company_name", ""),
-                                        ticker=f.get("ticker_cik", ""),
-                                        is_btc_related=True,
-                                        filing_date=f.get("filing_date", ""),
-                                        btc_amount=f.get("btc_amount", 0),
-                                    )
-                                elif f.get("event_type") in ("purchase", "holding"):
-                                    engine.add_edgar_filing(
-                                        company=f.get("company_name", ""),
-                                        ticker=f.get("ticker_cik", ""),
-                                        is_btc_related=True,
-                                        filing_date=f.get("filing_date", ""),
-                                    )
-                    except Exception as e:
-                        logger.debug(f"EDGAR → correlation feed: {e}")
-            except Exception as e:
-                logger.debug(f"EDGAR realtime: {e}")
-
-        with ScanContext(logger, scan_number, "[5/10] Correlation Engine v2"):
-            # Feed market context into the engine before calculating
-            try:
-                from treasury_signals.scanners.market_intelligence import get_risk_dashboard
-                risk_data = get_risk_dashboard()
-                fg_value = risk_data.get("fear_greed_value", 50)
-                btc_weekly = risk_data.get("btc_7d_change", 0)
-                engine.update_market_context(
-                    fear_greed=fg_value,
-                    btc_weekly_change=btc_weekly,
-                    btc_price=risk_data.get("btc_price", 0)
-                )
-            except Exception as e:
-                logger.debug(f"Market context update: {e}")
-                fg_value = 50
-                btc_weekly = 0
-
-            correlation = check_correlation()
-
-            # Historical pattern matching
-            try:
-                strc_data = get_strc_volume_data()
-                strc_r = strc_data.get("volume_ratio", 0) if strc_data else 0
-
-                pattern_match = pattern_engine.match_current_conditions(
-                    recent_signals=signals if 'signals' in dir() else [],
-                    strc_ratio=strc_r,
-                    fear_greed=fg_value,
-                    btc_change_pct=btc_weekly,
-                )
-                logger.info(f"Pattern Match: {pattern_match['score']}/100 ({pattern_match['matched_count']}/{pattern_match['total_patterns']} patterns)")
-                if pattern_match['matching_patterns']:
-                    for p in pattern_match['matching_patterns'][:3]:
-                        logger.info(f"  ✅ {p['name']}: {p['match_detail']}")
-            except Exception as e:
-                logger.debug(f"Pattern analysis skipped: {e}")
-                pattern_match = {"score": 0, "matched_count": 0, "total_patterns": 0, "matching_patterns": [], "narrative": ""}
-
-        with ScanContext(logger, scan_number, "[6/10] Daily email briefing"):
-            send_daily_email()
-
-        with ScanContext(logger, scan_number, "[7/10] Daily leaderboard"):
-            send_daily_leaderboard()
-
-        with ScanContext(logger, scan_number, "[8/10] Purchase & sale detection"):
-            # Step 1: Scan news for real purchase announcements (feeds into reconciler)
-            # Runs FIRST so news-confirmed purchases are in the DB before snapshot
-            # comparison, allowing snapshot deltas to be deduped against them.
-            try:
-                news_purchases = scan_news_for_purchases()
-                if news_purchases:
-                    logger.info(f"News scanner: {len(news_purchases)} purchase(s) found in headlines")
-            except Exception as e:
-                logger.debug(f"News purchase scan: {e}")
-
-            # Step 2: Snapshot comparison (all deltas go to pending, never auto-confirmed)
-            # Also detects holdings decreases as pending sales
-            detected = detect_new_purchases()
-            if detected:
-                log_detected_purchases(detected)
-                for d in detected[:3]:
-                    msg = format_purchase_telegram(d)
-                    send_to_paid(msg)
-                    if d["btc_amount"] >= 1000:
-                        send_to_free(msg)
-                logger.info(f"{len(detected)} purchase(s) detected and logged")
-
-                # Feed detected purchases into correlation engine as news signals
-                for d in detected[:10]:
-                    engine.add_news_signal(
-                        company=d.get("company", ""),
-                        ticker=d.get("ticker", ""),
-                        is_confirmed_purchase=True,
-                        headline=f"{d.get('company', '')} acquired {d.get('btc_amount', 0):,} BTC",
-                    )
-
-                # LLM purchase analysis
-                try:
-                    for d in detected[:2]:
-                        analysis = narrator.analyze_purchase(d, market_context={
-                            "btc_price": btc_price if 'btc_price' in dir() else 70000,
-                            "fear_greed": 50,
-                        }, was_predicted=d.get("was_predicted", False))
-                        if analysis:
-                            logger.info(f"LLM Purchase Analysis: {analysis[:100]}...")
-                except Exception as e:
-                    logger.debug(f"LLM purchase analysis skipped: {e}")
-            else:
-                logger.info("No new purchases detected")
-
-            # Reconciler: promote pending purchases confirmed by other scanners
-            try:
-                promoted = promote_pending_purchases()
-                if promoted:
-                    logger.info(f"Reconciler: {promoted} pending purchase(s) promoted to confirmed")
-            except Exception as e:
-                logger.debug(f"Reconciler promote: {e}")
-
-            # Reconciler: promote pending sales confirmed by other scanners
-            try:
-                promoted_sales = promote_pending_sales()
-                if promoted_sales:
-                    logger.info(f"Reconciler: {promoted_sales} pending sale(s) promoted to confirmed")
-            except Exception as e:
-                logger.debug(f"Reconciler promote sales: {e}")
-
-            # Reconciler: expire stale pending entries (once per day, morning only)
-            if morning:
-                try:
-                    expired = expire_stale_pending()
-                    if expired:
-                        logger.info(f"Reconciler: {expired} stale pending entries discarded")
-                except Exception as e:
-                    logger.debug(f"Reconciler expire: {e}")
-
-            # Log reconciler stats
-            try:
-                rstats = get_reconciler_stats()
-                logger.info(f"Reconciler: {rstats['confirmed_total']} confirmed purchases | {rstats.get('confirmed_sales', 0)} confirmed sales | {rstats.get('pending_buys', 0)} pending buys | {rstats.get('pending_sales', 0)} pending sales | {rstats['promoted_count']} promoted | {rstats['discarded_count']} discarded")
-            except Exception as e:
-                logger.debug(f"Reconciler stats: {e}")
-
-        with ScanContext(logger, scan_number, "[9/10] Regulatory scan"):
-            scan_regulatory()
-
-        with ScanContext(logger, scan_number, "[10/10] Dashboard ping"):
-            try:
-                response = req.get("https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/", timeout=30)
-                logger.debug(f"Dashboard ping: {response.status_code}")
-            except Exception as e:
-                logger.debug(f"Dashboard ping failed: {e}")
+        # ─── 10-step scan cycle (extracted into phase functions above) ───
+        new_count, skip_count = phase_1_tweets(scan_number, accounts)
+        signals, alerts_sent = phase_2_classify(scan_number)
+        phase_3_strc(scan_number)
+        phase_4_edgar(scan_number)
+        correlation, pattern_match, fg_value, btc_weekly = phase_5_correlation(scan_number, signals)
+        phase_6_email(scan_number)
+        phase_7_leaderboard(scan_number)
+        detected = phase_8_purchase_detection(scan_number, morning)
+        phase_9_regulatory(scan_number)
+        phase_10_dashboard_ping(scan_number)
 
         logger.info(f"Scan #{scan_number} complete")
 
