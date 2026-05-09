@@ -12,3 +12,4 @@ pandas
 lxml
 beautifulsoup4
 anthropic
+sentry-sdk==2.18.0

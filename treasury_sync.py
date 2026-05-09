@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 from supabase import create_client
 from bs4 import BeautifulSoup
 from logger import get_logger
+from observability import capture_exception
 
 logger = get_logger(__name__)
 
@@ -677,6 +678,7 @@ class TreasurySync:
             supabase.table("treasury_companies").delete().gte("id", 0).execute()
         except Exception as e:
             logger.warning(f"Could not clear table: {e}")
+            capture_exception(e, context={"where": "treasury_sync._wipe_and_rewrite.delete"})
 
         count = errors = skipped = 0
         for ticker, entity in all_entities.items():
@@ -708,7 +710,12 @@ class TreasurySync:
             except Exception as e:
                 errors += 1
                 if errors <= 3:
-                    logger.debug(f"Insert error {ticker}: {e}")
+                    logger.warning(f"Insert error {ticker}: {e}")
+                    capture_exception(e, context={
+                        "where": "treasury_sync._wipe_and_rewrite.insert",
+                        "ticker": ticker,
+                        "company": entity.get("company", "")[:80],
+                    })
         if errors > 0:
             logger.warning(f"Treasury Sync: {errors} insert errors")
         if skipped > 0:

@@ -42,6 +42,7 @@ import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from logger import get_logger
+from observability import notify_admin
 
 logger = get_logger(__name__)
 load_dotenv()
@@ -93,6 +94,7 @@ class FreshnessTracker:
     def __init__(self):
         self._sources = {}
         self._provenance = {}  # Tracks which source provided data for each category
+        self._escalated = set()  # source_ids we've already alerted admin about (debounce)
         self._init_sources()
 
     def _init_sources(self):
@@ -121,6 +123,11 @@ class FreshnessTracker:
         self._sources[source_id]["last_success"] = datetime.now()
         self._sources[source_id]["detail"] = detail[:200] if detail else None
         self._sources[source_id]["consecutive_failures"] = 0
+        # Recovery: clear the debounce so the NEXT failure streak triggers a fresh alert
+        if source_id in self._escalated:
+            self._escalated.discard(source_id)
+            label = SOURCE_LABELS.get(source_id, source_id)
+            notify_admin(f"✅ RECOVERED: {label} succeeded after previous failures")
         logger.debug(f"Freshness: {source_id} ✅ {detail[:80] if detail else 'OK'}")
 
     def record_failure(self, source_id, error=""):
@@ -140,6 +147,12 @@ class FreshnessTracker:
         failures = self._sources[source_id]["consecutive_failures"]
         if failures >= 3:
             logger.warning(f"Freshness: {source_id} ❌ {failures} consecutive failures — {error[:80] if error else 'unknown'}")
+            # Escalate to admin once per failure streak (debounced; cleared on recovery)
+            if source_id not in self._escalated:
+                label = SOURCE_LABELS.get(source_id, source_id)
+                err_str = str(error)[:120] if error else "unknown"
+                notify_admin(f"❌ {label} failed {failures} consecutive times. Last error: {err_str}")
+                self._escalated.add(source_id)
 
     def set_provenance(self, category, source_name, source_type="live"):
         """

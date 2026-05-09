@@ -28,6 +28,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from supabase import create_client
 from logger import get_logger
+from observability import capture_exception
 
 logger = get_logger(__name__)
 
@@ -299,6 +300,7 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
             return {"action": "pending", "purchase_id": pending_id, "details": f"{entrant_label}, awaiting confirmation from EDGAR/News/Global"}
         except Exception as e:
             logger.error(f"Reconciler: failed to save pending: {e}")
+            capture_exception(e, context={"where": "reconcile_and_save.save_pending", "ticker": ticker, "company": company, "btc": btc_amount})
             return {"action": "error", "purchase_id": None, "details": str(e)}
 
     # ─── STEP 2: Check for matching pending entry → confirm it ───
@@ -342,6 +344,7 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
             return {"action": "pending_confirmed", "purchase_id": purchase_id, "details": f"Pending entry confirmed by {source_type}"}
         except Exception as e:
             logger.error(f"Reconciler: failed to confirm pending: {e}")
+            capture_exception(e, context={"where": "reconcile_and_save.confirm_pending", "ticker": ticker, "company": company, "btc": btc_amount, "source_type": source_type})
             return {"action": "error", "purchase_id": None, "details": str(e)}
 
     # ─── STEP 3: Check for existing confirmed entry → upgrade or skip ───
@@ -376,6 +379,7 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
                 return {"action": "upgraded", "purchase_id": purchase_id, "details": f"Upgraded from rank {existing_rank} to rank {source_rank}"}
             except Exception as e:
                 logger.error(f"Reconciler: upgrade failed: {e}")
+                capture_exception(e, context={"where": "reconcile_and_save.upgrade", "ticker": ticker, "company": company, "btc": btc_amount, "existing_rank": existing_rank, "new_rank": source_rank})
                 return {"action": "error", "purchase_id": None, "details": str(e)}
         else:
             # Existing entry is from equal or better source — skip
@@ -403,6 +407,7 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
         return {"action": "confirmed", "purchase_id": purchase_id, "details": f"New purchase confirmed via {source_type}"}
     except Exception as e:
         logger.error(f"Reconciler: failed to save confirmed: {e}")
+        capture_exception(e, context={"where": "reconcile_and_save.save_confirmed", "ticker": ticker, "company": company, "btc": btc_amount, "source_type": source_type})
         return {"action": "error", "purchase_id": None, "details": str(e)}
 
 
@@ -606,6 +611,7 @@ def reconcile_sale(sale, source_type="snapshot"):
             return {"action": "pending", "sale_id": pending_id, "details": "Sale awaiting confirmation"}
         except Exception as e:
             logger.error(f"Reconciler: failed to save pending sale: {e}")
+            capture_exception(e, context={"where": "reconcile_sale.save_pending", "ticker": ticker, "company": company, "btc": btc_amount})
             return {"action": "error", "sale_id": None, "details": str(e)}
 
     # ─── Check for matching pending sale → confirm it ───
@@ -639,6 +645,7 @@ def reconcile_sale(sale, source_type="snapshot"):
             return {"action": "confirmed", "sale_id": sale_id, "details": f"Sale confirmed by {source_type}"}
         except Exception as e:
             logger.error(f"Reconciler: failed to confirm pending sale: {e}")
+            capture_exception(e, context={"where": "reconcile_sale.confirm_pending", "ticker": ticker, "company": company, "btc": btc_amount, "source_type": source_type})
             return {"action": "error", "sale_id": None, "details": str(e)}
 
     # ─── Check for existing confirmed sale → upgrade or skip ───
@@ -661,6 +668,8 @@ def reconcile_sale(sale, source_type="snapshot"):
                 logger.info(f"Reconciler: ⬆️ UPGRADED SALE — {company}: {source_type} replaced rank {existing_rank}")
                 return {"action": "upgraded", "sale_id": sale_id, "details": f"Upgraded from rank {existing_rank}"}
             except Exception as e:
+                logger.error(f"Reconciler: sale upgrade failed: {e}")
+                capture_exception(e, context={"where": "reconcile_sale.upgrade", "ticker": ticker, "company": company, "btc": btc_amount, "existing_rank": existing_rank, "new_rank": source_rank})
                 return {"action": "error", "sale_id": None, "details": str(e)}
         else:
             return {"action": "duplicate_skipped", "sale_id": existing.get("sale_id"), "details": f"Already confirmed with rank {existing_rank}"}
@@ -679,6 +688,7 @@ def reconcile_sale(sale, source_type="snapshot"):
         return {"action": "confirmed", "sale_id": sale_id, "details": f"Sale confirmed via {source_type}"}
     except Exception as e:
         logger.error(f"Reconciler: failed to save confirmed sale: {e}")
+        capture_exception(e, context={"where": "reconcile_sale.save_confirmed", "ticker": ticker, "company": company, "btc": btc_amount, "source_type": source_type})
         return {"action": "error", "sale_id": None, "details": str(e)}
 
 

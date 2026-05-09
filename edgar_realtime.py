@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from supabase import create_client
 from logger import get_logger
 from purchase_reconciler import reconcile_and_save, reconcile_sale
+from observability import capture_exception
 
 logger = get_logger(__name__)
 load_dotenv()
@@ -229,7 +230,13 @@ def _store_filing(filing_data):
     try:
         supabase.table("edgar_filings").upsert(filing_data, on_conflict="accession_number").execute()
     except Exception as e:
-        logger.debug(f"  EDGAR store error: {e}")
+        logger.warning(f"  EDGAR store error: {e} (accession={filing_data.get('accession_number','')})")
+        capture_exception(e, context={
+            "where": "edgar_realtime._store_filing",
+            "accession": filing_data.get("accession_number", ""),
+            "company": filing_data.get("company_name", "")[:80],
+            "event_type": filing_data.get("event_type", ""),
+        })
 
 
 def _send_alert(company, ticker, event_type, btc_amount, usd_amount, filing_url):

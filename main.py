@@ -30,6 +30,12 @@ import time
 import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+
+# Initialize Sentry BEFORE any other imports so module-level exceptions are captured
+load_dotenv()
+from observability import init_sentry
+init_sentry()
+
 from twitter_client import get_user_tweets, extract_tweet_info
 from database import save_tweet, get_new_tweets, mark_processed
 from classifier import classify_tweet, get_signal_label, get_dimension_breakdown

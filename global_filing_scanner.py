@@ -40,6 +40,8 @@ try:
 except ImportError:
     HAS_RECONCILER = False
 
+from observability import capture_exception
+
 logger = get_logger(__name__)
 load_dotenv()
 
@@ -114,7 +116,15 @@ def _store_filing(filing):
     try:
         supabase.table("edgar_filings").upsert(filing, on_conflict="accession_number").execute()
     except Exception as e:
-        logger.debug(f"  Filing store error: {e}")
+        # Promoted from logger.debug — this is the swallow that hid the missing
+        # `source` column for 28+ days. Schema mismatches must be loud.
+        logger.warning(f"  Filing store error: {e} (accession={filing.get('accession_number','')}, source={filing.get('source','')})")
+        capture_exception(e, context={
+            "where": "global_filing_scanner._store_filing",
+            "accession": filing.get("accession_number", ""),
+            "source": filing.get("source", ""),
+            "company": filing.get("company_name", "")[:80],
+        })
 
 def _get_processed():
     try:
@@ -225,7 +235,16 @@ def _route_to_reconciler(filing):
             result = reconcile_and_save(transaction, source_type="global_filing", is_new_entrant=False)
             logger.info(f"  {source} → Reconciler: {resolved_name} ({resolved_ticker}) — {result['action']}")
     except Exception as e:
-        logger.debug(f"  Reconciler routing error: {e}")
+        # Reconciler errors mean we have a parsed filing but failed to write it
+        # — surface loudly. This used to be debug.
+        logger.warning(f"  Reconciler routing error: {e} (source={source}, company={resolved_name})")
+        capture_exception(e, context={
+            "where": "global_filing_scanner._route_to_reconciler",
+            "source": source,
+            "company": resolved_name,
+            "ticker": resolved_ticker,
+            "btc": btc,
+        })
 
 
 # ═══════════════════════════════════════════════════════════
@@ -825,6 +844,11 @@ def scan_all_filings(days_back=1):
             total_new += new_count
         except Exception as e:
             logger.warning(f"  ⚠️ {country} adapter FAILED: {e}")
+            capture_exception(e, context={
+                "where": "global_filing_scanner.scan_all_filings",
+                "adapter": country,
+                "adapter_fn": adapter.__name__,
+            })
             source_stats[country] = -1  # Mark as failed, not just empty
 
     # Mechanism 2: Multi-language global news
