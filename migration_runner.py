@@ -28,7 +28,7 @@ import os
 import sys
 import re
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -111,7 +111,7 @@ def _record_applied(supabase, version, filename, checksum):
     """Insert a row into schema_migrations after successful application."""
     supabase.table("schema_migrations").upsert({
         "version": version,
-        "applied_at": datetime.utcnow().isoformat(),
+        "applied_at": datetime.now(timezone.utc).isoformat(),
         "checksum": checksum,
         "filename": filename,
     }, on_conflict="version").execute()
