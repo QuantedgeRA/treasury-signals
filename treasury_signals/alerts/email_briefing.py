@@ -36,7 +36,28 @@ from treasury_signals.logger import get_logger
 from treasury_signals.freshness_tracker import freshness
 from treasury_signals.storage.subscriber_manager import subscribers as sub_mgr
 from treasury_signals.alerts.watchlist_manager import get_watchlist_activity, format_watchlist_email_html
+from treasury_signals.alerts.slack_sender import send_briefing_to_slack
 from treasury_signals.pipelines.narrative_engine import narrator
+
+
+# Per-day, per-team dedupe for Slack briefings. The daily cron iterates
+# subscribers; without this, a 5-member team would get 5 identical Slack
+# messages. The set resets when the date rolls over (next cron run).
+_slack_sent_team_ids: set[str] = set()
+_slack_sent_date: str | None = None
+
+
+def _slack_already_sent_today(team_id: str) -> bool:
+    """Returns True if this team_id has already received today's Slack brief."""
+    global _slack_sent_team_ids, _slack_sent_date
+    today = datetime.now().date().isoformat()
+    if _slack_sent_date != today:
+        _slack_sent_team_ids = set()
+        _slack_sent_date = today
+    if team_id in _slack_sent_team_ids:
+        return True
+    _slack_sent_team_ids.add(team_id)
+    return False
 
 
 
@@ -1280,6 +1301,44 @@ def generate_and_send_briefing(to_email, subscriber=None):
     logger.info(f"Briefing: {lb_summary['total_companies']} companies | {reg_stats['total_items']} reg items | {accuracy['hit_rate']}% hit rate")
 
     success = send_briefing(to_email, html, subscriber=subscriber)
+
+    # ── Slack delivery (Team / Enterprise tier) ──────────────────────────
+    # Send a compact Block Kit version to the team's configured webhook.
+    # Once-per-team-per-day via _slack_already_sent_today() so multi-member
+    # teams don't see duplicate posts. Failures never block the email path.
+    try:
+        team_id = subscriber.get("team_id") if subscriber else None
+        if team_id and not _slack_already_sent_today(team_id):
+            team_row = supabase.table("teams").select("slack_webhook_url, name").eq("id", team_id).limit(1).execute()
+            row = (team_row.data or [None])[0]
+            webhook_url = row and row.get("slack_webhook_url")
+            if webhook_url:
+                wl_activity = (personalization or {}).get("watchlist_activity", [])
+                slack_briefing = {
+                    "date_str": datetime.now().strftime("%b %d, %Y"),
+                    "company_name": (subscriber.get("company_name") or row.get("name") or "Treasury team") if row else None,
+                    "btc_price": market.get("btc_price"),
+                    "btc_change_pct": market.get("btc_change"),
+                    "action_text": (action or {}).get("action", "—"),
+                    "action_score": (action or {}).get("score"),
+                    "action_summary": (action or {}).get("summary", ""),
+                    "risk_level": (risk or {}).get("risk_level", "—"),
+                    "fg_value": (risk or {}).get("fear_greed_value"),
+                    "watchlist_activity": [
+                        {"ticker": w.get("ticker"), "headline": w.get("headline") or w.get("text") or ""}
+                        for w in wl_activity[:3]
+                    ],
+                    "peer_activity": [{"text": p.get("text", "")} for p in (peers or [])[:3]],
+                    "dashboard_url": DASHBOARD_URL,
+                }
+                slack_res = send_briefing_to_slack(webhook_url, slack_briefing)
+                if slack_res.get("ok"):
+                    logger.info(f"Slack briefing sent for team {team_id}")
+                else:
+                    logger.warning(f"Slack briefing failed for team {team_id}: {slack_res.get('error')}")
+    except Exception as slack_err:
+        logger.warning(f"Slack briefing path threw for team {subscriber.get('team_id') if subscriber else None}: {slack_err}")
+
     return success, html
 
 

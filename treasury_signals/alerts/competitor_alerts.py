@@ -20,6 +20,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from supabase import create_client
 from treasury_signals.logger import get_logger
+from treasury_signals.alerts.slack_sender import send_competitor_alert_to_slack
 
 logger = get_logger(__name__)
 
@@ -68,6 +69,9 @@ def check_competitor_purchase(purchase_data):
     size_label = "MEGA" if usd_m >= 1000 else "LARGE" if usd_m >= 500 else "MEDIUM" if usd_m >= 100 else ""
 
     alerts_sent = 0
+    # Per-call dedupe so multi-member teams get exactly one Slack post per
+    # competitor purchase, not one per member.
+    _slack_alerted_teams: set[str] = set()
 
     for sub in subscribers:
         sub_ticker = (sub.get("ticker") or "").upper()
@@ -120,6 +124,29 @@ def check_competitor_purchase(purchase_data):
 
         _send_telegram(alert_body)
         _send_email_alert(sub_email, sub_name, company, ticker, btc_amount, usd_m, reasons, purchase_data)
+        # Slack alert: send once per team (not per member). Tracked in
+        # _slack_alerted_teams below to avoid 5x duplication on a 5-member
+        # team. Owner-configured webhook on the team row.
+        team_id = sub.get("team_id")
+        if team_id and team_id not in _slack_alerted_teams:
+            try:
+                team_row = supabase.table("teams").select("slack_webhook_url").eq("id", team_id).limit(1).execute()
+                webhook = (team_row.data or [{}])[0].get("slack_webhook_url") if team_row.data else None
+                if webhook:
+                    slack_res = send_competitor_alert_to_slack(webhook, {
+                        "company": company,
+                        "btc_amount": btc_amount,
+                        "usd_amount": usd_amount,
+                        "filing_date": purchase_data.get("filing_date", ""),
+                        "reasons": reasons,
+                    })
+                    if slack_res.get("ok"):
+                        logger.info(f"  Competitor Slack alert sent for team {team_id}")
+                    else:
+                        logger.warning(f"  Competitor Slack alert failed for team {team_id}: {slack_res.get('error')}")
+            except Exception as slack_err:
+                logger.warning(f"  Competitor Slack path threw for team {team_id}: {slack_err}")
+            _slack_alerted_teams.add(team_id)
         alerts_sent += 1
         logger.info(f"  Alert sent to {sub_email} ({len(reasons)} reasons)")
 

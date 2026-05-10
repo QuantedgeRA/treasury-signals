@@ -1,0 +1,36 @@
+-- 0009_team_slack_webhook.sql
+--
+-- Slack integration for the Team and Enterprise tiers.
+--
+-- Background: the pricing page advertises "Slack integration" as a Team
+-- feature alongside seats and shared watchlist. This migration adds the
+-- minimal storage required to wire it up.
+--
+-- ── Storage shape ────────────────────────────────────────────────────────
+-- Single TEXT column on teams. Stores the raw Incoming Webhook URL,
+-- which looks like:
+--   https://hooks.slack.com/services/T0XXXXXXX/B0XXXXXXX/abcdefg…
+-- The URL itself is the only secret — anyone holding it can post to the
+-- channel. Supabase encrypts at rest; we never log it.
+--
+-- ── Why incoming webhooks (not OAuth) ────────────────────────────────────
+-- Incoming webhooks need no app submission, no scopes, no token rotation.
+-- The owner creates one in their Slack workspace settings (one-time, ~30s)
+-- and pastes the URL. We POST JSON to it. Migration to a real Slack OAuth
+-- app is a future PR if customers ask for DMs / multi-channel routing /
+-- interactive buttons.
+--
+-- ── Permission model ─────────────────────────────────────────────────────
+-- Only the team owner may set/clear the webhook. Members read-only.
+-- Enforced in lib/teams.setTeamSlackWebhook via canManageTeam().
+--
+-- ── Validation ───────────────────────────────────────────────────────────
+-- API enforces the URL must start with 'https://hooks.slack.com/services/'.
+-- We do NOT validate against Slack's API on save (no OAuth means no token);
+-- instead we offer a 'Send test message' button on the /team page that
+-- POSTs immediately and reports success / 4xx back to the owner.
+--
+-- Migration is idempotent. No backfill needed.
+
+ALTER TABLE teams
+  ADD COLUMN IF NOT EXISTS slack_webhook_url TEXT;
