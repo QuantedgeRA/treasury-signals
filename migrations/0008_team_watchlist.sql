@@ -1,0 +1,32 @@
+-- 0008_team_watchlist.sql
+--
+-- Team-wide shared watchlist (the second half of the Team-tier value prop).
+--
+-- Background: subscribers.watchlist_json already stores each user's personal
+-- watchlist. The Team plan promised "shared watchlists across the team"
+-- alongside the seat sharing shipped in 0007 — this migration adds the
+-- team-side storage.
+--
+-- ── Storage shape ────────────────────────────────────────────────────────
+-- JSONB array of uppercase ticker strings. Same shape as
+-- subscribers.watchlist_json so the same readers/sanitizers work on both.
+-- 50-entry cap enforced at the API layer (matches the 20-entry personal cap
+-- but more generous since teams aggregate multiple users' interests).
+--
+-- ── Permission model ─────────────────────────────────────────────────────
+-- Owner: read + write
+-- Member: read-only
+-- Enforced in lib/teams.setTeamWatchlist via canManageTeam().
+--
+-- ── UI presentation ──────────────────────────────────────────────────────
+-- Personal and team lists are shown as two distinct sections (no
+-- auto-merge in the UI). Daily email briefings DO union both lists when
+-- computing watchlist activity, so a member sees both their personal
+-- companies AND the team's companies in their morning brief.
+--
+-- ── Migration safety ─────────────────────────────────────────────────────
+-- Idempotent ADD COLUMN IF NOT EXISTS. Default '[]'::jsonb so existing
+-- teams immediately have a valid empty list. No backfill needed.
+
+ALTER TABLE teams
+  ADD COLUMN IF NOT EXISTS watchlist_json JSONB DEFAULT '[]'::jsonb NOT NULL;

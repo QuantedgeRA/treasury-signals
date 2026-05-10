@@ -1196,17 +1196,46 @@ def generate_and_send_briefing(to_email, subscriber=None):
             personalization["context"] = sub_mgr.get_personalized_context(sub_email, btc_price, action, leaderboard)
             personalization["holdings_change"] = sub_mgr.track_holdings_change(sub_email)
 
-            # Watchlist activity (Phase 8)
-            watchlist = subscriber.get("watchlist", [])
-            if isinstance(watchlist, str):
-                import json as _json
-                watchlist = _json.loads(watchlist) if watchlist else []
+            # Watchlist activity (Phase 8) — union of personal + team watchlist.
+            # Personal list comes from the subscriber row; team list (Team /
+            # Enterprise tier) comes from teams.watchlist_json. We dedupe so
+            # the briefing doesn't show the same activity twice.
+            import json as _json
+            personal_wl = subscriber.get("watchlist", [])
+            if isinstance(personal_wl, str):
+                personal_wl = _json.loads(personal_wl) if personal_wl else []
+            personal_wl = [t for t in (personal_wl or []) if t]
+
+            team_wl = []
+            team_id = subscriber.get("team_id")
+            if team_id:
+                try:
+                    team_row = supabase.table("teams").select("watchlist_json").eq("id", team_id).limit(1).execute()
+                    raw = (team_row.data or [{}])[0].get("watchlist_json") if team_row.data else []
+                    if isinstance(raw, str):
+                        raw = _json.loads(raw) if raw else []
+                    team_wl = [t for t in (raw or []) if t]
+                except Exception as wl_err:
+                    logger.warning(f"Team watchlist load failed for team {team_id}: {wl_err}")
+
+            seen = set()
+            watchlist = []
+            for t in personal_wl + team_wl:
+                tu = (t or "").upper().strip()
+                if tu and tu not in seen:
+                    seen.add(tu)
+                    watchlist.append(tu)
+
             if watchlist:
                 personalization["watchlist_activity"] = get_watchlist_activity(
                     watchlist=watchlist, signals=signals,
                     purchases=purchases, leaderboard=leaderboard,
                 )
-                logger.info(f"Watchlist: {len(watchlist)} companies tracked, {len(personalization.get('watchlist_activity', []))} activities found")
+                logger.info(
+                    f"Watchlist: {len(watchlist)} unique tickers "
+                    f"(personal={len(personal_wl)}, team={len(team_wl)}), "
+                    f"{len(personalization.get('watchlist_activity', []))} activities found"
+                )
 
             logger.info(f"Personalization: {len(personalization.get('sector_peers', []))} peers, {len(personalization.get('competitor_spotlight', []))} competitors")
         except Exception as e:
