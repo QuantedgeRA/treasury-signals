@@ -209,20 +209,20 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                 break
 
         rank_html = f"""
-            <td width="25%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px; border: 1px solid #E67E2240;">
-                <span style="color: #E67E22; font-size: 24px; font-weight: 800; font-family: 'Courier New', monospace;">#{rank}</span>
+            <td width="25%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px; border: 1px solid #0EA5E940;">
+                <span style="color: #0EA5E9; font-size: 24px; font-weight: 800; font-family: 'Courier New', monospace;">#{rank}</span>
                 <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Your Rank</span>
                 <br><span style="color: #6b7280; font-size: 10px;">of {len(corporate)} companies</span>
             </td>"""
 
         gap_html = ""
         if next_gap > 0 and rank > 1:
-            gap_html = f'<p style="color: #9ca3af; font-size: 11px; margin: 8px 0 0 0; text-align: center;">🎯 Buy <span style="color: #E67E22; font-weight: 700;">{next_gap:,.0f} BTC</span> to move up to #{rank-1}</p>'
+            gap_html = f'<p style="color: #9ca3af; font-size: 11px; margin: 8px 0 0 0; text-align: center;">Buy <span style="color: #0EA5E9; font-weight: 700;">{next_gap:,.0f} BTC</span> to move up to #{rank-1}</p>'
 
         your_position_html = f"""
             <!-- YOUR POSITION -->
             <tr><td style="padding: 16px 36px 8px 36px;">
-                <span style="color: #E67E22; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">📍 Your Position — {subscriber_company}</span>
+                <span style="color: #0EA5E9; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">📍 Your Position — {subscriber_company}</span>
                 {f'<span style="color: #4b5563; font-size: 10px; margin-left: 8px;">({subscriber_ticker})</span>' if subscriber_ticker else ''}
                 <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 10px;">
                     <tr>
@@ -252,8 +252,8 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
         your_position_html = f"""
             <!-- YOUR POSITION (no holdings yet) -->
             <tr><td style="padding: 16px 36px 8px 36px;">
-                <div style="background: linear-gradient(135deg, #1a0f00 0%, #111827 100%); border: 1px solid #E67E2230; border-radius: 12px; padding: 18px 24px; text-align: center;">
-                    <span style="color: #E67E22; font-size: 12px; font-weight: 700;">📍 {subscriber_company}</span>
+                <div style="background: linear-gradient(135deg, #1a0f00 0%, #111827 100%); border: 1px solid #0EA5E930; border-radius: 12px; padding: 18px 24px; text-align: center;">
+                    <span style="color: #0EA5E9; font-size: 12px; font-weight: 700;">📍 {subscriber_company}</span>
                     <p style="color: #9ca3af; font-size: 12px; margin: 8px 0 0 0;">Your company hasn't added Bitcoin to the treasury yet. {smallest_text}</p>
                 </div>
             </td></tr>
@@ -287,8 +287,8 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
     if context_text and has_profile:
         personalized_context_html = f"""
             <tr><td style="padding: 0 36px 12px 36px;">
-                <div style="background: linear-gradient(135deg, #1a0f00 0%, #111827 100%); border-left: 3px solid #E67E22; border-radius: 0 8px 8px 0; padding: 14px 18px;">
-                    <span style="color: #E67E22; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">What This Means For {subscriber_company}</span>
+                <div style="background: linear-gradient(135deg, #1a0f00 0%, #111827 100%); border-left: 3px solid #0EA5E9; border-radius: 0 8px 8px 0; padding: 14px 18px;">
+                    <span style="color: #0EA5E9; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">What This Means For {subscriber_company}</span>
                     <p style="color: #d1d5db; font-size: 13px; line-height: 1.6; margin: 8px 0 0 0;">{context_text}</p>
                 </div>
             </td></tr>
@@ -302,7 +302,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
         for comp in spotlight[:3]:
             rel_color = "#10B981" if comp["relationship"] == "behind" else "#EF4444" if comp["relationship"] == "ahead" else "#F59E0B"
             rel_icon = "⬇️" if comp["relationship"] == "behind" else "⬆️" if comp["relationship"] == "ahead" else "↔️"
-            purchase_badge = f'<br><span style="color: #E67E22; font-size: 10px;">💰 {comp["recent_purchase"]}</span>' if comp.get("recent_purchase") else ""
+            purchase_badge = f'<br><span style="color: #0EA5E9; font-size: 10px;">💰 {comp["recent_purchase"]}</span>' if comp.get("recent_purchase") else ""
             rows += f"""
                 <tr>
                     <td style="padding: 10px 18px; border-bottom: 1px solid #1e2a3a;">
@@ -451,7 +451,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
         exec_bullets.append(f"<span style='color: #4b5563;'>🔗</span> Correlation Engine: {cor_score}/100 — baseline, no multi-stream convergence")
     if purchases:
         latest = purchases[0]
-        exec_bullets.append(f"<span style='color: #E67E22;'>💰</span> Last confirmed purchase: {latest['company'].replace(' (MicroStrategy)', '')} bought {latest['btc_amount']:,} BTC on {latest['filing_date']}")
+        exec_bullets.append(f"<span style='color: #0EA5E9;'>💰</span> Last confirmed purchase: {latest['company'].replace(' (MicroStrategy)', '')} bought {latest['btc_amount']:,} BTC on {latest['filing_date']}")
     exec_bullets.append(f"<span style='color: #3B82F6;'>🏛️</span> Regulatory: {reg_stats['total_items']} items tracked across {reg_stats['regions_tracked']} regions — {reg_stats['bullish']} bullish for BTC")
 
     exec_tooltips = {
@@ -547,7 +547,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
             leaderboard_html += f"""
             <tr>
                 <td style="padding: 10px 18px; border-bottom: 1px solid #1e2a3a; color: #e0e0e0; font-size: 13px;">{medal} <strong>{name}</strong> <span style="color: #4b5563;">({c['ticker']})</span></td>
-                <td style="padding: 10px 14px; border-bottom: 1px solid #1e2a3a; color: #E67E22; font-size: 13px; text-align: right; font-weight: 700; font-family: 'Courier New', monospace;">{c['btc_holdings']:,}</td>
+                <td style="padding: 10px 14px; border-bottom: 1px solid #1e2a3a; color: #0EA5E9; font-size: 13px; text-align: right; font-weight: 700; font-family: 'Courier New', monospace;">{c['btc_holdings']:,}</td>
                 <td style="padding: 10px 18px; border-bottom: 1px solid #1e2a3a; color: #9ca3af; font-size: 13px; text-align: right; font-family: 'Courier New', monospace;">${c['btc_value_b']:.2f}B{pnl_cell}</td>
             </tr>"""
 
@@ -574,7 +574,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
             <strong style="color: #e0e0e0; font-size: 13px; margin-left: 6px;">{company_short}</strong>
             <span style="color: #4b5563; font-size: 12px;">({p['ticker']})</span>
             <span style="color: #6b7280; font-size: 11px; float: right;">{p['filing_date']}</span>
-            <br><span style="color: #E67E22; font-size: 13px; font-weight: 700; font-family: 'Courier New', monospace;">₿ {p['btc_amount']:,}</span>
+            <br><span style="color: #0EA5E9; font-size: 13px; font-weight: 700; font-family: 'Courier New', monospace;">₿ {p['btc_amount']:,}</span>
             <span style="color: #9ca3af; font-size: 12px;"> — ${usd_m:,.0f}M at ${p['price_per_btc']:,.0f}/BTC</span>
         </td></tr>"""
 
@@ -698,18 +698,20 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
 
         <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 680px; margin: 0 auto; background-color: #0a0e17;">
 
-            <tr><td style="height: 4px; background: linear-gradient(90deg, #E67E22 0%, #F59E0B 50%, #E67E22 100%);"></td></tr>
+            <tr><td style="height: 4px; background: linear-gradient(90deg, #0EA5E9 0%, #38BDF8 50%, #0EA5E9 100%);"></td></tr>
 
             <!-- Header -->
             <tr><td style="padding: 28px 36px 20px 36px;">
                 <table width="100%" cellpadding="0" cellspacing="0"><tr>
                     <td>
-                        <span style="color: #E67E22; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em;">Treasury Signal Intelligence</span>
+                        <span style="color: #0EA5E9; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em;">Treasury Signal Intelligence</span>
                         <br>{greeting_html}
                         <br><span style="color: #4b5563; font-size: 12px;">{today} · {time_now}</span>
                     </td>
                     <td style="text-align: right; vertical-align: top;">
-                        <span style="color: #E67E22; font-size: 32px;">🔶</span>
+                        <table cellpadding="0" cellspacing="0" style="display: inline-table;"><tr><td style="background: #0EA5E9; border-radius: 8px; padding: 6px 10px;">
+                            <span style="color: #ffffff; font-size: 11px; font-weight: 800; letter-spacing: 0.18em;">TSI</span>
+                        </td></tr></table>
                     </td>
                 </tr></table>
             </td></tr>
@@ -758,26 +760,26 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                         <td width="24%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="The Fear &amp; Greed Index measures market sentiment on a scale of 0-100. Extreme Fear (0-25) historically signals buying opportunities. Extreme Greed (75-100) signals caution. Data from alternative.me.">
                             <span style="color: {fg_color}; font-size: 24px; font-weight: 800; font-family: 'Courier New', monospace;">{fg_value}</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Fear & Greed</span>
-                            <span style="color: #E67E22; font-size: 9px;"> ℹ</span>
+                            <span style="color: #0EA5E9; font-size: 9px;"> ℹ</span>
                             <br><span style="color: #6b7280; font-size: 9px;">{fg_label}</span>
                         </td>
                         <td width="2%"></td>
                         <td width="24%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="30-Day Annualized Volatility measures price fluctuation. Below 40% is stable. 40-60% is moderate. Above 60% means rapid price swings and elevated risk.">
                             <span style="color: {vol_color}; font-size: 24px; font-weight: 800; font-family: 'Courier New', monospace;">{vol_30d}%</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">30D Volatility</span>
-                            <span style="color: #E67E22; font-size: 9px;"> ℹ</span>
+                            <span style="color: #0EA5E9; font-size: 9px;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
                         <td width="24%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Drawdown from All-Time High shows how far Bitcoin has fallen from its peak. Larger drawdowns (30%+) can signal buying opportunities for long-term holders.">
                             <span style="color: #EF4444; font-size: 24px; font-weight: 800; font-family: 'Courier New', monospace;">{dd_ath}%</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">From ATH</span>
-                            <span style="color: #E67E22; font-size: 9px;"> ℹ</span>
+                            <span style="color: #0EA5E9; font-size: 9px;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
                         <td width="24%" style="padding: 14px 8px; text-align: center; background: #111827; border-radius: 10px; border: 1px solid {risk_color}; cursor: help;" title="Overall Risk Level combines Fear &amp; Greed, Volatility, and Drawdown. MODERATE = favorable. ELEVATED = caution. HIGH = consider pausing new purchases.">
                             <span style="color: {risk_color}; font-size: 14px; font-weight: 800;">{risk_level}</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Risk Level</span>
-                            <span style="color: #E67E22; font-size: 9px;"> ℹ</span>
+                            <span style="color: #0EA5E9; font-size: 9px;"> ℹ</span>
                         </td>
                     </tr>
                 </table>
@@ -809,8 +811,8 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
 
             <!-- ① EXECUTIVE SUMMARY -->
             <tr><td style="padding: 24px 36px 16px 36px;">
-                <span style="color: #E67E22; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">① Executive Summary</span>
-                <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 10px; background: #111827; border-radius: 12px; border-left: 4px solid #E67E22;">
+                <span style="color: #0EA5E9; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">① Executive Summary</span>
+                <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 10px; background: #111827; border-radius: 12px; border-left: 4px solid #0EA5E9;">
                     {exec_summary_html}
                 </table>
             </td></tr>
@@ -882,11 +884,11 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                     <tr>
                         <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑤ Recent BTC Purchases</span></td>
                         <td style="text-align: right;">
-                            <a href="https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/" style="color: #E67E22; font-size: 10px; font-weight: 600; text-decoration: none;">History →</a>
+                            <a href="https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/" style="color: #0EA5E9; font-size: 10px; font-weight: 600; text-decoration: none;">History →</a>
                             <span style="color: #4b5563;"> · </span>
-                            <a href="https://saylortracker.com" style="color: #E67E22; font-size: 10px; font-weight: 600; text-decoration: none;">Saylor Tracker →</a>
+                            <a href="https://saylortracker.com" style="color: #0EA5E9; font-size: 10px; font-weight: 600; text-decoration: none;">Saylor Tracker →</a>
                             <span style="color: #4b5563;"> · </span>
-                            <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&type=8-K&dateb=&owner=include&count=40" style="color: #E67E22; font-size: 10px; font-weight: 600; text-decoration: none;">SEC EDGAR →</a>
+                            <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&type=8-K&dateb=&owner=include&count=40" style="color: #0EA5E9; font-size: 10px; font-weight: 600; text-decoration: none;">SEC EDGAR →</a>
                         </td>
                     </tr>
                 </table>
@@ -903,7 +905,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                         {freshness.format_provenance_html("leaderboard_corporate")}
                         </td>
                         <td style="text-align: right;">
-                            <a href="https://bitcointreasuries.net" style="color: #E67E22; font-size: 11px; font-weight: 600; text-decoration: none;">View all {lb_summary['total_companies']} companies →</a>
+                            <a href="https://bitcointreasuries.net" style="color: #0EA5E9; font-size: 11px; font-weight: 600; text-decoration: none;">View all {lb_summary['total_companies']} companies →</a>
                         </td>
                     </tr>
                 </table>
@@ -917,13 +919,13 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                     </tr>
                     {leaderboard_html}
                     <tr style="background: rgba(230,126,34,0.05);">
-                        <td style="padding: 12px 18px; color: #E67E22; font-weight: 700; font-size: 13px;">TOTAL</td>
-                        <td style="padding: 12px 14px; color: #E67E22; font-weight: 700; font-size: 13px; text-align: right; font-family: 'Courier New', monospace;">{lb_summary['total_btc']:,}</td>
-                        <td style="padding: 12px 18px; color: #E67E22; font-weight: 700; font-size: 13px; text-align: right; font-family: 'Courier New', monospace;">${lb_summary['total_value_b']:.1f}B</td>
+                        <td style="padding: 12px 18px; color: #0EA5E9; font-weight: 700; font-size: 13px;">TOTAL</td>
+                        <td style="padding: 12px 14px; color: #0EA5E9; font-weight: 700; font-size: 13px; text-align: right; font-family: 'Courier New', monospace;">{lb_summary['total_btc']:,}</td>
+                        <td style="padding: 12px 18px; color: #0EA5E9; font-weight: 700; font-size: 13px; text-align: right; font-family: 'Courier New', monospace;">${lb_summary['total_value_b']:.1f}B</td>
                     </tr>
                     <tr>
                         <td colspan="3" style="padding: 10px 18px; text-align: center;">
-                            <a href="https://bitcointreasuries.net" style="color: #E67E22; font-size: 12px; font-weight: 600; text-decoration: none;">View full leaderboard with all {lb_summary['total_companies']} companies on bitcointreasuries.net →</a>
+                            <a href="https://bitcointreasuries.net" style="color: #0EA5E9; font-size: 12px; font-weight: 600; text-decoration: none;">View full leaderboard with all {lb_summary['total_companies']} companies on bitcointreasuries.net →</a>
                         </td>
                     </tr>
                 </table>
@@ -937,9 +939,9 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                         {freshness.format_provenance_html("regulatory")}
                         </td>
                         <td style="text-align: right;">
-                            <a href="https://www.congress.gov/search?q=bitcoin+crypto&s=1" style="color: #E67E22; font-size: 11px; font-weight: 600; text-decoration: none;">Congress.gov →</a>
+                            <a href="https://www.congress.gov/search?q=bitcoin+crypto&s=1" style="color: #0EA5E9; font-size: 11px; font-weight: 600; text-decoration: none;">Congress.gov →</a>
                             <span style="color: #4b5563; font-size: 11px;"> · </span>
-                            <a href="https://www.coindesk.com/policy/" style="color: #E67E22; font-size: 11px; font-weight: 600; text-decoration: none;">CoinDesk Policy →</a>
+                            <a href="https://www.coindesk.com/policy/" style="color: #0EA5E9; font-size: 11px; font-weight: 600; text-decoration: none;">CoinDesk Policy →</a>
                         </td>
                     </tr>
                 </table>
@@ -954,11 +956,11 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                     <tr>
                         <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑧ Notable Statements — Leaders & CEOs</span></td>
                         <td style="text-align: right;">
-                            <a href="https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/" style="color: #E67E22; font-size: 10px; font-weight: 600; text-decoration: none;">History →</a>
+                            <a href="https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/" style="color: #0EA5E9; font-size: 10px; font-weight: 600; text-decoration: none;">History →</a>
                             <span style="color: #4b5563;"> · </span>
-                            <a href="https://www.theblock.co/" style="color: #E67E22; font-size: 10px; font-weight: 600; text-decoration: none;">The Block →</a>
+                            <a href="https://www.theblock.co/" style="color: #0EA5E9; font-size: 10px; font-weight: 600; text-decoration: none;">The Block →</a>
                             <span style="color: #4b5563;"> · </span>
-                            <a href="https://www.bloomberg.com/crypto" style="color: #E67E22; font-size: 10px; font-weight: 600; text-decoration: none;">Bloomberg →</a>
+                            <a href="https://www.bloomberg.com/crypto" style="color: #0EA5E9; font-size: 10px; font-weight: 600; text-decoration: none;">Bloomberg →</a>
                         </td>
                     </tr>
                 </table>
@@ -973,33 +975,33 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                 <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 10px;">
                     <tr>
                         <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Total Signals: The total number of purchase signals detected since launch. A signal is any tweet scoring 40/100 or above on our classification engine.">
-                            <span style="color: #E67E22; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{total_signals}</span>
+                            <span style="color: #0EA5E9; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{total_signals}</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Signals</span>
-                            <span style="color: #E67E22; font-size: 9px;"> ℹ</span>
+                            <span style="color: #0EA5E9; font-size: 9px;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
                         <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="High Confidence: Signals scoring 60/100 or above. These historically precede confirmed purchases within 24-72 hours.">
-                            <span style="color: #E67E22; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{high_signals}</span>
+                            <span style="color: #0EA5E9; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{high_signals}</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">High Conf</span>
-                            <span style="color: #E67E22; font-size: 9px;"> ℹ</span>
+                            <span style="color: #0EA5E9; font-size: 9px;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
                         <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Predictions: Auto-logged when signals score 60+, STRC spikes, or correlation hits 50+. Later matched against confirmed purchases to calculate accuracy.">
-                            <span style="color: #E67E22; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{accuracy['total_predictions']}</span>
+                            <span style="color: #0EA5E9; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{accuracy['total_predictions']}</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Predictions</span>
-                            <span style="color: #E67E22; font-size: 9px;"> ℹ</span>
+                            <span style="color: #0EA5E9; font-size: 9px;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
                         <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Hit Rate: Percentage of confirmed purchases our system predicted in advance (within 72 hours before the 8-K filing).">
-                            <span style="color: #E67E22; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{accuracy['hit_rate']}%</span>
+                            <span style="color: #0EA5E9; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{accuracy['hit_rate']}%</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Hit Rate</span>
-                            <span style="color: #E67E22; font-size: 9px;"> ℹ</span>
+                            <span style="color: #0EA5E9; font-size: 9px;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
                         <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Confirmed Purchases: Verified BTC purchases from SEC 8-K filings, press releases, and auto-detected via leaderboard snapshot comparison.">
-                            <span style="color: #E67E22; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{accuracy['total_purchases']}</span>
+                            <span style="color: #0EA5E9; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{accuracy['total_purchases']}</span>
                             <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Confirmed</span>
-                            <span style="color: #E67E22; font-size: 9px;"> ℹ</span>
+                            <span style="color: #0EA5E9; font-size: 9px;"> ℹ</span>
                         </td>
                     </tr>
                 </table>
@@ -1010,39 +1012,39 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                 <span style="color: #e0e0e0; font-size: 14px; font-weight: 600;">Explore the Full Intelligence Platform</span>
                 <br><span style="color: #6b7280; font-size: 12px; margin-top: 4px; display: inline-block;">Interactive charts, live data, and deep-dive analysis across all 6 sections:</span>
                 <br><br>
-                <a href="https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/" style="background: linear-gradient(135deg, #E67E22, #d35400); color: white; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px; letter-spacing: 0.02em; display: inline-block;">Open Intelligence Platform →</a>
+                <a href="https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/" style="background: linear-gradient(135deg, #0EA5E9, #d35400); color: white; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px; letter-spacing: 0.02em; display: inline-block;">Open Intelligence Platform →</a>
                 <br><br>
                 <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 8px;">
                     <tr>
                         <td width="33%" style="padding: 8px 4px; text-align: center;">
-                            <span style="color: #E67E22; font-size: 16px;">📊</span>
+                            <span style="color: #0EA5E9; font-size: 16px;">📊</span>
                             <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Live Dashboard</span>
                             <br><span style="color: #4b5563; font-size: 9px;">Real-time signals & STRC</span>
                         </td>
                         <td width="33%" style="padding: 8px 4px; text-align: center;">
-                            <span style="color: #E67E22; font-size: 16px;">🏆</span>
+                            <span style="color: #0EA5E9; font-size: 16px;">🏆</span>
                             <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">BTC Leaderboard</span>
                             <br><span style="color: #4b5563; font-size: 9px;">{lb_summary['total_companies']} companies ranked</span>
                         </td>
                         <td width="33%" style="padding: 8px 4px; text-align: center;">
-                            <span style="color: #E67E22; font-size: 16px;">💰</span>
+                            <span style="color: #0EA5E9; font-size: 16px;">💰</span>
                             <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Recent Purchases</span>
                             <br><span style="color: #4b5563; font-size: 9px;">Auto-detected buys</span>
                         </td>
                     </tr>
                     <tr>
                         <td width="33%" style="padding: 8px 4px; text-align: center;">
-                            <span style="color: #E67E22; font-size: 16px;">🏛️</span>
+                            <span style="color: #0EA5E9; font-size: 16px;">🏛️</span>
                             <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Regulatory Tracker</span>
                             <br><span style="color: #4b5563; font-size: 9px;">{reg_stats['total_items']}+ items, {reg_stats['regions_tracked']} regions</span>
                         </td>
                         <td width="33%" style="padding: 8px 4px; text-align: center;">
-                            <span style="color: #E67E22; font-size: 16px;">📈</span>
+                            <span style="color: #0EA5E9; font-size: 16px;">📈</span>
                             <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Accuracy Tracking</span>
                             <br><span style="color: #4b5563; font-size: 9px;">Verified predictions</span>
                         </td>
                         <td width="33%" style="padding: 8px 4px; text-align: center;">
-                            <span style="color: #E67E22; font-size: 16px;">🔗</span>
+                            <span style="color: #0EA5E9; font-size: 16px;">🔗</span>
                             <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Correlation Engine</span>
                             <br><span style="color: #4b5563; font-size: 9px;">Multi-signal analysis</span>
                         </td>
@@ -1060,7 +1062,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
 
             <!-- Footer -->
             <tr><td style="padding: 24px 36px; border-top: 1px solid #1e2a3a;">
-                <span style="color: #E67E22; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;">Treasury Signal Intelligence™</span>
+                <span style="color: #0EA5E9; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;">Treasury Signal Intelligence™</span>
                 <br><span style="color: #374151; font-size: 10px;">Multi-Signal Correlation Engine™ · BTC Treasury Leaderboard™ · Global Regulatory Tracker™</span>
                 <br><span style="color: #1f2937; font-size: 10px; margin-top: 8px; display: inline-block;">
                     Data: TwitterAPI.io · Yahoo Finance · SEC EDGAR · bitcointreasuries · Not financial advice.<br>
@@ -1074,7 +1076,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                 </span>
             </td></tr>
 
-            <tr><td style="height: 4px; background: linear-gradient(90deg, #E67E22 0%, #F59E0B 50%, #E67E22 100%);"></td></tr>
+            <tr><td style="height: 4px; background: linear-gradient(90deg, #0EA5E9 0%, #F59E0B 50%, #0EA5E9 100%);"></td></tr>
         </table>
     </body>
     </html>
@@ -1088,9 +1090,9 @@ def send_briefing(to_email, html_content, subscriber=None):
         # Personalized subject line
         if subscriber and subscriber.get("company_name"):
             company_short = subscriber["company_name"][:30]
-            subject = f"🔶 {company_short} — Daily Intelligence Briefing — {datetime.now().strftime('%b %d, %Y')}"
+            subject = f"{company_short} · Daily Intelligence Briefing · {datetime.now().strftime('%b %d, %Y')}"
         else:
-            subject = f"🔶 Daily Intelligence Briefing — {datetime.now().strftime('%b %d, %Y')}"
+            subject = f"Daily Intelligence Briefing · {datetime.now().strftime('%b %d, %Y')}"
 
         params = {
             "from": f"{EMAIL_FROM_NAME} <{EMAIL_FROM_ADDRESS}>",

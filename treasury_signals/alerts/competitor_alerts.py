@@ -147,24 +147,24 @@ def _send_email_alert(email, name, company, ticker, btc_amount, usd_m, reasons, 
     html = f"""
 <div style="font-family:-apple-system,system-ui,sans-serif;max-width:560px;margin:0 auto;background:#0a0e17;color:#e0e0e0;padding:32px;border-radius:16px;">
   <div style="border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:16px;margin-bottom:24px;">
-    <span style="color:#E67E22;font-weight:700;font-size:13px;letter-spacing:0.1em;">COMPETITOR ALERT</span>
+    <span style="color:#0EA5E9;font-weight:700;font-size:13px;letter-spacing:0.1em;">COMPETITOR ALERT</span>
   </div>
   <h1 style="color:white;font-size:20px;margin:0 0 8px;">{company} bought {btc_amount:,} BTC</h1>
   <p style="color:rgba(255,255,255,0.3);font-size:14px;margin:0 0 24px;">
     {f'${usd_m:,.0f}M purchase' if usd_m > 0 else 'Purchase confirmed'} · {purchase_data.get('filing_date','Today')}
   </p>
-  <div style="background:rgba(230,126,34,0.05);border:1px solid rgba(230,126,34,0.15);border-radius:12px;padding:20px;margin-bottom:24px;">
+  <div style="background:rgba(14,165,233,0.05);border:1px solid rgba(14,165,233,0.15);border-radius:12px;padding:20px;margin-bottom:24px;">
     <p style="color:rgba(255,255,255,0.5);font-size:13px;margin:0 0 12px;font-weight:600;">Why this matters:</p>
     <ul style="color:rgba(255,255,255,0.4);font-size:13px;padding-left:20px;margin:0;">{reasons_html}</ul>
   </div>
-  <a href="https://app.quantedgeriskadvisory.com/competitive" style="display:inline-block;background:#E67E22;color:white;text-decoration:none;padding:10px 24px;border-radius:8px;font-weight:600;font-size:14px;">View Competitive Intel →</a>
+  <a href="https://app.quantedgeriskadvisory.com/competitive" style="display:inline-block;background:#0EA5E9;color:white;text-decoration:none;padding:10px 24px;border-radius:8px;font-weight:600;font-size:14px;">View Competitive Intel →</a>
   <p style="color:rgba(255,255,255,0.15);font-size:11px;margin-top:32px;">Treasury Signal Intelligence</p>
 </div>"""
     try:
         requests.post("https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
             json={"from": f"TSI Alerts <{EMAIL_FROM}>", "to": [email],
-                  "subject": f"🔔 {company} just bought {btc_amount:,} BTC", "html": html},
+                  "subject": f"Competitor alert · {company} bought {btc_amount:,} BTC", "html": html},
             timeout=10)
     except Exception:
         pass
