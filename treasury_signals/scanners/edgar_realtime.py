@@ -145,7 +145,15 @@ def _search_edgar(query, days_back=1):
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
     try:
-        params = {'q': query, 'dateRange': 'custom', 'startdt': start_date, 'enddt': end_date, 'forms': '8-K,8-K/A'}
+        # Forms covered:
+        #   8-K, 8-K/A   — ad-hoc material event filings (current focus)
+        #   10-Q          — quarterly report
+        #   10-K, 10-K/A  — annual report
+        # 10-Q/10-K are bigger documents but contain the treasury policy
+        # language + risk factors that persona A's IR team actually wants.
+        # The excerpt extractor dedups identical sentences across filings
+        # so we don't re-alert on annual boilerplate.
+        params = {'q': query, 'dateRange': 'custom', 'startdt': start_date, 'enddt': end_date, 'forms': '8-K,8-K/A,10-Q,10-K,10-K/A'}
         resp = requests.get(EDGAR_SEARCH_URL, params=params, headers=HEADERS, timeout=30)
         resp.raise_for_status()
         data = resp.json()

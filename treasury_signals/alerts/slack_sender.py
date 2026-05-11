@@ -269,6 +269,132 @@ def send_competitor_alert_to_slack(webhook_url: str, alert: dict) -> dict:
     return _post(webhook_url, {"text": fallback, "blocks": blocks})
 
 
+# ─────────────────────────── filing excerpt payload ─────────────────────
+
+
+# Categories from filing_excerpts table — used to pick the emoji + label.
+# Kept in sync with the CHECK constraint in migration 0011.
+_FILING_CATEGORY_EMOJI = {
+    "acquisition":     ":large_green_circle:",
+    "sale":            ":red_circle:",
+    "financing":       ":large_blue_circle:",
+    "policy_change":   ":large_purple_circle:",
+    "risk_factor":     ":warning:",
+    "forward_looking": ":crystal_ball:",
+    "general":         ":small_blue_diamond:",
+}
+
+_FILING_CATEGORY_LABEL = {
+    "acquisition":     "Acquisition",
+    "sale":            "Sale",
+    "financing":       "Financing",
+    "policy_change":   "Policy change",
+    "risk_factor":     "Risk factor",
+    "forward_looking": "Forward-looking",
+    "general":         "General",
+}
+
+
+def build_filing_excerpt_blocks(excerpt: dict) -> list[dict]:
+    """Block Kit payload for a single filing excerpt alert.
+
+    Expected keys in `excerpt`:
+        company_name, ticker, form_type, filing_date, filing_url,
+        category, impact_score, claude_summary, excerpt_text,
+        btc_amount, usd_amount
+    """
+    company = excerpt.get("company_name") or "Unknown entity"
+    ticker = excerpt.get("ticker") or ""
+    form_type = excerpt.get("form_type") or "8-K"
+    filing_date = excerpt.get("filing_date") or ""
+    filing_url = excerpt.get("filing_url") or ""
+    category = excerpt.get("category") or "general"
+    impact = excerpt.get("impact_score") or 0
+    summary = (excerpt.get("claude_summary") or "").strip()
+    verbatim = (excerpt.get("excerpt_text") or "").strip()
+    btc_amount = excerpt.get("btc_amount")
+    usd_amount = excerpt.get("usd_amount")
+
+    emoji = _FILING_CATEGORY_EMOJI.get(category, ":small_blue_diamond:")
+    cat_label = _FILING_CATEGORY_LABEL.get(category, "General")
+
+    # Header line: company + ticker + form
+    header_text = f"*{company}*"
+    if ticker:
+        header_text += f" ({ticker})"
+    header_text += f" filed a {form_type}"
+
+    blocks: list[dict] = [
+        {"type": "header", "text": {"type": "plain_text", "text": f"Filing alert · {cat_label}", "emoji": True}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"{emoji} {header_text}"}},
+    ]
+
+    # The Claude summary is the primary "what happened" line
+    if summary:
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*Summary*\n{summary[:600]}"},
+        })
+
+    # Verbatim excerpt — limited to 800 chars so it doesn't dominate the message
+    if verbatim:
+        clipped = verbatim[:800] + ("…" if len(verbatim) > 800 else "")
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*From the filing*\n> {clipped}"},
+        })
+
+    # Context line: impact + amounts + date
+    context_parts = [f"*Impact:* {impact}/100"]
+    if btc_amount:
+        try:
+            context_parts.append(f"*BTC:* {float(btc_amount):,.0f}")
+        except (TypeError, ValueError):
+            pass
+    if usd_amount:
+        try:
+            context_parts.append(f"*USD:* {_format_usd(float(usd_amount))}")
+        except (TypeError, ValueError):
+            pass
+    if filing_date:
+        context_parts.append(f"*Filed:* {filing_date}")
+
+    blocks.append({
+        "type": "context",
+        "elements": [{"type": "mrkdwn", "text": "  ·  ".join(context_parts)}],
+    })
+
+    # CTAs: view filing on SEC + open dashboard /filings page
+    cta_elements = []
+    if filing_url:
+        cta_elements.append({
+            "type": "button",
+            "text": {"type": "plain_text", "text": "Open on SEC EDGAR", "emoji": True},
+            "url": filing_url,
+        })
+    cta_elements.append({
+        "type": "button",
+        "text": {"type": "plain_text", "text": "Open in TSI", "emoji": True},
+        "url": f"{DASHBOARD_URL}/filings",
+        "style": "primary",
+    })
+    blocks.append({"type": "actions", "elements": cta_elements})
+
+    return blocks
+
+
+def send_filing_excerpt_to_slack(webhook_url: str, excerpt: dict) -> dict:
+    """High-level entry. Builds blocks + posts. Returns {ok, error?}."""
+    if not is_valid_slack_webhook(webhook_url):
+        return {"ok": False, "error": "invalid_webhook_url"}
+    blocks = build_filing_excerpt_blocks(excerpt)
+    company = excerpt.get("company_name") or "Unknown"
+    ticker = excerpt.get("ticker") or ""
+    cat = excerpt.get("category") or "general"
+    fallback = f"Filing alert · {company}{f' ({ticker})' if ticker else ''} · {cat} · impact {excerpt.get('impact_score') or 0}/100"
+    return _post(webhook_url, {"text": fallback, "blocks": blocks})
+
+
 # ─────────────────────────── test message ────────────────────────────────
 
 

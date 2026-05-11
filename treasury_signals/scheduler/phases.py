@@ -84,6 +84,17 @@ def phase_4_edgar(state: ScanState):
                 except Exception as e:
                     logger.debug(f"Excerpt extractor: {e}")
 
+                # Push high-impact excerpts to teams' Slack channels.
+                # Per-team watchlist filter applies; alerted_at marks each
+                # excerpt as processed so we never re-send.
+                try:
+                    from treasury_signals.alerts.filing_excerpt_alerts import (
+                        dispatch_pending_excerpts,
+                    )
+                    dispatch_pending_excerpts(min_impact=70)
+                except Exception as e:
+                    logger.debug(f"Filing alert dispatcher: {e}")
+
                 # Pull the most recent stored filings and feed them to the
                 # correlation engine (kept here, not in edgar_realtime, so
                 # the engine instance stays a scheduler concern).

@@ -58,7 +58,27 @@ BTC_KEYWORDS = (
 # returns AT MOST this many excerpts even when more are submitted.
 MAX_CANDIDATE_SENTENCES = 40
 MAX_EXCERPTS_PER_FILING = 15
-MAX_FILING_TEXT_CHARS = 40_000  # SEC 8-Ks fit comfortably; bigger ones get truncated
+
+# Per-form text fetch ceiling. 8-Ks are typically 5-30 pages; 10-Qs and 10-Ks
+# are 50-300+ pages. We bound to keep parsing fast and the Claude prompt
+# tight — the BTC-relevant material is typically clustered in 1-2 sections
+# (treasury policy, risk factors), and our candidate sentence pre-filter
+# pulls them regardless of where they sit in the document.
+TEXT_CHAR_CEILING_BY_FORM = {
+    "10-Q":   120_000,
+    "10-K":   180_000,
+    "10-K/A": 180_000,
+    "8-K":     40_000,
+    "8-K/A":   40_000,
+}
+DEFAULT_TEXT_CHAR_CEILING = 40_000
+
+# Boilerplate dedup window. 10-Q risk-factor sections and 10-K treasury
+# policy paragraphs are often verbatim quarter-over-quarter (or year-
+# over-year). We skip inserting an excerpt whose first 120 chars match
+# an existing excerpt from the same ticker within this window — avoids
+# the dispatcher re-alerting on identical quarterly language.
+DEDUP_LOOKBACK_DAYS = 540  # ~18 months: longer than annual filing cycle
 
 
 SCORING_PROMPT = """You are extracting BTC-relevant material from a corporate SEC filing for a treasury-intelligence product. Treasury operators (CFOs, IR leads) read this output to decide whether to alert their team within 10 minutes of the filing landing.
@@ -117,20 +137,21 @@ CANDIDATE SENTENCES (each line is one sentence, numbered):
 # ─────────────────────────── HELPERS ─────────────────────────────────────
 
 
-def _fetch_filing_text(url: str) -> str:
-    """Fetch + strip HTML. Mirrors the helper in filing_parser.py but with
-    a larger char ceiling because we want Claude to see late-document risk
-    factor sections that the parser truncates."""
+def _fetch_filing_text(url: str, form_type: str = "8-K") -> str:
+    """Fetch + strip HTML. Per-form char ceiling — 10-K/10-Q get a higher
+    cap because risk-factor + treasury-policy sections sit deep in the
+    document and would otherwise be truncated."""
     if not url or url.startswith("https://news.google.com"):
         return ""
+    ceiling = TEXT_CHAR_CEILING_BY_FORM.get(form_type, DEFAULT_TEXT_CHAR_CEILING)
     try:
         time.sleep(0.4)  # SEC rate limit cushion
-        resp = requests.get(url, headers=HEADERS_WEB, timeout=30)
+        resp = requests.get(url, headers=HEADERS_WEB, timeout=45)
         if not resp.ok:
             return ""
         text = re.sub(r"<[^>]+>", " ", resp.text)
         text = re.sub(r"\s+", " ", text)
-        return text[:MAX_FILING_TEXT_CHARS]
+        return text[:ceiling]
     except Exception as e:
         logger.debug(f"  Excerpt fetch error: {e}")
         return ""
@@ -272,16 +293,72 @@ def _get_filings_needing_excerpts(lookback_hours: int, limit: int) -> list[dict]
     return pending[:limit]
 
 
+def _excerpt_dedup_key(text: str) -> str:
+    """Normalize first 120 chars for boilerplate detection. Lowercases,
+    collapses whitespace, drops common punctuation. Two excerpts with the
+    same key are treated as boilerplate clones (quarterly risk factor
+    paragraph, annual treasury policy line, etc.)."""
+    if not text:
+        return ""
+    normalized = re.sub(r"\s+", " ", text.lower()).strip()
+    normalized = re.sub(r"[^a-z0-9 ]", "", normalized)
+    return normalized[:120]
+
+
+def _existing_dedup_keys_for_ticker(ticker: str) -> set[str]:
+    """Pull recent excerpt prefixes for this ticker so we can skip
+    quarterly/annual boilerplate. Returns an empty set on lookup failure
+    (degrades gracefully: worst case we insert a near-duplicate)."""
+    if not ticker:
+        return set()
+    cutoff = (datetime.utcnow() - timedelta(days=DEDUP_LOOKBACK_DAYS)).isoformat()
+    try:
+        res = (
+            supabase.table("filing_excerpts")
+            .select("excerpt_text")
+            .eq("ticker", ticker)
+            .gte("created_at", cutoff)
+            .limit(500)
+            .execute()
+        )
+        return {_excerpt_dedup_key(r.get("excerpt_text") or "") for r in (res.data or [])}
+    except Exception as e:
+        logger.debug(f"  Excerpt dedup lookup error for ticker={ticker}: {e}")
+        return set()
+
+
 def _store_excerpts(filing: dict, excerpts: list[dict]) -> int:
-    """Insert excerpts. Returns count of rows stored."""
+    """Insert excerpts. Returns count of rows stored.
+
+    Boilerplate dedup: if an excerpt's normalized prefix matches an
+    existing row for the same ticker in the last DEDUP_LOOKBACK_DAYS,
+    we skip it. Prevents 10-K risk-factor paragraphs from re-alerting
+    annually.
+    """
     if not excerpts:
         return 0
+
+    ticker = (filing.get("ticker_cik") or "")[:50]
+    existing_keys = _existing_dedup_keys_for_ticker(ticker)
+    dedup_skipped = 0
 
     rows = []
     for e in excerpts:
         excerpt_text = (e.get("excerpt_text") or "").strip()
         if not excerpt_text:
             continue
+
+        # Boilerplate dedup — skip if we've seen this prefix before.
+        key = _excerpt_dedup_key(excerpt_text)
+        if key and key in existing_keys:
+            dedup_skipped += 1
+            continue
+        # Also dedup against earlier excerpts in this very same Claude batch
+        # (occasionally Claude returns near-duplicates with slight wording
+        # variation).
+        if key:
+            existing_keys.add(key)
+
         category = (e.get("category") or "general").strip()
         # Defensive — Claude occasionally invents categories. Coerce to 'general'.
         valid_categories = {
@@ -314,7 +391,12 @@ def _store_excerpts(filing: dict, excerpts: list[dict]) -> int:
         })
 
     if not rows:
+        if dedup_skipped:
+            logger.debug(f"  Excerpt extractor: all {dedup_skipped} excerpts were boilerplate duplicates for {ticker}")
         return 0
+
+    if dedup_skipped:
+        logger.info(f"  Excerpt extractor: dedup skipped {dedup_skipped} boilerplate excerpts for {ticker}")
 
     try:
         supabase.table("filing_excerpts").insert(rows).execute()
@@ -360,7 +442,8 @@ def extract_excerpts_for_recent_filings(lookback_hours: int = 24, max_filings: i
         if not url:
             continue
 
-        text = _fetch_filing_text(url)
+        form_type = filing.get("form_type") or "8-K"
+        text = _fetch_filing_text(url, form_type=form_type)
         if not text or len(text) < 200:
             logger.debug(f"  Excerpt extractor: empty or tiny filing text for {filing.get('accession_number')}")
             continue
