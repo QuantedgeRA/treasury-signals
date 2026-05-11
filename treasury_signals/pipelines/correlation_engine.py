@@ -46,7 +46,18 @@ SCORE_WEIGHTS = {
     "whale_unidentified": 10,         # Large whale movement, unknown source
     "news_purchase_confirmed": 20,    # News confirming a purchase
     "news_purchase_rumor": 10,        # News suggesting possible purchase
+    # Stream 7 (added Week 5): Claude-scored filing excerpts. Quality > quantity —
+    # one strong excerpt outweighs a half-dozen regex-detected 8-Ks. Weight scales
+    # with the Claude impact_score, with a small category-specific boost for
+    # pre-announcement-relevant disclosures (acquisitions, financing, policy).
+    "filing_excerpt_extreme": 35,      # Claude impact >= 90
+    "filing_excerpt_high":    25,      # Claude impact 70-89
+    "filing_excerpt_medium":  15,      # Claude impact 50-69
 }
+
+# Filing-excerpt categories that hint at a pending BTC purchase / treasury
+# move. Get a +5 boost on top of the impact-tier base score.
+PRE_ANNOUNCEMENT_CATEGORIES = {"acquisition", "financing", "policy_change", "forward_looking"}
 
 # Multi-stream multipliers (when multiple streams fire for same company)
 MULTI_STREAM_MULTIPLIERS = {
@@ -289,6 +300,57 @@ class CorrelationEngineV2:
         self.signals.append(signal)
         self._cleanup_old_signals()
         logger.debug(f"Correlation: +news for {clean_ticker} ({score}pts)")
+
+    # ============================================
+    # STREAM 7: CLAUDE-SCORED FILING EXCERPTS
+    # ============================================
+    def add_filing_excerpt(self, excerpt):
+        """Add a filing-excerpt-based signal (Week 5 addition).
+
+        Args:
+            excerpt: dict with keys company_name, ticker, impact_score,
+                category, claude_summary, form_type, filing_date,
+                excerpt_text, id (DB pk; optional)
+
+        Scores based on Claude impact tier + a small category boost for
+        pre-announcement-relevant disclosures. Skips when impact < 50 —
+        below that, the excerpt is informational and would just add
+        noise to the correlation feed.
+        """
+        impact = int(excerpt.get("impact_score") or 0)
+        if impact < 50:
+            return
+
+        ticker = (excerpt.get("ticker") or "").upper().replace(".US", "").strip()
+        if not ticker:
+            return
+
+        company = excerpt.get("company_name") or ""
+        category = excerpt.get("category") or "general"
+        form_type = excerpt.get("form_type") or "filing"
+        summary = (excerpt.get("claude_summary") or excerpt.get("excerpt_text") or "")[:120]
+
+        # Impact-tier base score
+        if impact >= 90:
+            score = SCORE_WEIGHTS["filing_excerpt_extreme"]
+        elif impact >= 70:
+            score = SCORE_WEIGHTS["filing_excerpt_high"]
+        else:
+            score = SCORE_WEIGHTS["filing_excerpt_medium"]
+
+        # Pre-announcement category boost
+        if category in PRE_ANNOUNCEMENT_CATEGORIES:
+            score += 5
+
+        detail = f"{form_type} ({category}, impact {impact}): {summary}"
+
+        signal = CompanySignal(company, ticker, "filing_excerpt", score, detail)
+        # Stamp the excerpt id on the signal so the persister can link
+        # back to the source row in pre_announcement_signals.components.
+        signal.excerpt_id = excerpt.get("id")
+        self.signals.append(signal)
+        self._cleanup_old_signals()
+        logger.debug(f"Correlation: +filing_excerpt for {ticker} ({score}pts) — impact {impact} {category}")
 
     # ============================================
     # MARKET CONTEXT

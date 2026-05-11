@@ -395,6 +395,112 @@ def send_filing_excerpt_to_slack(webhook_url: str, excerpt: dict) -> dict:
     return _post(webhook_url, {"text": fallback, "blocks": blocks})
 
 
+# ─────────────────────────── pre-announcement signal payload ────────────
+
+
+_STREAM_EMOJI = {
+    "tweet":          ":bird:",
+    "strc":           ":bar_chart:",
+    "edgar":          ":classical_building:",
+    "global_filing":  ":globe_with_meridians:",
+    "whale":          ":whale:",
+    "news":           ":newspaper:",
+    "filing_excerpt": ":mag:",
+}
+
+
+def build_pre_announcement_blocks(signal: dict) -> list[dict]:
+    """Block Kit payload for a high-score pre-announcement signal.
+
+    Expected keys (matches pre_announcement_signals row + the components
+    JSON field):
+        ticker, company, score, num_streams, alert_level, components
+        components.streams (list), components.reasons (list)
+    """
+    company = signal.get("company") or "Unknown entity"
+    ticker = signal.get("ticker") or ""
+    score = signal.get("score") or 0
+    num_streams = signal.get("num_streams") or 0
+    alert_level = signal.get("alert_level") or "HIGH"
+    components = signal.get("components") or {}
+    streams = components.get("streams") or []
+    reasons = components.get("reasons") or []
+
+    stream_pills = " ".join(
+        _STREAM_EMOJI.get(s, ":small_blue_diamond:") + " " + s.replace("_", " ")
+        for s in streams[:6]
+    )
+
+    blocks: list[dict] = [
+        {"type": "header", "text": {"type": "plain_text", "text": f"Pre-announcement signal · {alert_level}", "emoji": True}},
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f":radio_button: *{company}*{f' ({ticker})' if ticker else ''} — score *{score}/100* across *{num_streams} stream{'s' if num_streams != 1 else ''}*",
+            },
+        },
+    ]
+
+    if stream_pills:
+        blocks.append({
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": f"*Streams firing:* {stream_pills}"}],
+        })
+
+    if reasons:
+        body = "\n".join(f"• {(r or '').strip()[:180]}" for r in reasons[:4])
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*Reasons*\n{body}"}})
+
+    # Market context line
+    fg = components.get("fear_greed")
+    btc_weekly = components.get("btc_weekly_change")
+    ctx_parts = []
+    if fg is not None:
+        ctx_parts.append(f"*F&G:* {fg}")
+    if btc_weekly is not None:
+        try:
+            ctx_parts.append(f"*BTC 7d:* {float(btc_weekly):+.1f}%")
+        except (TypeError, ValueError):
+            pass
+    if ctx_parts:
+        blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": "  ·  ".join(ctx_parts)}]})
+
+    blocks.append({
+        "type": "actions",
+        "elements": [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Investigate in TSI", "emoji": True},
+                "url": f"{DASHBOARD_URL}/signals",
+                "style": "primary",
+            },
+        ],
+    })
+
+    # Explicit experimental disclaimer — false positives are by design
+    blocks.append({
+        "type": "context",
+        "elements": [{
+            "type": "mrkdwn",
+            "text": "_Experimental signal — correlation across 7 streams, not a confirmed transaction. Calibration improves with each verified purchase._",
+        }],
+    })
+
+    return blocks
+
+
+def send_pre_announcement_to_slack(webhook_url: str, signal: dict) -> dict:
+    if not is_valid_slack_webhook(webhook_url):
+        return {"ok": False, "error": "invalid_webhook_url"}
+    blocks = build_pre_announcement_blocks(signal)
+    company = signal.get("company") or "Unknown"
+    ticker = signal.get("ticker") or ""
+    score = signal.get("score") or 0
+    fallback = f"Pre-announcement signal · {company}{f' ({ticker})' if ticker else ''} · score {score}/100"
+    return _post(webhook_url, {"text": fallback, "blocks": blocks})
+
+
 # ─────────────────────────── test message ────────────────────────────────
 
 

@@ -199,8 +199,25 @@ def check_strc_volume():
 # ─── Correlation Engine v2 calculation + alerting ──────────────────────────
 
 def check_correlation():
-    """Calculate v2 correlation, alert on score jumps, return result dict."""
+    """Calculate v2 correlation, alert on score jumps, persist snapshot,
+    return result dict.
+
+    Order matters:
+      1. Feed Claude-scored filing excerpts into the engine (Week 5
+         stream — same data flow as tweets/EDGAR/whale/news).
+      2. engine.calculate_correlation() rolls everything up.
+      3. Persist a snapshot to pre_announcement_signals so the
+         frontend feed + Slack dispatcher can read the same numbers.
+      4. Telegram alert flow runs unchanged.
+    """
     global last_correlation_alert_score, sent_correlation_score
+
+    # Stream 7 feeder — Week 5 pre-announcement signals
+    try:
+        from treasury_signals.pipelines.pre_announcement_persister import feed_filing_excerpts_to_engine
+        feed_filing_excerpts_to_engine(engine)
+    except Exception as e:
+        logger.debug(f"Pre-announce feeder: {e}")
 
     result = engine.calculate_correlation()
     market_score = result['market_score']
@@ -208,6 +225,21 @@ def check_correlation():
     level = result['alert_level']
 
     logger.info(f"Correlation v2: Market {market_score}/100 | {total_streams}/6 streams | {level}")
+
+    # Persist snapshot for the frontend + Slack dispatcher
+    try:
+        from treasury_signals.pipelines.pre_announcement_persister import persist_correlation_snapshot
+        persist_correlation_snapshot(result)
+    except Exception as e:
+        logger.debug(f"Pre-announce persister: {e}")
+
+    # Dispatch high-score pre-announcement signals to team Slack channels.
+    # 24h per-ticker cooldown + per-team watchlist filter inside the dispatcher.
+    try:
+        from treasury_signals.alerts.pre_announcement_alerts import dispatch_pending_signals
+        dispatch_pending_signals()
+    except Exception as e:
+        logger.debug(f"Pre-announce dispatcher: {e}")
 
     for c in result['top_companies'][:3]:
         if c['score'] >= 30:
