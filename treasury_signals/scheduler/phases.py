@@ -66,11 +66,24 @@ def phase_3_strc(state: ScanState):
 
 
 def phase_4_edgar(state: ScanState):
-    """[4/10] SEC EDGAR realtime 8-K scanner + correlation feed."""
+    """[4/10] SEC EDGAR realtime 8-K scanner + correlation feed +
+    Claude-scored excerpt extraction (the filing-intelligence moat).
+    """
     with ScanContext(logger, state.scan_number, "[4/10] SEC EDGAR realtime"):
         try:
             edgar_result = check_edgar_realtime(days_back=1)
             if edgar_result and edgar_result.get("new_filings", 0) > 0:
+                # Extract BTC-relevant sentences + Claude-score them.
+                # Bounded run (max 10 filings/scan) keeps Claude spend predictable.
+                # No-ops when ANTHROPIC_API_KEY is unset.
+                try:
+                    from treasury_signals.pipelines.filing_excerpt_extractor import (
+                        extract_excerpts_for_recent_filings,
+                    )
+                    extract_excerpts_for_recent_filings(lookback_hours=24, max_filings=10)
+                except Exception as e:
+                    logger.debug(f"Excerpt extractor: {e}")
+
                 # Pull the most recent stored filings and feed them to the
                 # correlation engine (kept here, not in edgar_realtime, so
                 # the engine instance stays a scheduler concern).
