@@ -959,7 +959,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                     <tr>
                         <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑤ Recent BTC Purchases</span></td>
                         <td style="text-align: right;">
-                            <a href="https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/" style="color: #0EA5E9; font-size: 10px; font-weight: 600; text-decoration: none;">History →</a>
+                            <a href="{DASHBOARD_URL}/purchases" style="color: #0EA5E9; font-size: 10px; font-weight: 600; text-decoration: none;">History →</a>
                             <span style="color: #4b5563;"> · </span>
                             <a href="https://saylortracker.com" style="color: #0EA5E9; font-size: 10px; font-weight: 600; text-decoration: none;">Saylor Tracker →</a>
                             <span style="color: #4b5563;"> · </span>
@@ -1031,7 +1031,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                     <tr>
                         <td><span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑧ Notable Statements — Leaders & CEOs</span></td>
                         <td style="text-align: right;">
-                            <a href="https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/" style="color: #0EA5E9; font-size: 10px; font-weight: 600; text-decoration: none;">History →</a>
+                            <a href="{DASHBOARD_URL}/regulatory" style="color: #0EA5E9; font-size: 10px; font-weight: 600; text-decoration: none;">History →</a>
                             <span style="color: #4b5563;"> · </span>
                             <a href="https://www.theblock.co/" style="color: #0EA5E9; font-size: 10px; font-weight: 600; text-decoration: none;">The Block →</a>
                             <span style="color: #4b5563;"> · </span>

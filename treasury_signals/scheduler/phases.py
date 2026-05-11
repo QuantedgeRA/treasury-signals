@@ -259,11 +259,3 @@ def phase_9_regulatory(state: ScanState):
         scan_regulatory()
 
 
-def phase_10_dashboard_ping(state: ScanState):
-    """[10/10] Keep the legacy Streamlit dashboard warm (cron warmer)."""
-    with ScanContext(logger, state.scan_number, "[10/10] Dashboard ping"):
-        try:
-            response = req.get("https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/", timeout=30)
-            logger.debug(f"Dashboard ping: {response.status_code}")
-        except Exception as e:
-            logger.debug(f"Dashboard ping failed: {e}")

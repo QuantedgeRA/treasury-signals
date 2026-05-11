@@ -119,6 +119,44 @@ def _get_market_data(btc_price_override=None):
         # Check if velocity snapshots exist for new entrant detection
         new_entrants = []
 
+        # Filing intelligence — Claude-scored excerpts from 8-K/10-Q/10-K (Week 2-3 moat)
+        # Pulls last 24h, impact >= 60, top 5 by impact score for the briefing
+        filing_excerpts = []
+        try:
+            excerpt_cutoff = (datetime.now() - timedelta(hours=24)).isoformat()
+            excerpt_res = supabase.table("filing_excerpts").select(
+                "company_name, ticker, form_type, filing_date, claude_summary, impact_score, category, filing_url"
+            ).gte("created_at", excerpt_cutoff).gte("impact_score", 60).order(
+                "impact_score", ascending=False
+            ).limit(5).execute()
+            filing_excerpts = excerpt_res.data or []
+        except Exception as e:
+            # Table may not exist if migration 0011 unapplied — log + carry on
+            logger.debug(f"Pro briefing: filing_excerpts query failed: {e}")
+
+        # Pre-announcement signals — companies currently signaling (Week 5 moat)
+        # Latest snapshot per ticker, score >= 60 in the engine's 48h window
+        signaling_companies = []
+        try:
+            signal_cutoff = (datetime.now() - timedelta(hours=48)).isoformat()
+            signal_res = supabase.table("pre_announcement_signals").select(
+                "ticker, company, score, num_streams, components, alert_level"
+            ).gte("snapshot_at", signal_cutoff).gte("score", 60).order(
+                "score", ascending=False
+            ).limit(20).execute()
+            # Dedup to latest snapshot per ticker
+            seen_tickers = set()
+            for row in (signal_res.data or []):
+                t = (row.get("ticker") or "").upper()
+                if not t or t in seen_tickers:
+                    continue
+                seen_tickers.add(t)
+                signaling_companies.append(row)
+                if len(signaling_companies) >= 5:
+                    break
+        except Exception as e:
+            logger.debug(f"Pro briefing: pre_announcement_signals query failed: {e}")
+
         return {
             "companies": companies,
             "btc_price": btc_price,
@@ -126,6 +164,8 @@ def _get_market_data(btc_price_override=None):
             "signals": signals,
             "narrative": narrative,
             "new_entrants": new_entrants,
+            "filing_excerpts": filing_excerpts,
+            "signaling_companies": signaling_companies,
         }
     except Exception as e:
         logger.debug(f"Market data fetch error: {e}")
@@ -182,6 +222,8 @@ def _build_email_html(subscriber, market, position):
     purchases = market["purchases"]
     signals = market["signals"]
     narrative = market["narrative"]
+    filing_excerpts = market.get("filing_excerpts", [])
+    signaling_companies = market.get("signaling_companies", [])
 
     # Format helpers
     def fmt_btc(v):
@@ -292,6 +334,78 @@ def _build_email_html(subscriber, market, position):
           </td></tr>
         </table>"""
 
+    # Filing intelligence — Claude-scored 8-K/10-Q/10-K excerpts (Week 2-3 moat)
+    filings_html = ""
+    if filing_excerpts:
+        fil_rows = ""
+        for e in filing_excerpts[:4]:
+            score = e.get("impact_score") or 0
+            cat = (e.get("category") or "general").replace("_", " ")
+            company_disp = (e.get("company_name") or "Unknown")[:28]
+            ticker = e.get("ticker") or ""
+            form = e.get("form_type") or "8-K"
+            summary = (e.get("claude_summary") or "")[:140]
+            score_color = "#10B981" if score >= 90 else "#0EA5E9" if score >= 70 else "rgba(255,255,255,0.3)"
+            fil_rows += f"""
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+              <td style="padding:10px 0;width:40px;"><span style="background:rgba(14,165,233,0.1);color:{score_color};font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;">{score}</span></td>
+              <td style="padding:10px 8px 10px 0;">
+                <div style="color:white;font-size:13px;font-weight:600;">{company_disp}{f' <span style=\"color:rgba(255,255,255,0.2);font-family:monospace;font-size:11px;\">{ticker}</span>' if ticker else ''}</div>
+                <div style="color:rgba(255,255,255,0.35);font-size:11px;line-height:1.4;margin-top:2px;">{summary}</div>
+              </td>
+              <td style="padding:10px 0;color:rgba(255,255,255,0.2);font-size:10px;text-align:right;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;">{form}<br><span style="color:rgba(255,255,255,0.12);">{cat}</span></td>
+            </tr>"""
+
+        filings_html = f"""
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+          <tr>
+            <td style="color:rgba(255,255,255,0.25);font-size:10px;text-transform:uppercase;letter-spacing:0.1em;font-weight:600;padding-bottom:8px;">Filing Intelligence (24h)</td>
+            <td style="text-align:right;padding-bottom:8px;"><a href="{DASHBOARD_URL}/filings" style="color:rgba(14,165,233,0.6);font-size:10px;text-decoration:none;">View all →</a></td>
+          </tr>
+          <tr><td colspan="2">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(14,165,233,0.03);border:1px solid rgba(14,165,233,0.08);border-radius:10px;padding:4px 16px;">
+              {fil_rows}
+            </table>
+          </td></tr>
+        </table>"""
+
+    # Pre-announcement signals — cross-stream correlation (Week 5 moat)
+    signaling_html = ""
+    if signaling_companies:
+        sig_rows = ""
+        for s in signaling_companies[:4]:
+            score = s.get("score") or 0
+            ticker = (s.get("ticker") or "").upper()
+            company_disp = (s.get("company") or "Unknown")[:28]
+            num_streams = s.get("num_streams") or 0
+            level = s.get("alert_level") or "MEDIUM"
+            components = s.get("components") or {}
+            streams = components.get("streams") or []
+            streams_disp = " · ".join(s.replace("_", " ") for s in streams[:4]) if streams else "—"
+            score_color = "#10B981" if score >= 80 else "#0EA5E9" if score >= 60 else "rgba(255,255,255,0.3)"
+            sig_rows += f"""
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+              <td style="padding:10px 0;width:40px;"><span style="background:rgba(14,165,233,0.1);color:{score_color};font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;">{score}</span></td>
+              <td style="padding:10px 8px 10px 0;">
+                <div style="color:white;font-size:13px;font-weight:600;">{company_disp}{f' <span style=\"color:rgba(255,255,255,0.2);font-family:monospace;font-size:11px;\">{ticker}</span>' if ticker else ''}</div>
+                <div style="color:rgba(255,255,255,0.25);font-size:11px;margin-top:2px;">{streams_disp}</div>
+              </td>
+              <td style="padding:10px 0;color:rgba(255,255,255,0.2);font-size:10px;text-align:right;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;">{num_streams} stream{'s' if num_streams != 1 else ''}<br><span style="color:rgba(255,255,255,0.12);">{level.lower()}</span></td>
+            </tr>"""
+
+        signaling_html = f"""
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+          <tr>
+            <td style="color:rgba(255,255,255,0.25);font-size:10px;text-transform:uppercase;letter-spacing:0.1em;font-weight:600;padding-bottom:8px;">Pre-Announcement Signals (48h) · Experimental</td>
+            <td style="text-align:right;padding-bottom:8px;"><a href="{DASHBOARD_URL}/signals" style="color:rgba(14,165,233,0.6);font-size:10px;text-decoration:none;">View all →</a></td>
+          </tr>
+          <tr><td colspan="2">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:4px 16px;">
+              {sig_rows}
+            </table>
+          </td></tr>
+        </table>"""
+
     # Narrative
     narrative_html = ""
     if narrative:
@@ -363,6 +477,8 @@ def _build_email_html(subscriber, market, position):
 
   {position_html}
   {narrative_html}
+  {filings_html}
+  {signaling_html}
   {purchases_html}
   {signals_html}
 

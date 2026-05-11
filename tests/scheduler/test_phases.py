@@ -192,25 +192,6 @@ class TestSimplePhases:
         phases.phase_9_regulatory(state)
         assert called == [True]
 
-    def test_phase_10_pings_url(self, monkeypatch, state):
-        captured = []
-        mock_resp = MagicMock(status_code=200)
-        def fake_get(url, timeout):
-            captured.append(url)
-            return mock_resp
-        monkeypatch.setattr(phases.req, 'get', fake_get)
-        phases.phase_10_dashboard_ping(state)
-        assert len(captured) == 1
-        assert 'streamlit' in captured[0].lower()
-
-    def test_phase_10_swallows_http_failure(self, monkeypatch, state):
-        def raises(url, timeout):
-            raise RuntimeError('network down')
-        monkeypatch.setattr(phases.req, 'get', raises)
-        # Should not raise
-        phases.phase_10_dashboard_ping(state)
-
-
 # ─── Phase 8 — purchase detection ──────────────────────────────────────────
 
 class TestPhase8PurchaseDetection:

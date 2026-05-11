@@ -7,7 +7,7 @@ Usage from main.py:
     from treasury_signals.scheduler import engine
     from treasury_signals.scheduler.state import ScanState
     from treasury_signals.scheduler.phases import (
-        phase_1_tweets, phase_2_classify, ..., phase_10_dashboard_ping,
+        phase_1_tweets, phase_2_classify, ..., phase_9_regulatory,
     )
 """
 

@@ -31,7 +31,7 @@ from treasury_signals.scheduler.helpers import is_morning_scan
 from treasury_signals.scheduler.phases import (
     phase_1_tweets, phase_2_classify, phase_3_strc, phase_4_edgar,
     phase_5_correlation, phase_6_email, phase_7_leaderboard,
-    phase_8_purchase_detection, phase_9_regulatory, phase_10_dashboard_ping,
+    phase_8_purchase_detection, phase_9_regulatory,
 )
 from treasury_signals.scheduler import post_scan
 
@@ -123,7 +123,6 @@ def main():
         phase_7_leaderboard(state)
         phase_8_purchase_detection(state)
         phase_9_regulatory(state)
-        phase_10_dashboard_ping(state)
 
         logger.info(f"Scan #{scan_number} complete")
 
