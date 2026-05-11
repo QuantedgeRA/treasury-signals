@@ -68,23 +68,26 @@ def save_freshness_snapshot():
 
 def run_daily_only_tasks(state: ScanState):
     """Morning-only learning loop: classifier feedback + price predictor.
-    Both no-op silently outside the morning window."""
-    if not state.morning:
-        return
 
-    try:
-        feedback_engine.learn()
-        feedback_engine.load_from_db()
-        report = feedback_engine.get_learning_report()
-        if "No learning data" not in report:
-            logger.info("Feedback loop: learning cycle complete")
-    except Exception as e:
-        logger.debug(f"Feedback loop: {e}")
+    SOFT-HIDDEN 2026-05-11 — predictions feature deprecated pending strategic
+    pivot to filings-based signals (see memory/product_strategy_2026_05.md).
+    Code preserved for 30-day reversibility; uncomment block below to restore.
+    """
+    return
 
-    try:
-        predictor.analyze()
-    except Exception as e:
-        logger.debug(f"Price predictor: {e}")
+    # try:
+    #     feedback_engine.learn()
+    #     feedback_engine.load_from_db()
+    #     report = feedback_engine.get_learning_report()
+    #     if "No learning data" not in report:
+    #         logger.info("Feedback loop: learning cycle complete")
+    # except Exception as e:
+    #     logger.debug(f"Feedback loop: {e}")
+    #
+    # try:
+    #     predictor.analyze()
+    # except Exception as e:
+    #     logger.debug(f"Price predictor: {e}")
 
 
 # ─── Entity sync (every scan): snapshot → CoinGecko/BT pull → protect ──────

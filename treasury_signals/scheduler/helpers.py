@@ -140,11 +140,12 @@ def process_and_alert():
 
                 engine.add_tweet_signal(tweet['author_username'], company_name, ticker, result['score'], tweet['tweet_text'])
 
-                log_prediction(
-                    company=company_name, ticker=ticker,
-                    signal_type="tweet", signal_score=result['score'],
-                    signal_details=f"@{tweet['author_username']}: {tweet['tweet_text'][:200]}",
-                )
+                # SOFT-HIDDEN 2026-05-11 — predictions deprecated (memory/product_strategy_2026_05.md)
+                # log_prediction(
+                #     company=company_name, ticker=ticker,
+                #     signal_type="tweet", signal_score=result['score'],
+                #     signal_details=f"@{tweet['author_username']}: {tweet['tweet_text'][:200]}",
+                # )
 
             tweet_id = tweet.get('tweet_id', tweet['tweet_text'][:50])
             if tweet_id not in sent_tweet_ids:
@@ -174,12 +175,13 @@ def check_strc_volume():
         if strc_analysis['is_signal'] and current_status != sent_strc_status:
             engine.add_strc_spike(strc_data['volume_ratio'], strc_data['dollar_volume_m'])
 
-            log_prediction(
-                company="Strategy (MSTR)", ticker="MSTR",
-                signal_type="strc_volume",
-                signal_score=min(int(strc_data['volume_ratio'] * 30), 90),
-                signal_details=f"STRC volume spike: {strc_data['volume_ratio']}x normal, ${strc_data['dollar_volume_m']}M",
-            )
+            # SOFT-HIDDEN 2026-05-11 — predictions deprecated (memory/product_strategy_2026_05.md)
+            # log_prediction(
+            #     company="Strategy (MSTR)", ticker="MSTR",
+            #     signal_type="strc_volume",
+            #     signal_score=min(int(strc_data['volume_ratio'] * 30), 90),
+            #     signal_details=f"STRC volume spike: {strc_data['volume_ratio']}x normal, ${strc_data['dollar_volume_m']}M",
+            # )
 
             strc_message = format_strc_alert(strc_data, strc_analysis)
             is_very_high = strc_data['volume_ratio'] >= 2.0
@@ -217,11 +219,12 @@ def check_correlation():
 
     if market_score >= 50:
         signaling = [c for c in result['top_companies'] if c['score'] >= 40]
-        log_prediction(
-            company="Market-Wide", ticker="MULTI",
-            signal_type="correlation_v2", signal_score=market_score,
-            signal_details=f"{len(signaling)} companies signaling. Streams: {', '.join(result['active_streams'])}",
-        )
+        # SOFT-HIDDEN 2026-05-11 — predictions deprecated (memory/product_strategy_2026_05.md)
+        # log_prediction(
+        #     company="Market-Wide", ticker="MULTI",
+        #     signal_type="correlation_v2", signal_score=market_score,
+        #     signal_details=f"{len(signaling)} companies signaling. Streams: {', '.join(result['active_streams'])}",
+        # )
 
     if market_score >= 50 and (market_score - last_correlation_alert_score) >= 15 and market_score != sent_correlation_score:
         alert_message = engine.format_correlation_alert(result)
