@@ -4,7 +4,7 @@
 -- See schema/README.md for the regen workflow.
 --
 -- Tables + columns only. Constraints (PK / FK / UNIQUE) and indexes
--- still need to be captured separately — run schema/introspect.sql
+-- still need to be captured separately - run schema/introspect.sql
 -- Queries 2 and 3 in the Supabase SQL editor and paste the results
 -- at the bottom of this file under their respective section headers.
 
@@ -417,3 +417,13 @@ CREATE TABLE IF NOT EXISTS public.whale_transactions (
   direction VARCHAR(200),
   detected_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- ----------------------------------------------------------------------
+-- CONSTRAINTS
+-- (paste Query 2 results below - see schema/README.md)
+-- ----------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------
+-- INDEXES
+-- (paste Query 3 results below - see schema/README.md)
+-- ----------------------------------------------------------------------

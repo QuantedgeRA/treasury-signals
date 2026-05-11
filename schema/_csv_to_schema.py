@@ -31,7 +31,7 @@ def build_schema(csv_text: str) -> str:
     out.append("-- See schema/README.md for the regen workflow.")
     out.append("--")
     out.append("-- Tables + columns only. Constraints (PK / FK / UNIQUE) and indexes")
-    out.append("-- still need to be captured separately — run schema/introspect.sql")
+    out.append("-- still need to be captured separately - run schema/introspect.sql")
     out.append("-- Queries 2 and 3 in the Supabase SQL editor and paste the results")
     out.append("-- at the bottom of this file under their respective section headers.")
     out.append("")
@@ -83,6 +83,23 @@ def build_schema(csv_text: str) -> str:
         out.append(",\n".join(col_lines))
         out.append(");")
         out.append("")
+
+    # Placeholder sections for the constraint + index follow-up dumps.
+    # Run the two queries in schema/README.md or schema/introspect.sql
+    # (Queries 2 and 3) and paste the result rows BELOW the matching
+    # header. Keeping these placeholders here means schema.sql is
+    # self-documenting — the next dev can see what's expected.
+    sep = "-- " + ("-" * 70)
+    out.append(sep)
+    out.append("-- CONSTRAINTS")
+    out.append("-- (paste Query 2 results below - see schema/README.md)")
+    out.append(sep)
+    out.append("")
+    out.append(sep)
+    out.append("-- INDEXES")
+    out.append("-- (paste Query 3 results below - see schema/README.md)")
+    out.append(sep)
+    out.append("")
 
     return "\n".join(out)
 
@@ -357,7 +374,19 @@ whale_transactions,detected_at,timestamp with time zone,false,now(),6
 """
 
 
+def _force_utf8_stdout():
+    """On Windows, sys.stdout uses cp1252 by default when piped — that
+    breaks any non-ASCII output (em-dashes, box-drawing chars). Force
+    UTF-8 reconfiguration so `python _csv_to_schema.py > schema.sql`
+    produces a UTF-8 file regardless of shell encoding."""
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")  # py3.7+
+    except Exception:
+        pass
+
+
 if __name__ == "__main__":
+    _force_utf8_stdout()
     # If stdin has data, prefer it; otherwise use the embedded snapshot.
     if not sys.stdin.isatty():
         csv_text = sys.stdin.read()
