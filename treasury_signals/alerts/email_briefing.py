@@ -73,7 +73,7 @@ RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "Treasury Signal Intelligence")
 EMAIL_FROM_ADDRESS = os.getenv("EMAIL_FROM_ADDRESS", "onboarding@resend.dev")
 EMAIL_REPLY_TO = os.getenv("EMAIL_REPLY_TO", "")
-DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app")
+DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://app.quantedgeriskadvisory.com")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 resend.api_key = RESEND_API_KEY
@@ -149,18 +149,72 @@ def get_all_signals():
 
 
 def get_accuracy_data():
+    """Intelligence Performance stats for the daily briefing's section 9.
+
+    Previously surfaced "predictions accuracy" (since soft-killed 2026-05-11).
+    Now surfaces the live moat data instead — filing_excerpts (Claude-scored
+    8-K/10-Q/10-K sentences) + active pre-announcement signals (cross-stream
+    correlation per company). The returned dict keeps the legacy key names so
+    the HTML template doesn't need a wider rewrite; the label text in the
+    template explains what each number now means.
+
+    Mapping:
+        total_purchases    — confirmed BTC purchases (unchanged)
+        total_predictions  → recent filing excerpts count (last 30d)
+        predicted          → active companies signaling >= 60 right now
+        hit_rate           → high-impact excerpt percentage (impact >= 70)
+    """
+    from datetime import datetime, timedelta
+
+    total_purchases = 0
+    filing_excerpts_total = 0
+    high_impact_count = 0
+    active_signaling = 0
+
     try:
-        purchases = supabase.table("confirmed_purchases").select("*").execute()
-        predictions = supabase.table("predictions").select("*").execute()
-        all_purchases = purchases.data if purchases.data else []
-        all_predictions = predictions.data if predictions.data else []
-        total = len(all_purchases)
-        predicted = len([p for p in all_purchases if p.get("was_predicted")])
-        hit_rate = round(predicted / total * 100, 1) if total > 0 else 0
-        return {"total_purchases": total, "predicted": predicted, "hit_rate": hit_rate, "total_predictions": len(all_predictions)}
+        purchases = supabase.table("confirmed_purchases").select("id").execute()
+        total_purchases = len(purchases.data or [])
     except Exception as e:
-        logger.error(f"Failed to fetch accuracy data: {e}", exc_info=True)
-        return {"total_purchases": 0, "predicted": 0, "hit_rate": 0, "total_predictions": 0}
+        logger.debug(f"Confirmed purchase count failed: {e}")
+
+    try:
+        # Last 30 days of filing excerpts — the moat
+        cutoff_30d = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        excerpts = (
+            supabase.table("filing_excerpts")
+            .select("impact_score")
+            .gte("created_at", cutoff_30d)
+            .execute()
+        )
+        rows = excerpts.data or []
+        filing_excerpts_total = len(rows)
+        high_impact_count = sum(1 for r in rows if (r.get("impact_score") or 0) >= 70)
+    except Exception as e:
+        # filing_excerpts may not exist yet on a fresh DB. Log + carry on.
+        logger.debug(f"Filing excerpt stats failed: {e}")
+
+    try:
+        # Latest snapshot per ticker, score >= 60 — the active signaling companies
+        cutoff_48h = (datetime.utcnow() - timedelta(hours=48)).isoformat()
+        signals = (
+            supabase.table("pre_announcement_signals")
+            .select("ticker")
+            .gte("snapshot_at", cutoff_48h)
+            .gte("score", 60)
+            .execute()
+        )
+        active_signaling = len({r.get("ticker") for r in (signals.data or []) if r.get("ticker")})
+    except Exception as e:
+        logger.debug(f"Pre-announcement signal stats failed: {e}")
+
+    high_impact_pct = round(high_impact_count / filing_excerpts_total * 100, 1) if filing_excerpts_total > 0 else 0
+
+    return {
+        "total_purchases": total_purchases,
+        "predicted": active_signaling,        # repurposed: companies signaling now
+        "hit_rate": high_impact_pct,           # repurposed: high-impact excerpt %
+        "total_predictions": filing_excerpts_total,  # repurposed: 30d excerpt count
+    }
 
 
 def _get_feedback_email_html():
@@ -995,27 +1049,27 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                 <span style="color: #6b7280; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;">⑨ Intelligence Performance</span>
                 <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 10px;">
                     <tr>
-                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Total Signals: The total number of purchase signals detected since launch. A signal is any tweet scoring 40/100 or above on our classification engine.">
+                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Tweet Signals: The total number of tweet-based signals detected since launch. A signal is any tracked executive tweet scoring 40/100 or above on our classifier.">
                             <span style="color: #0EA5E9; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{total_signals}</span>
-                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Signals</span>
+                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Tweet Signals</span>
                             <span style="color: #0EA5E9; font-size: 9px;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
-                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="High Confidence: Signals scoring 60/100 or above. These historically precede confirmed purchases within 24-72 hours.">
-                            <span style="color: #0EA5E9; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{high_signals}</span>
-                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">High Conf</span>
+                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Active Signaling Companies: Tickers currently above the 60/100 cross-stream score in the last 48h. See /signals.">
+                            <span style="color: #0EA5E9; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{accuracy['predicted']}</span>
+                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Signaling Now</span>
                             <span style="color: #0EA5E9; font-size: 9px;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
-                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Predictions: Auto-logged when signals score 60+, STRC spikes, or correlation hits 50+. Later matched against confirmed purchases to calculate accuracy.">
+                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Filing Excerpts: Claude-scored BTC-relevant sentences extracted from 8-K, 10-Q, and 10-K filings in the last 30 days.">
                             <span style="color: #0EA5E9; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{accuracy['total_predictions']}</span>
-                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Predictions</span>
+                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Excerpts 30d</span>
                             <span style="color: #0EA5E9; font-size: 9px;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
-                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="Hit Rate: Percentage of confirmed purchases our system predicted in advance (within 72 hours before the 8-K filing).">
+                        <td width="19%" style="padding: 14px 6px; text-align: center; background: #111827; border-radius: 10px; cursor: help;" title="High-Impact: Percentage of recent filing excerpts that Claude scored at or above the 70/100 alert threshold.">
                             <span style="color: #0EA5E9; font-size: 22px; font-weight: 800; font-family: 'Courier New', monospace;">{accuracy['hit_rate']}%</span>
-                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">Hit Rate</span>
+                            <br><span style="color: #4b5563; font-size: 9px; font-weight: 600; text-transform: uppercase;">High Impact</span>
                             <span style="color: #0EA5E9; font-size: 9px;"> ℹ</span>
                         </td>
                         <td width="2%"></td>
@@ -1033,7 +1087,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                 <span style="color: #e0e0e0; font-size: 14px; font-weight: 600;">Explore the Full Intelligence Platform</span>
                 <br><span style="color: #6b7280; font-size: 12px; margin-top: 4px; display: inline-block;">Interactive charts, live data, and deep-dive analysis across all 6 sections:</span>
                 <br><br>
-                <a href="https://treasury-signals-jqyywcwr8l8pbtv66rvbbg.streamlit.app/" style="background: linear-gradient(135deg, #0EA5E9, #d35400); color: white; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px; letter-spacing: 0.02em; display: inline-block;">Open Intelligence Platform →</a>
+                <a href="{DASHBOARD_URL}" style="background: linear-gradient(135deg, #0EA5E9, #d35400); color: white; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 15px; letter-spacing: 0.02em; display: inline-block;">Open Intelligence Platform →</a>
                 <br><br>
                 <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 8px;">
                     <tr>
@@ -1060,14 +1114,14 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
                             <br><span style="color: #4b5563; font-size: 9px;">{reg_stats['total_items']}+ items, {reg_stats['regions_tracked']} regions</span>
                         </td>
                         <td width="33%" style="padding: 8px 4px; text-align: center;">
-                            <span style="color: #0EA5E9; font-size: 16px;">📈</span>
-                            <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Accuracy Tracking</span>
-                            <br><span style="color: #4b5563; font-size: 9px;">Verified predictions</span>
+                            <span style="color: #0EA5E9; font-size: 16px;">🔍</span>
+                            <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Filing Intelligence</span>
+                            <br><span style="color: #4b5563; font-size: 9px;">Claude-scored 8-K / 10-Q / 10-K excerpts</span>
                         </td>
                         <td width="33%" style="padding: 8px 4px; text-align: center;">
-                            <span style="color: #0EA5E9; font-size: 16px;">🔗</span>
-                            <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Correlation Engine</span>
-                            <br><span style="color: #4b5563; font-size: 9px;">Multi-signal analysis</span>
+                            <span style="color: #0EA5E9; font-size: 16px;">📡</span>
+                            <br><span style="color: #9ca3af; font-size: 10px; font-weight: 600;">Pre-Announce Signals</span>
+                            <br><span style="color: #4b5563; font-size: 9px;">7-stream cross-correlation</span>
                         </td>
                     </tr>
                 </table>

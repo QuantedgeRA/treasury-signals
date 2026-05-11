@@ -153,7 +153,7 @@ def _render_welcome(sub: dict) -> tuple[str, str]:
     body = f"""
     {_kicker("Welcome to Pro · Day 1 of 7")}
     {_h1(f"Welcome to TSI Pro, {first}.")}
-    {_p("You've unlocked daily personalized briefings, real-time competitor alerts, board-ready reports, and the full leaderboard. To get the most out of your 7-day trial, do these three things now — each takes under a minute:")}
+    {_p("You've unlocked daily personalized briefings, Claude-scored filing intelligence, pre-announcement signals, board-ready quarterly reports, the treasury proposal wizard, and the full leaderboard. To get the most out of your 7-day trial, do these three things now — each takes under a minute:")}
 
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#111827;border:1px solid #1e2a3a;border-radius:12px;padding:8px 0;margin-bottom:24px;">
       <tr><td style="padding:10px 18px;border-bottom:1px solid #1e2a3a;">
@@ -303,13 +303,14 @@ def _render_day6_endreminder(sub: dict) -> tuple[str, str]:
 
     <p style="color:#e5e7eb;font-size:13px;font-weight:600;margin:24px 0 8px;">What you keep on Pro:</p>
     <ul style="color:#9ca3af;font-size:13px;line-height:1.8;margin:0 0 24px 0;padding-left:18px;">
-      <li>Daily personalized briefings (instead of weekly summary)</li>
-      <li>Real-time alerts via email + Telegram</li>
-      <li>Board reports & shareholder comms templates</li>
-      <li>Competitive intel + NAV premium analysis</li>
-      <li>What-If calculator + Peer benchmark</li>
-      <li>Full leaderboard (not delayed top 10)</li>
-      <li>API access</li>
+      <li>Daily personalized briefings (instead of the free weekly summary)</li>
+      <li>Filing intelligence — Claude-scored 8-K, 10-Q, 10-K excerpts within minutes</li>
+      <li>Pre-announcement signals — cross-stream correlation across 7 data sources</li>
+      <li>Real-time alerts via email + Telegram + Slack</li>
+      <li>Board-ready quarterly PDF with peer comp + filing precedents</li>
+      <li>Treasury adoption proposal wizard (for advisors pitching clients)</li>
+      <li>Competitive intel + NAV premium + Peer benchmark + What-If calculator</li>
+      <li>Full leaderboard + REST API + Google Sheets add-on</li>
     </ul>
 
     {_button("Manage subscription", f"{DASHBOARD_URL}/company")}
