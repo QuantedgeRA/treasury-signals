@@ -42,8 +42,24 @@ State is tracked in a `schema_migrations(version, applied_at, checksum)` table t
 
 Before this folder, schema changes happened in the Supabase SQL editor with nothing in git tracking what was applied. On 2026-05-08 we discovered `edgar_filings.source` was missing for 28+ days because the column existed in code but not in the table — caught only by a manual query that errored. The migration runner makes this class of bug impossible: any schema delta lives in version control before it lives in production.
 
+## Companion: `schema/` snapshot
+
+`migrations/` is the source of truth for *changes*. `schema/schema.sql` is the
+assembled snapshot of the full schema at a point in time — what every fresh
+environment needs to recreate the database. See [`schema/README.md`](../schema/README.md)
+for the regen workflow and three install-free paths to keep it current.
+
+Per-PR convention: when you add a migration, also re-run `bash schema/regen.sh`
+(or `pwsh schema/regen.ps1`) and commit the regenerated `schema.sql` in the
+same PR. Reviewers then see both the migration delta and the post-change
+full snapshot, which makes schema-touching changes much easier to review.
+
 ## Limitations (current MVP scope)
 
 - No down-migrations / rollbacks. To undo, write a forward migration.
-- No automated schema dump of pre-existing state. `0001_baseline_2026-05-08.sql` is a marker, not a `CREATE TABLE` dump. To bootstrap a new env, you currently need the live DB. A `pg_dump` of the existing schema is a future "phase 3b" task.
+- `0001_baseline_2026-05-08.sql` is a marker, not a `CREATE TABLE` dump. The
+  pre-baseline tables (`subscribers`, `treasury_companies`,
+  `confirmed_purchases`, `leaderboard_snapshots`, `verification_codes`,
+  etc.) are captured in `schema/schema.sql` once you run `schema/regen.sh`
+  with `DATABASE_URL` set — see `schema/README.md`.
 - No checksum verification (yet). A future enhancement could detect if a migration file was edited after being applied.
