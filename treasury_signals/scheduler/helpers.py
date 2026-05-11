@@ -309,6 +309,16 @@ def send_daily_email():
                 telegram_alerts.send_weekly_summary()
         except Exception as e:
             logger.debug(f"Weekly summary: {e}")
+
+        # 7-day trial conversion drip — runs once per day after the daily
+        # briefing, since both share the same "after 7am, once per day"
+        # gate. Failures are swallowed so a drip outage never blocks the
+        # main briefing path.
+        try:
+            from treasury_signals.alerts.trial_drip import send_due_trial_emails
+            send_due_trial_emails()
+        except Exception as e:
+            logger.debug(f"Trial drip: {e}")
     else:
         if last_email_date == today:
             logger.debug("Daily briefing already sent today")
