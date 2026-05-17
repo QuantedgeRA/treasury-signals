@@ -422,8 +422,91 @@ CREATE TABLE IF NOT EXISTS public.whale_transactions (
 -- CONSTRAINTS
 -- (paste Query 2 results below - see schema/README.md)
 -- ----------------------------------------------------------------------
+ALTER TABLE audit_log ADD CONSTRAINT audit_log_pkey PRIMARY KEY (id);
+ALTER TABLE confirmed_purchases ADD CONSTRAINT confirmed_purchases_pkey PRIMARY KEY (id);
+ALTER TABLE confirmed_purchases ADD CONSTRAINT confirmed_purchases_purchase_id_key UNIQUE (purchase_id);
+ALTER TABLE confirmed_sales ADD CONSTRAINT confirmed_sales_pkey PRIMARY KEY (sale_id);
+ALTER TABLE data_freshness ADD CONSTRAINT data_freshness_pkey PRIMARY KEY (id);
+ALTER TABLE data_freshness ADD CONSTRAINT data_freshness_snapshot_time_key UNIQUE (snapshot_time);
+ALTER TABLE edgar_companies ADD CONSTRAINT edgar_companies_pkey PRIMARY KEY (id);
+ALTER TABLE edgar_companies ADD CONSTRAINT edgar_companies_cik_key UNIQUE (cik);
+ALTER TABLE edgar_filings ADD CONSTRAINT edgar_filings_pkey PRIMARY KEY (id);
+ALTER TABLE edgar_filings ADD CONSTRAINT edgar_filings_accession_number_key UNIQUE (accession_number);
+ALTER TABLE leaderboard_snapshots ADD CONSTRAINT leaderboard_snapshots_pkey PRIMARY KEY (id);
+ALTER TABLE leaderboard_snapshots ADD CONSTRAINT leaderboard_snapshots_snapshot_date_key UNIQUE (snapshot_date);
+ALTER TABLE learned_weights ADD CONSTRAINT learned_weights_pkey PRIMARY KEY (id);
+ALTER TABLE learned_weights ADD CONSTRAINT learned_weights_weight_key_key UNIQUE (weight_key);
+ALTER TABLE narratives ADD CONSTRAINT narratives_pkey PRIMARY KEY (id);
+ALTER TABLE narratives ADD CONSTRAINT narratives_narrative_type_narrative_date_key UNIQUE (narrative_type, narrative_date);
+ALTER TABLE new_entrants ADD CONSTRAINT new_entrants_pkey PRIMARY KEY (id);
+ALTER TABLE new_entrants ADD CONSTRAINT new_entrants_ticker_key UNIQUE (ticker);
+ALTER TABLE notable_statements ADD CONSTRAINT notable_statements_pkey PRIMARY KEY (id);
+ALTER TABLE notable_statements ADD CONSTRAINT notable_statements_statement_id_key UNIQUE (statement_id);
+ALTER TABLE pending_purchases ADD CONSTRAINT pending_purchases_pkey PRIMARY KEY (id);
+ALTER TABLE pending_purchases ADD CONSTRAINT pending_purchases_pending_id_key UNIQUE (pending_id);
+ALTER TABLE predictions ADD CONSTRAINT predictions_pkey PRIMARY KEY (id);
+ALTER TABLE predictions ADD CONSTRAINT predictions_prediction_id_key UNIQUE (prediction_id);
+ALTER TABLE price_predictions ADD CONSTRAINT price_predictions_pkey PRIMARY KEY (id);
+ALTER TABLE price_predictions ADD CONSTRAINT price_predictions_prediction_date_key UNIQUE (prediction_date);
+ALTER TABLE regulatory_items ADD CONSTRAINT regulatory_items_pkey PRIMARY KEY (id);
+ALTER TABLE regulatory_items ADD CONSTRAINT regulatory_items_item_id_key UNIQUE (item_id);
+ALTER TABLE subscribers ADD CONSTRAINT subscribers_pkey PRIMARY KEY (id);
+ALTER TABLE subscribers ADD CONSTRAINT subscribers_subscriber_id_key UNIQUE (subscriber_id);
+ALTER TABLE subscribers ADD CONSTRAINT subscribers_email_key UNIQUE (email);
+ALTER TABLE team_invites ADD CONSTRAINT team_invites_team_id_fkey FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE;
+ALTER TABLE team_invites ADD CONSTRAINT team_invites_pkey PRIMARY KEY (id);
+ALTER TABLE team_invites ADD CONSTRAINT team_invites_token_key UNIQUE (token);
+ALTER TABLE teams ADD CONSTRAINT teams_pkey PRIMARY KEY (id);
+ALTER TABLE treasury_companies ADD CONSTRAINT treasury_companies_pkey PRIMARY KEY (id);
+ALTER TABLE treasury_companies ADD CONSTRAINT treasury_companies_ticker_key UNIQUE (ticker);
+ALTER TABLE treasury_history ADD CONSTRAINT treasury_history_pkey PRIMARY KEY (id);
+ALTER TABLE treasury_history ADD CONSTRAINT treasury_history_ticker_snapshot_date_key UNIQUE (ticker, snapshot_date);
+ALTER TABLE tweets ADD CONSTRAINT tweets_pkey PRIMARY KEY (id);
+ALTER TABLE tweets ADD CONSTRAINT tweets_tweet_id_key UNIQUE (tweet_id);
+ALTER TABLE user_saved_views ADD CONSTRAINT user_saved_views_pkey PRIMARY KEY (id);
+ALTER TABLE verification_codes ADD CONSTRAINT verification_codes_pkey PRIMARY KEY (id);
+ALTER TABLE whale_transactions ADD CONSTRAINT whale_transactions_pkey PRIMARY KEY (id);
+ALTER TABLE whale_transactions ADD CONSTRAINT whale_transactions_tx_hash_key UNIQUE (tx_hash);
 
 -- ----------------------------------------------------------------------
 -- INDEXES
 -- (paste Query 3 results below - see schema/README.md)
 -- ----------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_audit_action_recent ON public.audit_log USING btree (action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_actor_recent ON public.audit_log USING btree (actor_email, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_created_at ON public.audit_log USING btree (created_at DESC);
+CREATE UNIQUE INDEX confirmed_purchases_purchase_id_key ON public.confirmed_purchases USING btree (purchase_id);
+CREATE UNIQUE INDEX data_freshness_snapshot_time_key ON public.data_freshness USING btree (snapshot_time);
+CREATE UNIQUE INDEX edgar_companies_cik_key ON public.edgar_companies USING btree (cik);
+CREATE UNIQUE INDEX edgar_filings_accession_number_key ON public.edgar_filings USING btree (accession_number);
+CREATE UNIQUE INDEX leaderboard_snapshots_snapshot_date_key ON public.leaderboard_snapshots USING btree (snapshot_date);
+CREATE UNIQUE INDEX learned_weights_weight_key_key ON public.learned_weights USING btree (weight_key);
+CREATE UNIQUE INDEX narratives_narrative_type_narrative_date_key ON public.narratives USING btree (narrative_type, narrative_date);
+CREATE UNIQUE INDEX new_entrants_ticker_key ON public.new_entrants USING btree (ticker);
+CREATE UNIQUE INDEX notable_statements_statement_id_key ON public.notable_statements USING btree (statement_id);
+CREATE UNIQUE INDEX pending_purchases_pending_id_key ON public.pending_purchases USING btree (pending_id);
+CREATE UNIQUE INDEX predictions_prediction_id_key ON public.predictions USING btree (prediction_id);
+CREATE UNIQUE INDEX price_predictions_prediction_date_key ON public.price_predictions USING btree (prediction_date);
+CREATE UNIQUE INDEX regulatory_items_item_id_key ON public.regulatory_items USING btree (item_id);
+CREATE INDEX IF NOT EXISTS idx_subscribers_active ON public.subscribers USING btree (is_active);
+CREATE INDEX IF NOT EXISTS idx_subscribers_email ON public.subscribers USING btree (email);
+CREATE INDEX IF NOT EXISTS idx_subscribers_team ON public.subscribers USING btree (team_id) WHERE (team_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_subscribers_trial_started ON public.subscribers USING btree (trial_started_at) WHERE (trial_started_at IS NOT NULL);
+CREATE UNIQUE INDEX subscribers_email_key ON public.subscribers USING btree (email);
+CREATE UNIQUE INDEX subscribers_subscriber_id_key ON public.subscribers USING btree (subscriber_id);
+CREATE INDEX IF NOT EXISTS idx_team_invites_email_status ON public.team_invites USING btree (email, status);
+CREATE INDEX IF NOT EXISTS idx_team_invites_team_status ON public.team_invites USING btree (team_id, status);
+CREATE INDEX IF NOT EXISTS idx_team_invites_token_pending ON public.team_invites USING btree (token) WHERE (status = 'pending'::text);
+CREATE UNIQUE INDEX team_invites_token_key ON public.team_invites USING btree (token);
+CREATE INDEX IF NOT EXISTS idx_teams_owner ON public.teams USING btree (owner_id);
+CREATE INDEX IF NOT EXISTS idx_teams_stripe_customer ON public.teams USING btree (stripe_customer_id) WHERE (stripe_customer_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_treasury_companies_holdings ON public.treasury_companies USING btree (btc_holdings DESC);
+CREATE UNIQUE INDEX treasury_companies_ticker_key ON public.treasury_companies USING btree (ticker);
+CREATE INDEX IF NOT EXISTS idx_treasury_history_date ON public.treasury_history USING btree (snapshot_date);
+CREATE INDEX IF NOT EXISTS idx_treasury_history_ticker ON public.treasury_history USING btree (ticker);
+CREATE UNIQUE INDEX treasury_history_ticker_snapshot_date_key ON public.treasury_history USING btree (ticker, snapshot_date);
+CREATE UNIQUE INDEX tweets_tweet_id_key ON public.tweets USING btree (tweet_id);
+CREATE INDEX IF NOT EXISTS idx_saved_views_team_page ON public.user_saved_views USING btree (team_id, page) WHERE (team_id IS NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_saved_views_user_page ON public.user_saved_views USING btree (user_id, page);
+CREATE INDEX IF NOT EXISTS idx_verification_email ON public.verification_codes USING btree (email, code);
+CREATE UNIQUE INDEX whale_transactions_tx_hash_key ON public.whale_transactions USING btree (tx_hash);
