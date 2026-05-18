@@ -83,7 +83,7 @@ Render auto-deploys `master` on push (no `render.yaml` — service settings are 
 
 Two services run from this repo:
 1. **Main worker** (`python main.py`) — the 3x/day full scan loop (10 phases + post-scan synthesis, briefings, leaderboard, etc.).
-2. **Fast EDGAR cron** (`python fast_edgar.py`, schedule `* * * * *` or `*/2 * * * *`) — runs just the EDGAR scan + Claude excerpt + alert dispatch every 1–2 minutes so customer-visible alert latency on new 8-Ks stays sub-60-seconds. Same env vars as the main worker. Without this cron, file-to-alert latency reverts to ~4 hour median / ~6 hour worst-case (the gap between scheduled scan slots).
+2. **Fast filings cron** (`python fast_edgar.py`, schedule `* * * * *` or `*/2 * * * *`) — runs US SEC EDGAR + non-USA regulatory adapters (Japan EDINET, South Korea DART, etc.) + Claude excerpt extraction + alert dispatch every 1–2 minutes so customer-visible alert latency on new filings stays sub-60-seconds. Same env vars as the main worker (including `DART_API_KEY` and `EDINET_API_KEY` for international coverage). Without this cron, file-to-alert latency reverts to ~4 hour median / ~6 hour worst-case (the gap between scheduled scan slots).
 
 The dashboard repo (`treasury-dashboard`) auto-deploys to Vercel on push to `main`. If pushes stop appearing in Vercel, check **Project → Settings → Git → Connected Git Repository** first — the GitHub App connection has broken once before.
 

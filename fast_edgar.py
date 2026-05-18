@@ -1,20 +1,22 @@
 """
-fast_edgar.py — Fast EDGAR cron entry point.
+fast_edgar.py — Fast filings cron entry point (US + international).
 
-Runs a single SEC EDGAR FTS scan + Claude excerpt extraction + Slack alert
-dispatch, then exits. Designed to be invoked by Render's cron scheduler every
-1–2 minutes so the customer-visible alert latency on new BTC 8-Ks stays
-sub-60-seconds (median).
+Runs SEC EDGAR FTS + non-USA regulatory adapters (Japan-EDINET, South Korea-
+DART, etc.) + Claude excerpt extraction + Slack alert dispatch, then exits.
+Designed to be invoked by Render's cron scheduler every 1–2 minutes so the
+customer-visible alert latency on new BTC filings stays sub-60-seconds (median).
 
 Why this exists:
     main.py sleeps until the next SCAN_HOURS slot (6/12/18 UTC) and only then
-    runs phase_4_edgar. That makes worst-case file-to-alert latency ~6 hours
-    and median ~4 hours — incompatible with the trader-led value prop that the
-    landing page, trial drip, and FAQ all promise ("sub-60 seconds").
+    runs phase_4_edgar (US) + phase_9_regulatory (international). That makes
+    worst-case file-to-alert latency ~6 hours and median ~4 hours —
+    incompatible with the trader-led value prop that the landing page, trial
+    drip, and FAQ all promise ("sub-60 seconds").
 
-    This script runs only the fast path (EDGAR scan → Claude excerpt → alerts).
+    This script runs only the fast paths (filing scan → excerpt → alerts).
     The 3x/day full scan in main.py still does the heavy synthesis work
-    (correlation engine, daily briefing, leaderboard, etc.).
+    (correlation engine, daily briefing, leaderboard, Google News in 15
+    languages, crypto news wires).
 
 Idempotency:
     check_edgar_filings() dedupes via edgar_filings.accession_number (UNIQUE).
@@ -44,12 +46,16 @@ logger = get_logger(__name__)
 
 def main():
     start = time.time()
-    result = check_edgar_filings(days_back=1)
-    new_filings = (result or {}).get("new_filings", 0)
 
-    if new_filings > 0:
-        # Claude-score the just-stored filings. Bounded to keep spend predictable;
-        # no-ops when ANTHROPIC_API_KEY is unset.
+    # US SEC EDGAR — FTS scan via edgar_realtime.py. Dedupes via
+    # edgar_filings.accession_number UNIQUE.
+    us_result = check_edgar_filings(days_back=1)
+    us_new = (us_result or {}).get("new_filings", 0)
+
+    if us_new > 0:
+        # Claude-score the just-stored US filings. Bounded to keep spend
+        # predictable; no-ops when ANTHROPIC_API_KEY is unset. Currently
+        # SEC-only — extractor reads from edgar_filings.
         try:
             from treasury_signals.pipelines.filing_excerpt_extractor import (
                 extract_excerpts_for_recent_filings,
@@ -68,8 +74,22 @@ def main():
         except Exception as e:
             logger.debug(f"fast_edgar alert dispatcher: {e}")
 
+    # International — Japan EDINET, South Korea DART, plus any other non-USA
+    # regulatory adapters defined in REGULATORY_ADAPTERS. Each adapter
+    # silently no-ops when its API key is unset. Alerts fire via
+    # global_filing_scanner._send_alert (reconciler-routed).
+    intl_new = 0
+    try:
+        from treasury_signals.scanners.global_filing_scanner import scan_intl_filings
+        intl = scan_intl_filings(days_back=1) or {}
+        intl_new = intl.get("new_filings", 0)
+        if intl_new > 0:
+            logger.info(f"fast_edgar intl: {intl_new} new — {intl.get('sources')}")
+    except Exception as e:
+        logger.debug(f"fast_edgar intl scan: {e}")
+
     elapsed = time.time() - start
-    logger.info(f"fast_edgar: {new_filings} new filings, {elapsed:.1f}s")
+    logger.info(f"fast_edgar: {us_new} US + {intl_new} intl filings, {elapsed:.1f}s")
 
 
 if __name__ == "__main__":

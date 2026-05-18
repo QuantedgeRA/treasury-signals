@@ -907,6 +907,61 @@ def scan_all_filings(days_back=1):
     return {'new_filings': total_new, 'alerts': total_alerts, 'sources': source_stats}
 
 
+def scan_intl_filings(days_back=1):
+    """Fast-cron variant: runs only non-USA regulatory adapters.
+
+    Skips USA adapters (edgar_realtime.py handles those via FTS) and skips
+    the heavier Google News + crypto-wire mechanisms that scan_all_filings
+    includes — those stay on the 3x/day cycle. Used by fast_edgar.py to
+    keep international file-to-alert latency at sub-60s parity with US.
+
+    Returns {'new_filings': int, 'alerts': int, 'sources': {country: count}}.
+    """
+    processed = _get_processed()
+    source_stats = {}
+    total_new = 0
+    total_alerts = 0
+
+    for country, adapter in REGULATORY_ADAPTERS:
+        if country.startswith('USA'):
+            continue
+        try:
+            filings = adapter(days_back) if 'days_back' in adapter.__code__.co_varnames else adapter()
+            new_count = 0
+            for filing in filings:
+                acc = filing.get('accession_number', '')
+                if acc in processed:
+                    continue
+                filing['processed_at'] = datetime.now().isoformat()
+                filing['btc_amount'] = filing.get('btc_amount', 0)
+                filing['usd_amount'] = filing.get('usd_amount', 0)
+                _store_filing(filing)
+                _route_to_reconciler(filing)
+                processed.add(acc)
+                new_count += 1
+                if filing.get('company_name') and filing.get('event_type') != 'holding':
+                    _send_alert(
+                        filing.get('source', country),
+                        filing['company_name'],
+                        filing.get('event_type', 'filing'),
+                        filing.get('btc_amount', 0),
+                        filing.get('filing_url', ''),
+                    )
+                    total_alerts += 1
+            source_stats[country] = new_count
+            total_new += new_count
+        except Exception as e:
+            logger.warning(f"  ⚠️ {country} adapter FAILED: {e}")
+            capture_exception(e, context={
+                "where": "global_filing_scanner.scan_intl_filings",
+                "adapter": country,
+                "adapter_fn": adapter.__name__,
+            })
+            source_stats[country] = -1
+
+    return {'new_filings': total_new, 'alerts': total_alerts, 'sources': source_stats}
+
+
 if __name__ == "__main__":
     logger.info("Global Scanner v2 — manual run (last 3 days)...")
     result = scan_all_filings(days_back=3)
