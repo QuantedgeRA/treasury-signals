@@ -1,15 +1,15 @@
 """
-email_briefing.py
------------------
-Executive Daily Intelligence Briefing v4.0
+email_briefing.py — Daily BTC Treasury Tape (free tier)
+-------------------------------------------------------
+Yesterday in the BTC treasury tape, synthesized at 7am ET. Sent to every
+subscriber; Pro subscribers also receive pro_briefing.py with deeper data.
 
-Full CEO intelligence report with:
+Sections:
 - Action Signal (Buy/Hold/Wait)
 - Risk Dashboard (Fear & Greed, Volatility, Drawdown)
 - What Changed Overnight
 - Peer Activity
 - Week Ahead
-- Executive Summary
 - Market Snapshot + STRC Status
 - Correlation Engine
 - Purchase Signals
@@ -17,7 +17,6 @@ Full CEO intelligence report with:
 - BTC Treasury Leaderboard (Top 10 + link to all)
 - Global Regulatory Landscape
 - Notable Statements
-- Intelligence Performance (Accuracy)
 """
 
 import os
@@ -247,7 +246,7 @@ def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, r
     if has_profile and subscriber_name:
         greeting_html = f'<span style="color: #e0e0e0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em;">Good morning, {subscriber_name}</span>'
     else:
-        greeting_html = '<span style="color: #e0e0e0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em;">Executive Daily Briefing</span>'
+        greeting_html = '<span style="color: #e0e0e0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em;">Daily Treasury Tape</span>'
 
     # Build "Your Position" section if subscriber has holdings
     your_position_html = ""
@@ -1165,9 +1164,9 @@ def send_briefing(to_email, html_content, subscriber=None):
         # Personalized subject line
         if subscriber and subscriber.get("company_name"):
             company_short = subscriber["company_name"][:30]
-            subject = f"{company_short} · Daily Intelligence Briefing · {datetime.now().strftime('%b %d, %Y')}"
+            subject = f"{company_short} · BTC treasury tape · {datetime.now().strftime('%b %d, %Y')}"
         else:
-            subject = f"Daily Intelligence Briefing · {datetime.now().strftime('%b %d, %Y')}"
+            subject = f"BTC treasury tape · {datetime.now().strftime('%b %d, %Y')}"
 
         params = {
             "from": f"{EMAIL_FROM_NAME} <{EMAIL_FROM_ADDRESS}>",
@@ -1196,7 +1195,7 @@ def send_briefing(to_email, html_content, subscriber=None):
 
 
 def generate_and_send_briefing(to_email, subscriber=None):
-    logger.info("Generating executive briefing v5.0 (personalized CEO intelligence)...")
+    logger.info("Generating daily treasury tape v5.0 (personalized free-tier briefing)...")
 
     market = get_market_data()
     signals = get_recent_signals(hours=24)
@@ -1397,7 +1396,7 @@ def generate_and_send_briefing(to_email, subscriber=None):
 
 
 if __name__ == "__main__":
-    print("Executive Email Briefing v4.0 — Full CEO Intelligence\n")
+    print("Daily Treasury Tape v5 — free-tier briefing render test\n")
     print("=" * 60)
 
     market = get_market_data()

@@ -1,8 +1,9 @@
 """
-pro_briefing.py — Bloomberg-Quality Daily Email Briefing
-=========================================================
-Sends personalized daily intelligence to Pro subscribers.
-Styled to match the TSI steel blue brand (#0EA5E9).
+pro_briefing.py — Daily BTC Treasury Tape (Pro tier)
+=====================================================
+Pro-tier daily synthesis sent at 7am ET. Goes deeper than the free-tier
+email_briefing.py — Claude-scored filing excerpts, pre-announcement signal
+state, and full purchase recap from the previous 48h.
 
 Usage:
     from treasury_signals.alerts.pro_briefing import send_pro_briefings
@@ -212,7 +213,7 @@ def _get_subscriber_position(subscriber, companies, btc_price):
 
 
 def _build_email_html(subscriber, market, position):
-    """Build the Bloomberg-quality HTML email."""
+    """Build the Pro-tier daily treasury tape HTML email."""
     name = subscriber.get("name", "").split(" ")[0] or "there"
     company = subscriber.get("company_name") or ""
     ticker = subscriber.get("ticker") or ""
@@ -557,7 +558,7 @@ def send_pro_briefings(btc_price=None):
                 json={
                     "from": "Treasury Signal Intelligence <briefing@quantedgeriskadvisory.com>",
                     "to": [sub["email"]],
-                    "subject": f"TSI Daily Brief — BTC ${market['btc_price']:,.0f} | {len(market['purchases'])} purchases | {len(market['signals'])} signals",
+                    "subject": f"BTC treasury tape · {len(market['purchases'])} purchases · {len(market['signals'])} signals · ${market['btc_price']:,.0f}",
                     "html": html,
                 },
                 timeout=15,
