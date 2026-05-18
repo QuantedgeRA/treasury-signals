@@ -1,6 +1,6 @@
 # treasury-signals — TSI backend scanner
 
-Python scanner that powers Treasury Signal Intelligence (TSI), a Bitcoin corporate-treasury monitoring platform under Quantedge Risk Advisory. This repo runs the data pipeline; the customer-facing dashboard lives in [`treasury-dashboard`](https://github.com/QuantedgeRA/treasury-dashboard) (Next.js on Vercel).
+Python scanner that powers Treasury Signal Intelligence (TSI). Detects BTC treasury 8-Ks across ~200 public companies (US + Japan + Korea + 12 more markets) within seconds of the SEC/DART/EDINET filing, runs them through Claude for impact-scored excerpts, and pushes alerts to subscribers via email, Telegram, and Slack — before the news reaches Twitter. Customer-facing dashboard lives in [`treasury-dashboard`](https://github.com/QuantedgeRA/treasury-dashboard) (Next.js on Vercel).
 
 ## What it does
 
