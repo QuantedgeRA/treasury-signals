@@ -181,8 +181,8 @@ class TelegramAlerts:
                 f"{'━' * 30}\n\n"
 
                 f"📱 <b>Free subscribers see this weekly.</b>\n"
-                f"⚡ <b>Pro subscribers see it daily — personalized to their company,</b> "
-                f"<b>with full signal details, competitor alerts, and real-time Telegram notifications.</b>\n\n"
+                f"⚡ <b>Pro subscribers get sub-60-second alerts on every BTC treasury 8-K</b> — "
+                f"<b>Claude-scored excerpts, pre-announcement signals, and real-time delivery via Telegram, Slack, and email.</b>\n\n"
 
                 f"🔗 Start 7-day free trial:\n"
                 f"{DASHBOARD_URL}\n\n"
