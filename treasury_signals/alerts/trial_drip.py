@@ -3,13 +3,21 @@ trial_drip.py — 7-day trial conversion email sequence.
 -------------------------------------------------------
 
 When a user starts a Pro trial via Stripe Checkout, we send them 5 emails
-over the trial window to walk them into the value:
+over the trial window to walk them into the value. Copy is trader-led
+per the 2026-05-17 positioning lock — "Know the next BTC treasury
+purchase before the 8-K hits Twitter." All five emails ladder to that
+one-liner; no CFO/treasurer framing.
 
-    Day 0 — welcome           : 3-step setup checklist
-    Day 1 — first_brief        : prove daily value (yesterday's snapshot)
-    Day 3 — calculator         : push the most-missed feature
-    Day 5 — competitors        : real competitor activity since trial start
-    Day 6 — endreminder        : honest "trial ends tomorrow" note
+    Day 0 — welcome           : value prop + 3-step setup (watchlist, alerts, /filings)
+    Day 1 — first_brief        : prove the feed is live with yesterday's tape
+    Day 3 — calculator         : surface the killer feature (Claude-scored 8-K extraction)
+    Day 5 — competitors        : recap of real BTC 8-Ks since trial started
+    Day 6 — endreminder        : honest "trial ends tomorrow" + what you keep on Pro
+
+NOTE: The day codes (welcome / day1_brief / day3_calculator / etc.) are
+preserved verbatim — they're the dedupe keys stored in
+trial_emails_sent_json. The "calculator" label is now semantic legacy;
+the email itself surfaces 8-K extraction.
 
 Industry baseline: a sequence like this lifts trial → paid conversion
 25-40% over the do-nothing baseline. No dark patterns — the day-6 email
@@ -145,102 +153,94 @@ def _first_name(sub: dict) -> str:
 
 
 def _render_welcome(sub: dict) -> tuple[str, str]:
-    """Day 0 — Welcome + 3-step setup checklist."""
+    """Day 0 — Welcome + value prop + 3-step setup pointing at watchlist + alerts."""
     first = _first_name(sub)
-    has_company = bool((sub.get("company_name") or "").strip())
-    has_ticker = bool((sub.get("ticker") or "").strip())
+    has_watchlist = bool(sub.get("watchlist_json"))
 
     body = f"""
     {_kicker("Welcome to Pro · Day 1 of 7")}
-    {_h1(f"Welcome to TSI Pro, {first}.")}
-    {_p("You've unlocked daily personalized briefings, Claude-scored filing intelligence, pre-announcement signals, board-ready quarterly reports, the treasury proposal wizard, and the full leaderboard. To get the most out of your 7-day trial, do these three things now — each takes under a minute:")}
+    {_h1(f"Welcome, {first}. Your edge is live.")}
+    {_p("Know the next BTC treasury purchase <strong style='color:#e5e7eb;'>before the 8-K hits Twitter</strong>. Real-time alerts on every public company buying Bitcoin — SEC filing to your inbox in under 60 seconds.")}
+    {_p("Three things to do right now — each takes under a minute:")}
 
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#111827;border:1px solid #1e2a3a;border-radius:12px;padding:8px 0;margin-bottom:24px;">
       <tr><td style="padding:10px 18px;border-bottom:1px solid #1e2a3a;">
         <p style="color:#e5e7eb;font-size:13px;margin:0;line-height:1.5;">
           <strong style="color:#0EA5E9;">1.</strong>
-          {"<span style='color:#10b981;'>✓</span> " if has_ticker else ""}
-          Set your company's ticker so the dashboard ranks you against peers.
+          {"<span style='color:#10b981;'>✓</span> " if has_watchlist else ""}
+          Add the tickers you trade to your watchlist — alerts fire only for those.
         </p>
       </td></tr>
       <tr><td style="padding:10px 18px;border-bottom:1px solid #1e2a3a;">
         <p style="color:#e5e7eb;font-size:13px;margin:0;line-height:1.5;">
           <strong style="color:#0EA5E9;">2.</strong>
-          {"<span style='color:#10b981;'>✓</span> " if has_company else ""}
-          Add 5 entities to your watchlist — they'll show up in tomorrow's briefing.
+          Connect Slack if you want alerts fastest — email and Telegram work too.
         </p>
       </td></tr>
       <tr><td style="padding:10px 18px;">
         <p style="color:#e5e7eb;font-size:13px;margin:0;line-height:1.5;">
-          <strong style="color:#0EA5E9;">3.</strong> Open the dashboard and read your verdict — it's the synthesized "what to do today" from all the data we ingested overnight.
+          <strong style="color:#0EA5E9;">3.</strong> Open <strong>/filings</strong> — the Claude-scored 8-K excerpts firing every cycle.
         </p>
       </td></tr>
     </table>
 
     {_button("Open dashboard", f"{DASHBOARD_URL}/dashboard")}
     """
-    return ("Welcome to TSI Pro — your 5-minute setup", _wrap(body, preheader="Set your ticker, add a watchlist, and open today's brief."))
+    return (
+        "Your TSI Pro trial is live — point it at your watchlist",
+        _wrap(body, preheader="Add tickers, pick your alert channel, open the filings feed."),
+    )
 
 
 def _render_day1_brief(sub: dict) -> tuple[str, str]:
-    """Day 1 — prove the daily value with a snapshot of what your dashboard caught."""
+    """Day 1 — prove the feed is live by recapping yesterday's tape."""
     first = _first_name(sub)
     body = f"""
     {_kicker("Day 2 of 7")}
-    {_h1(f"Your first brief landed this morning, {first}.")}
-    {_p("Every Pro user gets a personalized intelligence brief at 7am ET — synthesized from regulatory filings, on-chain data, and competitor activity ingested overnight.")}
-    {_p("Today's brief covers: <strong style=\"color:#e5e7eb;\">action signal, risk dashboard, what changed overnight, peer activity, week ahead</strong> — and the watchlist activity for any entities you're tracking.")}
-    {_p("Don't see it in your inbox? Check spam — and add briefing@quantedgeriskadvisory.com to your contacts so it never gets caught again.")}
+    {_h1(f"Yesterday in the BTC treasury tape, {first}.")}
+    {_p("Your first brief landed at 7am ET. It's the previous 24 hours of every 8-K, 10-Q, 10-K, on-chain whale move, and tracked-company purchase — Claude-scored and ranked by impact.")}
+    {_p("What it covers: <strong style='color:#e5e7eb;'>filings caught, signal flips, peer activity, what changed overnight.</strong> No filler, no Bitcoin-price chatter — just events that move the tape.")}
+    {_p("Don't see it? Check spam — add briefing@quantedgeriskadvisory.com to your contacts so it never gets caught again.")}
 
-    {_button("View today's brief", f"{DASHBOARD_URL}/dashboard")}
+    {_button("Open today's brief", f"{DASHBOARD_URL}/dashboard")}
 
     <p style="color:#4b5563;font-size:11px;margin:20px 0 0;line-height:1.5;">
-      <em>Tomorrow's email walks you through the most-missed Pro feature.</em>
+      <em>Tomorrow: the killer feature most users don't discover until day 3.</em>
     </p>
     """
     return (
-        f"Your first daily brief is ready, {first}",
-        _wrap(body, preheader="Synthesized intel — action signal, risk, peer activity, watchlist."),
+        "Yesterday in the BTC treasury tape",
+        _wrap(body, preheader="Every 8-K, signal flip, and peer move in the last 24 hours."),
     )
 
 
 def _render_day3_calculator(sub: dict) -> tuple[str, str]:
-    """Day 3 — surface the What-If Calculator (most-missed Pro tool)."""
-    first = _first_name(sub)
-    holdings = float(sub.get("btc_holdings") or 0)
-    suggested_buy = max(100, round(holdings * 0.5)) if holdings > 0 else 1000
-    company = (sub.get("company_name") or "your company").strip()
+    """Day 3 — surface the 8-K extraction moat (the killer feature).
 
+    Function name is legacy from when this email pitched the calculator —
+    kept for dedupe stability. Content is the Claude-scored 8-K extract.
+    """
     body = f"""
-    {_kicker("Day 4 of 7 · Most users discover this on day 3")}
-    {_h1(f"What if {company} bought {suggested_buy:,} BTC tomorrow?")}
-    {_p(f"The What-If Calculator models a hypothetical purchase against your current position and the live leaderboard. Most CFOs run their first scenario by day 3 of trial — usually right before a board meeting.")}
-    {_p("In one click you'll see:")}
+    {_kicker("Day 4 of 7 · The feature most users miss until now")}
+    {_h1("We read the 8-K so you don't have to.")}
+    {_p("When MSTR, Tesla, MARA, Metaplanet, or any of the ~200 tracked treasury companies files an 8-K, the pipeline catches it inside SEC EDGAR within seconds.")}
+    {_p("Claude reads the entire filing and surfaces only the BTC-relevant sentences with an impact score. You get the excerpt — not a 30-page PDF — pushed to your inbox, Telegram, and Slack <strong style='color:#e5e7eb;'>before the news reaches Twitter</strong>.")}
+    {_p("Median time from EDGAR filing to your alert: <strong style='color:#10b981;'>under 60 seconds</strong>. Trade the move, not the news.")}
 
-    <ul style="color:#9ca3af;font-size:14px;line-height:1.8;margin:0 0 24px 0;padding-left:18px;">
-      <li>Your new leaderboard rank after the purchase</li>
-      <li>Companies you'd overtake</li>
-      <li>How many BTC to reach the next position above you</li>
-      <li>P&amp;L scenarios across bear / current / bull / moon prices</li>
-      <li>Break-even price post-purchase</li>
-    </ul>
-
-    {_button(f"Model {suggested_buy:,} BTC scenario", f"{DASHBOARD_URL}/calculator")}
+    {_button("See the live filings feed", f"{DASHBOARD_URL}/filings")}
 
     <p style="color:#4b5563;font-size:11px;margin:20px 0 0;line-height:1.5;">
-      <em>Not the right number? Open the calculator and try your own.</em>
+      <em>Tomorrow: a recap of every BTC 8-K that filed since your trial started.</em>
     </p>
     """
     return (
-        "Most Pro users discover this on day 3",
-        _wrap(body, preheader="Model a hypothetical purchase and see your new rank in one click."),
+        "We read the 8-K so you don't have to",
+        _wrap(body, preheader="Claude-scored BTC excerpts in under 60s. The killer feature most users miss."),
     )
 
 
 def _render_day5_competitors(sub: dict, recent_purchases: list[dict]) -> tuple[str, str]:
-    """Day 5 — real competitor activity recap, value demonstration."""
-    first = _first_name(sub)
-
+    """Day 5 — recap of real BTC treasury 8-Ks since trial started."""
     if recent_purchases:
         rows = []
         for p in recent_purchases[:3]:
@@ -254,7 +254,7 @@ def _render_day5_competitors(sub: dict, recent_purchases: list[dict]) -> tuple[s
                 f'<tr><td style="padding:10px 18px;border-bottom:1px solid #1e2a3a;">'
                 f'<p style="color:#e5e7eb;font-size:13px;margin:0;line-height:1.5;">'
                 f'<strong>{company}</strong> bought {btc:,} BTC{usd_str}'
-                f'<br><span style="color:#6b7280;font-size:11px;">{ticker} · {date}</span>'
+                f'<br><span style="color:#6b7280;font-size:11px;">{ticker} · filed {date}</span>'
                 f'</p></td></tr>'
             )
         # Strip the trailing border on the last row
@@ -268,26 +268,26 @@ def _render_day5_competitors(sub: dict, recent_purchases: list[dict]) -> tuple[s
         )
     else:
         activity_block = _p(
-            "It was a quiet week for new purchases — but the dashboard still tracked "
-            "regulatory activity, signal updates, and price movement. The next purchase "
-            "wave is usually within 5 trading days of any major BTC price swing.",
+            "It was a quiet week for new BTC treasury 8-Ks — but the pipeline still "
+            "caught every regulatory event, signal flip, and price move. The next "
+            "purchase wave is usually within 5 trading days of any major BTC swing.",
             color="#9ca3af",
         )
 
     body = f"""
     {_kicker("Day 6 of 7")}
-    {_h1("Competitor activity since you started your trial")}
-    {_p("Here's what real corporate Bitcoin treasuries did over the last few days — every one of these would have triggered a real-time alert in your inbox / Telegram / Slack on Pro:")}
+    {_h1("Since your trial started, this hit the tape:")}
+    {_p("Every one of these BTC purchases triggered a real-time alert in your inbox / Telegram / Slack — Claude-scored excerpt, impact rank, all under 60 seconds from the EDGAR filing:")}
 
     {activity_block}
 
-    {_p("Want this for your team? Pro stays at $19/mo after your trial ends tomorrow. Team adds 5 seats + Slack integration at $99/mo.")}
+    {_p("Want to keep catching them? Pro stays at $19/mo after tomorrow. Team adds 5 seats + Slack channel delivery at $99/mo.")}
 
     {_button("Open competitive intel", f"{DASHBOARD_URL}/competitive")}
     """
     return (
-        "Your competitors made these moves this week",
-        _wrap(body, preheader="Real purchases. Pro alerts you within 15 minutes of each filing."),
+        "Every BTC treasury 8-K that fired this week",
+        _wrap(body, preheader="The alerts that hit your inbox since you started — and what they moved."),
     )
 
 
@@ -303,14 +303,13 @@ def _render_day6_endreminder(sub: dict) -> tuple[str, str]:
 
     <p style="color:#e5e7eb;font-size:13px;font-weight:600;margin:24px 0 8px;">What you keep on Pro:</p>
     <ul style="color:#9ca3af;font-size:13px;line-height:1.8;margin:0 0 24px 0;padding-left:18px;">
-      <li>Daily personalized briefings (instead of the free weekly summary)</li>
-      <li>Filing intelligence — Claude-scored 8-K, 10-Q, 10-K excerpts within minutes</li>
-      <li>Pre-announcement signals — cross-stream correlation across 7 data sources</li>
-      <li>Real-time alerts via email + Telegram + Slack</li>
-      <li>Board-ready quarterly PDF with peer comp + filing precedents</li>
-      <li>Treasury adoption proposal wizard (for advisors pitching clients)</li>
-      <li>Competitive intel + NAV premium + Peer benchmark + What-If calculator</li>
-      <li>Full leaderboard + REST API + Google Sheets add-on</li>
+      <li><strong style="color:#e5e7eb;">Sub-60-second 8-K alerts</strong> across ~200 BTC treasury companies (US + Japan + Korea + EU)</li>
+      <li><strong style="color:#e5e7eb;">Claude-scored excerpts</strong> — skip the PDF, read the 3 sentences that matter</li>
+      <li><strong style="color:#e5e7eb;">Pre-announcement signals</strong> across 7 data streams (filings, on-chain, social, news)</li>
+      <li>Real-time delivery via email + Telegram + Slack</li>
+      <li>10-Q / 10-K coverage (the FASB fair-value disclosures that move EPS)</li>
+      <li>Daily intelligence brief synthesized at 7am ET</li>
+      <li>REST API + Google Sheets add-on for programmatic access</li>
     </ul>
 
     {_button("Manage subscription", f"{DASHBOARD_URL}/company")}
