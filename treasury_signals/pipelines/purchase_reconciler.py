@@ -331,6 +331,8 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
                 "filing_url": best_url,
                 "was_predicted": False,
                 "source": f"Confirmed: {source_type} (rank {source_rank})",
+                "direction": purchase.get("direction"),
+                "direction_confidence": purchase.get("direction_confidence"),
             }, on_conflict="purchase_id").execute()
 
             # Mark pending as confirmed
@@ -373,6 +375,8 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
                     "filing_url": filing_url,
                     "was_predicted": existing.get("was_predicted", False),
                     "source": f"Upgraded: {source_type} (rank {source_rank}, was rank {existing_rank})",
+                    "direction": purchase.get("direction"),
+                    "direction_confidence": purchase.get("direction_confidence"),
                 }, on_conflict="purchase_id").execute()
 
                 logger.info(f"Reconciler: ⬆️ UPGRADED — {company}: {source_type} (rank {source_rank}) replaced rank {existing_rank}")
@@ -401,6 +405,8 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
             "filing_url": filing_url,
             "was_predicted": False,
             "source": f"{source_type} (rank {source_rank})",
+            "direction": purchase.get("direction"),
+            "direction_confidence": purchase.get("direction_confidence"),
         }, on_conflict="purchase_id").execute()
 
         logger.info(f"Reconciler: ✅ CONFIRMED — {company} ({ticker}): {btc_amount:,.0f} BTC via {source_type}")

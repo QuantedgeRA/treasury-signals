@@ -336,6 +336,21 @@ def check_edgar_filings(days_back=1):
             usd_amount = _extract_usd_amount(text)
             event_type = _classify_event(text)
 
+            # Direction classifier — tags the filing as pure_buy / raise_then_buy /
+            # convertible / sale / unclear so traders know which way the stock
+            # is likely to move. See pipelines/direction_classifier.py for the
+            # pattern library. Defensive: never crash the EDGAR scan on a
+            # classifier hiccup, since direction is enrichment, not core data.
+            direction = None
+            direction_confidence = None
+            try:
+                from treasury_signals.pipelines.direction_classifier import classify_direction
+                dir_result = classify_direction(text)
+                direction = dir_result.direction
+                direction_confidence = dir_result.confidence
+            except Exception as e:
+                logger.debug(f"  Direction classifier error: {e}")
+
             # Store in edgar_filings table
             filing_data = {
                 'accession_number': accession,
@@ -348,6 +363,8 @@ def check_edgar_filings(days_back=1):
                 'usd_amount': usd_amount,
                 'filing_url': filing_url[:500],
                 'processed_at': datetime.now().isoformat(),
+                'direction': direction,
+                'direction_confidence': direction_confidence,
             }
             _store_filing(filing_data)
             processed.add(accession)
@@ -368,9 +385,11 @@ def check_edgar_filings(days_back=1):
                     "filing_url": filing_url,
                     "source": f"SEC EDGAR 8-K (real-time)",
                     "notes": f"Accession: {accession}. EDGAR entity: {company_name}",
+                    "direction": direction,
+                    "direction_confidence": direction_confidence,
                 }
                 result = reconcile_and_save(purchase, source_type="edgar", is_new_entrant=False)
-                logger.info(f"  EDGAR → Reconciler: {company_name} — {result['action']}")
+                logger.info(f"  EDGAR → Reconciler: {company_name} — {result['action']} (direction: {direction})")
 
             # Route sale-type filings through the sale reconciler
             elif event_type == 'sale' and btc_amount > 0:
