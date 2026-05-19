@@ -93,6 +93,8 @@ def process_and_alert():
         return [], 0
     signals = []
     alerts_sent = 0
+    from treasury_signals.pipelines.exec_signal_detector import detect_exec_signal
+
     for tweet in unprocessed:
         result = classify_tweet(
             tweet_text=tweet['tweet_text'],
@@ -100,6 +102,24 @@ def process_and_alert():
             created_at=tweet['created_at'],
             is_reply=tweet.get('is_reply', False),
         )
+
+        # CEO pattern detector — overrides the generic classifier when a
+        # known executive's tweet matches a registered pre-announcement
+        # pattern (Saylor tracker, Mallers acquisition, etc.). Boosts the
+        # score to detector confidence so high-conviction patterns cross
+        # the 60 alert threshold even when the classifier underweights them.
+        exec_signal = detect_exec_signal(tweet['author_username'], tweet['tweet_text'])
+        if exec_signal.fired and exec_signal.confidence > result['score']:
+            result['score'] = exec_signal.confidence
+            result['is_signal'] = True
+            result.setdefault('reasons', []).insert(
+                0, f"PATTERN [{exec_signal.pattern}]: {exec_signal.reasoning}"
+            )
+            logger.info(
+                f"Exec pattern fired: @{tweet['author_username']} → "
+                f"{exec_signal.pattern} (conf {exec_signal.confidence})"
+            )
+
         mark_processed(
             tweet_id=tweet['tweet_id'],
             is_signal=result['is_signal'],
