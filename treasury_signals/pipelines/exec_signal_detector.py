@@ -57,6 +57,39 @@ class ExecSignal:
     reasoning: str = ""            # short human-readable explanation
 
 
+# ─── Pattern context — for alert templates ────────────────────────────────
+# Maps pattern name → marketing-grade narrative shown in pre-announcement
+# alerts. The historical/lead numbers are CLAIMS until backtested against
+# our own data; keep wording cautious. Imported by telegram_bot.send_alert.
+
+PATTERN_CONTEXT = {
+    "saylor_tracker": {
+        "title": "SAYLOR TRACKER SIGNAL",
+        "company": "Strategy (MSTR)",
+        "historical": "Historically preceded MSTR purchase 8-Ks with 5-7 day lead time. (107/107 in external dataset; not yet validated against our own historical tweets.)",
+        "expected_lead": "5-7 days",
+    },
+    "mallers_acquisition": {
+        "title": "MALLERS ACQUISITION SIGNAL",
+        "company": "Twenty One Capital (XXI)",
+        "historical": "Twenty One Capital CEO posts often accompany or briefly precede 8-K filings.",
+        "expected_lead": "Hours to 1 day",
+    },
+    "metaplanet_purchase": {
+        "title": "METAPLANET PURCHASE SIGNAL",
+        "company": "Metaplanet (3350.T)",
+        "historical": "Metaplanet account posts have historically tracked closely with EDINET filings.",
+        "expected_lead": "1-3 days",
+    },
+    "mara_production_update": {
+        "title": "MARA PRODUCTION SIGNAL",
+        "company": "MARA Holdings (MARA)",
+        "historical": "MARA monthly production-update tweet typically precedes the official 8-K.",
+        "expected_lead": "Hours to 1 day",
+    },
+}
+
+
 # ─── Saylor — the canonical signal ────────────────────────────────────────
 # Historical: 107/107 MSTR purchase announcements preceded by a tweet
 # matching one of these patterns. Typical lead time 5-7 days.

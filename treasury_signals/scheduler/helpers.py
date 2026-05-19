@@ -112,6 +112,7 @@ def process_and_alert():
         if exec_signal.fired and exec_signal.confidence > result['score']:
             result['score'] = exec_signal.confidence
             result['is_signal'] = True
+            result['pattern'] = exec_signal.pattern
             result.setdefault('reasons', []).insert(
                 0, f"PATTERN [{exec_signal.pattern}]: {exec_signal.reasoning}"
             )
@@ -136,6 +137,7 @@ def process_and_alert():
                 'label': get_signal_label(result['score']),
                 'reasons': result['reasons'],
                 'dimensions': result.get('dimensions', {}),
+                'pattern': result.get('pattern', ''),
             }
             signals.append(signal)
             logger.info(f"Signal: @{tweet['author_username']} {result['score']}/100 — {get_dimension_breakdown(result.get('dimensions', {}))}")

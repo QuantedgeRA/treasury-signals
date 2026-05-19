@@ -69,6 +69,48 @@ def send_to_paid(message):
     return False
 
 
+def _build_pattern_message(signal, *, is_free=False, is_delayed=False):
+    """Pattern-specific alert template — used when signal['pattern'] is set
+    by exec_signal_detector. Returns None if no recognized pattern, so the
+    caller can fall back to the generic template."""
+    pattern = signal.get('pattern')
+    if not pattern:
+        return None
+
+    # Lazy import to avoid a circular dependency if anything in the
+    # detector module ever imports from alerts.
+    from treasury_signals.pipelines.exec_signal_detector import PATTERN_CONTEXT
+    ctx = PATTERN_CONTEXT.get(pattern)
+    if not ctx:
+        return None
+
+    header_prefix = "⚠️ "
+    delay_tag = " (Delayed 1hr)" if is_delayed else ""
+    text_limit = 200 if is_free else 500
+    ellipsis = '...' if (is_free and len(signal['text']) > text_limit) else ''
+
+    msg = f"""
+{header_prefix}{ctx['title']}{delay_tag}
+
+🎯 Pattern: {pattern}  ·  Score: {signal['score']}/100
+🏢 {ctx['company']}
+📈 {ctx['historical']}
+⏱  Expected lead: {ctx['expected_lead']}
+
+👤 @{signal['author']} ({signal['company']})
+📅 {signal['created_at']}
+
+💬 Tweet:
+{signal['text'][:text_limit]}{ellipsis}
+
+🔗 {signal.get('url', '')}
+"""
+    if is_free:
+        msg += "\n🔓 Get instant alerts on all patterns → upgrade to PRO\n"
+    msg += "\n---\nTreasury Signal Intelligence"
+    return msg
+
+
 def send_alert(signal, delay_free=True):
     """
     Send a purchase signal alert.
@@ -77,7 +119,15 @@ def send_alert(signal, delay_free=True):
     FREE channel: gets only Saylor signals, with 1 hour delay
     """
 
-    message = f"""
+    # When the exec_signal_detector tagged a known pattern, use the
+    # pattern-specific template — names the pattern, provides historical
+    # context, and tells the trader what lead time to expect. Otherwise
+    # fall back to the generic SIGNAL DETECTED format.
+    pattern_msg = _build_pattern_message(signal)
+    if pattern_msg:
+        message = pattern_msg
+    else:
+        message = f"""
 ⚠️ PURCHASE SIGNAL DETECTED
 
 {signal['label']}  Score: {signal['score']}/100
@@ -108,7 +158,12 @@ Treasury Purchase Signal Intelligence
 
     if is_saylor and signal['score'] >= 60:
         if delay_free:
-            free_message = f"""
+            # Prefer the pattern-named template when the detector tagged
+            # the signal. Falls back to the generic delayed format if no
+            # pattern (e.g., generic-classifier signal from @saylor).
+            free_message = _build_pattern_message(signal, is_free=True, is_delayed=True)
+            if not free_message:
+                free_message = f"""
 ⚠️ PURCHASE SIGNAL DETECTED (Delayed)
 
 {signal['label']}  Score: {signal['score']}/100
