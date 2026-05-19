@@ -166,6 +166,21 @@ def run_heavy_maintenance(state: ScanState):
     except Exception as e:
         logger.debug(f"Shares sync: {e}")
 
+    # mNAV daily snapshot — depends on freshly synced shares_outstanding above.
+    # Persists one row per public treasury company per day into mnav_history
+    # (migration 0014). Defensive: never let mNAV errors block the rest of
+    # the heavy-maintenance phase.
+    try:
+        from treasury_signals.pipelines.mnav_calculator import compute_and_persist_all_mnav
+        mnav_stats = compute_and_persist_all_mnav()
+        if mnav_stats.get("persisted", 0) > 0:
+            logger.info(
+                f"mNAV daily snapshot: {mnav_stats['persisted']} persisted, "
+                f"{mnav_stats['skipped']} skipped, {mnav_stats['errors']} errors"
+            )
+    except Exception as e:
+        logger.debug(f"mNAV daily snapshot: {e}")
+
 
 # ─── Primary source data collection ────────────────────────────────────────
 
