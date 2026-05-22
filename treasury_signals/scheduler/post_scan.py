@@ -181,6 +181,54 @@ def run_heavy_maintenance(state: ScanState):
     except Exception as e:
         logger.debug(f"mNAV daily snapshot: {e}")
 
+    # mNAV alerts — compare today's snapshot to 7-day-prior to detect
+    # premium compression, premium expansion, and new-discount crossings.
+    # Must run AFTER compute_and_persist_all_mnav so today's row exists.
+    try:
+        from treasury_signals.alerts.mnav_alerts import check_mnav_alerts
+        alert_stats = check_mnav_alerts()
+        if alert_stats.get("alerts_fired", 0) > 0:
+            logger.info(
+                f"mNAV alerts: {alert_stats['alerts_fired']} fired, "
+                f"types={alert_stats.get('by_type', {})}"
+            )
+    except Exception as e:
+        logger.debug(f"mNAV alerts: {e}")
+
+    # ATM-filing detector — scans S-3 / S-3/A / 424B5 / 424B7 across every
+    # public treasury issuer. Funds-side complement to the 8-K purchase
+    # detector: an ATM takedown filing is the leading indicator before the
+    # BTC buy lands in the next 8-K. Migration 0015 + scanners/atm_filing_detector.
+    # Morning-only because EDGAR submissions are batched daily by the SEC.
+    try:
+        from treasury_signals.scanners.atm_filing_detector import scan_atm_filings
+        atm_stats = scan_atm_filings()
+        if atm_stats.get("new_detections", 0) > 0:
+            logger.info(
+                f"ATM scanner: {atm_stats['new_detections']} new "
+                f"({atm_stats.get('takedowns', 0)} takedowns, "
+                f"{atm_stats.get('active', 0)} active, "
+                f"{atm_stats.get('shelves', 0)} shelves)"
+            )
+    except Exception as e:
+        logger.debug(f"ATM scanner: {e}")
+
+    # Treasury-equity volume tracker — joins yfinance volume spikes against
+    # atm_filings to emit "issuance underway, BTC buy imminent" signals for
+    # any treasury equity (generalization of MSTR-only strc_tracker).
+    # Must run AFTER atm scanner so the join sees same-day filings.
+    try:
+        from treasury_signals.scanners.equity_volume_tracker import scan_treasury_equity_volume
+        ev_stats = scan_treasury_equity_volume()
+        if ev_stats.get("signals", 0) > 0:
+            logger.info(
+                f"Equity volume: {ev_stats['signals']} signals, "
+                f"{ev_stats.get('suppressed', 0)} suppressed (no ATM), "
+                f"scanned {ev_stats.get('scanned', 0)}"
+            )
+    except Exception as e:
+        logger.debug(f"Equity volume tracker: {e}")
+
 
 # ─── Primary source data collection ────────────────────────────────────────
 
