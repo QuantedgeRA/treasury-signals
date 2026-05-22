@@ -141,6 +141,15 @@ class EntityStore:
         # Strip non-ASCII from ticker too
         clean_ticker = re.sub(r'[^\x20-\x7E]', '', ticker).strip()
         clean_ticker = re.sub(r'[^A-Za-z0-9.\-]', '', clean_ticker).upper()
+        # Strip Bloomberg-style `.US` suffix at ingest. BitcoinTreasuries.net
+        # uses MARA.US / RIOT.US / etc. — yfinance + EDGAR want the bare form.
+        # Without this, duplicate rows accumulate forever (one written by this
+        # sync as MARA.US, one written by SEC-aware tools as MARA), because
+        # the post-sync ticker_validator can't rename across the UNIQUE
+        # constraint silently. Only `.US` is stripped: other exchange suffixes
+        # (`.T`, `.HK`, `.L`, etc.) carry real meaning for foreign listings.
+        if clean_ticker.endswith(".US") and len(clean_ticker) > 3:
+            clean_ticker = clean_ticker[:-3]
         if clean_ticker:
             entity["ticker"] = clean_ticker
             ticker = clean_ticker

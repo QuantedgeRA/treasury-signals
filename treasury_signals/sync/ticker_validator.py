@@ -218,13 +218,126 @@ def _validate_ticker_yahoo(ticker):
         return None
 
 
+# Columns the validator may safely overwrite when merging a duplicate ticker
+# row into its canonical sibling. Identity (id, ticker, company, entity_type,
+# created_at) and immutable-by-nature columns are NOT in this list — they
+# stay with the surviving row.
+_MERGE_OVERRIDE_COLUMNS = (
+    "btc_holdings", "btc_holdings_recent", "shares_outstanding", "stock_price",
+    "market_cap", "country", "category", "last_updated", "data_freshness",
+    "source_url", "icon_url", "twitter_handle", "website", "purchase_history",
+    "first_seen", "last_seen_in_source", "data_source",
+)
+
+
+def _parse_dt(s):
+    """Parse an ISO-ish timestamp string into a comparable datetime.
+
+    Returns datetime.min on failure so missing/bad values sort as "very old".
+    """
+    from datetime import datetime
+    if not s:
+        return datetime.min
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except Exception:
+        return datetime.min
+
+
 def _update_ticker(entity_id, old_ticker, new_ticker, company):
-    """Update ticker in both treasury_companies and confirmed_purchases."""
+    """Rename a treasury_companies row's ticker, auto-merging on collision.
+
+    When the destination ticker already exists (UNIQUE constraint on
+    treasury_companies.ticker), this used to silently catch the postgrest
+    APIError and return False — which let duplicate (BARE, BARE.US) rows
+    accumulate forever. Now we detect the collision pre-flight and merge:
+
+      1. Identify which row (source or target) has fresher last_updated.
+      2. Copy that row's live columns onto the SURVIVING row (target —
+         the one that already has the bare/correct ticker).
+      3. Repoint FK-like references (confirmed_purchases.ticker etc.) from
+         the soon-to-be-deleted source's old ticker to the new ticker.
+      4. Delete the source row.
+
+    Returns True on a successful rename OR merge, False otherwise.
+    """
+    if not new_ticker or old_ticker == new_ticker:
+        return False
+
+    # Pre-flight: does the destination ticker already exist?
+    try:
+        existing = (
+            supabase.table("treasury_companies")
+            .select("*")
+            .eq("ticker", new_ticker)
+            .limit(1)
+            .execute()
+        )
+    except Exception as e:
+        logger.debug(f"  Collision-check error for {company}: {e}")
+        existing = None
+
+    target = (existing.data[0] if existing and existing.data else None)
+
+    if target and target.get("id") != entity_id:
+        # COLLISION — merge source row into target, then delete source.
+        try:
+            source = (
+                supabase.table("treasury_companies")
+                .select("*")
+                .eq("id", entity_id)
+                .limit(1)
+                .execute()
+            ).data[0]
+        except Exception as e:
+            logger.warning(f"  Merge: source fetch failed for {company}: {e}")
+            return False
+
+        src_dt = _parse_dt(source.get("last_updated"))
+        tgt_dt = _parse_dt(target.get("last_updated"))
+        fresher = source if src_dt >= tgt_dt else target
+
+        # Build a patch: only fields where the fresher row has a non-null value.
+        patch = {}
+        for col in _MERGE_OVERRIDE_COLUMNS:
+            if col not in fresher:
+                continue
+            val = fresher.get(col)
+            if val is None:
+                continue
+            patch[col] = val
+
+        try:
+            if patch:
+                supabase.table("treasury_companies").update(patch).eq(
+                    "id", target["id"]
+                ).execute()
+            # Repoint references in confirmed_purchases to the surviving ticker.
+            if old_ticker:
+                supabase.table("confirmed_purchases").update(
+                    {"ticker": new_ticker}
+                ).eq("ticker", old_ticker).execute()
+            # Delete the source row last so partial failures leave the target
+            # intact + the source still findable for retry.
+            supabase.table("treasury_companies").delete().eq(
+                "id", entity_id
+            ).execute()
+            logger.info(
+                f"  MERGED: {company} — '{old_ticker}' into existing '{new_ticker}' "
+                f"(fresher={'SRC' if fresher is source else 'TGT'}, {len(patch)} cols)"
+            )
+            return True
+        except Exception as e:
+            logger.warning(
+                f"  Merge failed for {company} ({old_ticker} -> {new_ticker}): {e}"
+            )
+            return False
+
+    # No collision — simple rename.
     try:
         supabase.table("treasury_companies").update(
             {"ticker": new_ticker}
         ).eq("id", entity_id).execute()
-
         if old_ticker:
             supabase.table("confirmed_purchases").update(
                 {"ticker": new_ticker}
