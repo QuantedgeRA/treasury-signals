@@ -56,24 +56,28 @@ ELIGIBLE_PLANS = {"pro", "team", "enterprise"}
 
 
 def _fetch_eligible_subscribers() -> list[dict]:
-    """Pro+ subscribers with a non-empty watchlist."""
-    if not supabase:
-        return []
+    """Pro+ subscribers with a non-empty watchlist.
+
+    Uses the canonical subscriber_manager helper rather than querying
+    treasury_companies.subscribers directly — the helper handles the
+    `watchlist_json` column (raw schema) → `watchlist` field (parsed list)
+    translation in one place. Filters to Pro+ plans afterwards (the helper
+    accepts a single-plan filter or none).
+    """
     try:
-        res = (
-            supabase.table("subscribers")
-            .select("id, email, name, plan, watchlist, telegram_chat_id")
-            .in_("plan", list(ELIGIBLE_PLANS))
-            .execute()
-        )
+        from treasury_signals.storage.subscriber_manager import subscribers as subscriber_store
+        all_active = subscriber_store.get_active_subscribers()
     except Exception as e:
         logger.warning(f"divergence_digest: subscriber fetch failed: {e}")
         return []
 
     out = []
-    for row in (res.data or []):
+    for row in (all_active or []):
+        plan = (row.get("plan") or "").lower()
+        if plan not in ELIGIBLE_PLANS:
+            continue
+        # `watchlist` is populated by the helper from watchlist_json
         wl = row.get("watchlist") or []
-        # watchlist may be stored as JSON string in some legacy rows
         if isinstance(wl, str):
             try:
                 import json
