@@ -229,6 +229,23 @@ def run_heavy_maintenance(state: ScanState):
     except Exception as e:
         logger.debug(f"Equity volume tracker: {e}")
 
+    # Weekly Pro-tier digest: per-subscriber filtered list of open
+    # btc_holdings_divergence_alerts on their watchlist tickers. Mondays
+    # UTC only — once per week. The alerts table is populated continuously
+    # by the reconciler; this just opens the per-week emit window.
+    from datetime import datetime as _dt
+    if _dt.utcnow().weekday() == 0:  # Monday
+        try:
+            from treasury_signals.alerts.divergence_digest import send_weekly_digest_to_all
+            dg_stats = send_weekly_digest_to_all()
+            if dg_stats.get("sent", 0) > 0:
+                logger.info(
+                    f"Divergence digest (weekly): {dg_stats['sent']} sent, "
+                    f"{dg_stats.get('skipped_no_divergence', 0)} skipped (no divergences)"
+                )
+        except Exception as e:
+            logger.debug(f"Divergence digest weekly: {e}")
+
 
 # ─── Primary source data collection ────────────────────────────────────────
 

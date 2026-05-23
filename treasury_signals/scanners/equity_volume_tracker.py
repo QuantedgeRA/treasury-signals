@@ -271,6 +271,41 @@ def _classify(ratio: float, dollar_vol_m: float, has_active_atm: bool) -> tuple[
     return "NORMAL", False, f"Volume {ratio}x average (${dollar_vol_m}M). Normal trading."
 
 
+def _persist_signal(s: EquityVolumeSignal) -> None:
+    """Upsert one signal into equity_volume_signals (migration 0017).
+
+    Powers the customer-facing /signals dashboard page. Same-day re-runs
+    update in place via UNIQUE(ticker, signal_date). Errors are swallowed
+    so a Supabase hiccup never breaks the Telegram alert path.
+    """
+    if not supabase:
+        return
+    try:
+        supabase.table("equity_volume_signals").upsert(
+            {
+                "ticker": s.ticker,
+                "company": s.company,
+                "signal_date": s.date,
+                "level": s.level,
+                "is_signal": bool(s.is_signal),
+                "volume_ratio": s.volume_ratio,
+                "volume": int(s.volume),
+                "avg_volume": int(s.avg_volume),
+                "dollar_volume_m": s.dollar_volume_m,
+                "avg_dollar_volume_m": s.avg_dollar_volume_m,
+                "price": s.price,
+                "has_active_atm": bool(s.has_active_atm),
+                "atm_capacity_usd": s.atm_capacity_usd,
+                "atm_status": s.atm_status,
+                "message": s.message,
+                "components": {},
+            },
+            on_conflict="ticker,signal_date",
+        ).execute()
+    except Exception as e:
+        logger.debug(f"equity_vol persist failed for {s.ticker}: {e}")
+
+
 def _send_telegram_alert(s: EquityVolumeSignal) -> None:
     if not s.is_signal:
         return
@@ -382,6 +417,12 @@ def scan_treasury_equity_volume() -> dict:
         by_level[level] = by_level.get(level, 0) + 1
         if level == "SUPPRESSED":
             suppressed += 1
+
+        # Persist every signal (including NORMAL) so the dashboard has a
+        # complete daily view. Migration 0017 created equity_volume_signals
+        # with UNIQUE(ticker, signal_date) so same-day re-runs upsert cleanly.
+        _persist_signal(sig)
+
         if is_signal:
             signals += 1
             try:
