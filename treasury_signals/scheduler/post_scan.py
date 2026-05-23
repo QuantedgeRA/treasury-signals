@@ -246,6 +246,36 @@ def run_heavy_maintenance(state: ScanState):
         except Exception as e:
             logger.debug(f"Divergence digest weekly: {e}")
 
+    # Backtest reactions backfill — compute equity reactions on new
+    # confirmed_purchases that don't have a backtest_reactions row yet.
+    # Powers the public /backtest landing-page asset. yfinance is slow +
+    # rate-limited, so this runs once per morning (heavy_maintenance).
+    # Idempotent: upserts on (ticker, filing_date); re-running same day
+    # is a no-op.
+    try:
+        import subprocess
+        # Use the script as a one-shot so its argument parsing + sys.path
+        # setup work identically to a manual invocation. The script itself
+        # exits cleanly on success/failure and writes to the same logger.
+        from pathlib import Path as _Path
+        script_path = _Path(__file__).resolve().parent.parent.parent / "scripts" / "backfill_backtest_reactions.py"
+        if script_path.exists():
+            result = subprocess.run(
+                ["python", str(script_path), "--apply"],
+                capture_output=True,
+                text=True,
+                timeout=600,  # 10 min cap — yfinance can be slow
+            )
+            if result.returncode == 0:
+                # Print stats from the script's stdout summary
+                for line in result.stdout.splitlines()[-6:]:
+                    if line.strip():
+                        logger.info(f"  backtest: {line.strip()}")
+            else:
+                logger.debug(f"Backtest backfill returned {result.returncode}: {result.stderr[:200]}")
+    except Exception as e:
+        logger.debug(f"Backtest backfill: {e}")
+
 
 # ─── Primary source data collection ────────────────────────────────────────
 
