@@ -357,7 +357,19 @@ def resolve_ticker(ticker: str) -> Optional[ResolveResult]:
 
 
 def _create_divergence_alert(result: ResolveResult) -> Optional[int]:
-    """Insert a divergence_alert row. Returns the new row id, or None on failure."""
+    """Upsert a divergence_alert row per ticker. Returns the row id.
+
+    Dedupe strategy: at most ONE 'open' alert per ticker exists at any
+    time. When reconcile_ticker runs again on the same ticker and a
+    divergence is still present, we UPDATE the existing open alert
+    in place (refreshes source_values + spread + detected_at) instead
+    of inserting a new row. This prevents the alerts table from
+    ballooning when treasury_sync runs the reconciler on each cycle.
+
+    When the divergence eventually clears (sources converge), the
+    open alert is auto-resolved by _maybe_resolve_divergence_alert()
+    called from reconcile_ticker.
+    """
     if not supabase:
         return None
     source_values = {
@@ -380,17 +392,57 @@ def _create_divergence_alert(result: ResolveResult) -> Optional[int]:
         "resolved_source": result.resolved_source,
         "resolved_trust_score": result.resolved_trust,
         "status": "open",
+        "detected_at": _now_utc().isoformat(),
     }
+
+    # Look for an existing open alert for this ticker. If present, UPDATE
+    # in place so we don't create duplicates each reconcile cycle.
     try:
+        existing = (
+            supabase.table("btc_holdings_divergence_alerts")
+            .select("id")
+            .eq("ticker", result.ticker)
+            .eq("status", "open")
+            .order("detected_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+    except Exception:
+        existing = None
+
+    open_id = existing.data[0]["id"] if (existing and existing.data) else None
+
+    try:
+        if open_id is not None:
+            supabase.table("btc_holdings_divergence_alerts").update(payload).eq(
+                "id", open_id
+            ).execute()
+            return open_id
         res = supabase.table("btc_holdings_divergence_alerts").insert(payload).execute()
         return (res.data[0]["id"] if res.data else None)
     except Exception as e:
-        logger.warning(f"reconciler: divergence alert insert failed for {result.ticker}: {e}")
+        logger.warning(f"reconciler: divergence alert upsert failed for {result.ticker}: {e}")
         capture_exception(e, context={
             "where": "btc_holdings_reconciler._create_divergence_alert",
             "ticker": result.ticker,
         })
         return None
+
+
+def _maybe_resolve_open_alert(ticker: str) -> None:
+    """When a ticker's sources converge and no longer diverge, close any
+    open alert row so it stops appearing in widgets/dashboards.
+
+    Called from reconcile_ticker on the no-divergence path.
+    """
+    if not supabase:
+        return
+    try:
+        supabase.table("btc_holdings_divergence_alerts").update(
+            {"status": "auto_resolved", "acknowledged_at": _now_utc().isoformat()}
+        ).eq("ticker", ticker).eq("status", "open").execute()
+    except Exception as e:
+        logger.debug(f"reconciler: auto-resolve open alert for {ticker}: {e}")
 
 
 def _send_telegram_divergence_alert(result: ResolveResult, alert_id: Optional[int]) -> None:
@@ -477,6 +529,12 @@ def reconcile_ticker(ticker: str, *, send_alerts: bool = True) -> Optional[Resol
         alert_id = _create_divergence_alert(result)
         if send_alerts:
             _send_telegram_divergence_alert(result, alert_id)
+    else:
+        # No divergence detected this run — auto-close any prior open alert
+        # so the divergence stops appearing in widgets/digests once sources
+        # have converged. Status 'auto_resolved' (vs 'acknowledged') makes
+        # the audit log distinguish human-triaged from auto-cleared events.
+        _maybe_resolve_open_alert(ticker)
 
     _persist_resolved(result, alert_id)
 
