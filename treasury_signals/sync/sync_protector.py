@@ -1,11 +1,21 @@
 """
-sync_protector.py — Protects primary source data from aggregator overwrites
-============================================================================
-After treasury_sync.py runs (which uses CoinGecko + BitcoinTreasuries.net),
-this module restores any BTC holdings that were overwritten by aggregator data
-when the entity has higher-priority primary source data.
+sync_protector.py — preserves the legacy `data_source` metadata across syncs.
 
-Priority order (highest to lowest):
+ROLE CHANGE (2026-05-23, post-migration-0016)
+=============================================
+This module USED to be the trust-hierarchy enforcer: snapshot non-aggregator
+btc_holdings before treasury_sync ran, restore them after. That responsibility
+has moved to pipelines/btc_holdings_reconciler.py, which computes the
+canonical btc_holdings value from attributed observations using a deterministic
+trust hierarchy + staleness penalty.
+
+sync_protector's remaining job: preserve the legacy `data_source` column
+(used for analytics + the existing freshness UI) so it doesn't get
+wholesale-stamped to 'aggregator' on every sync. btc_holdings is NO LONGER
+restored here — the reconciler owns it.
+
+Trust hierarchy (deprecated for btc_holdings; kept here for data_source
+analytics only):
   100 = sec_filing (SEC EDGAR)
    90 = regulatory_filing (SEDAR, EDINET, DART, RNS, etc.)
    85 = etf_issuer (iShares, Fidelity, Grayscale websites)
@@ -102,24 +112,19 @@ def protect_primary_data():
 
                 current = result.data[0]
 
-                # If aggregator sync overwrote our primary source data, restore it
+                # Post-0016 behavior: only restore the data_source / source_updated_at
+                # METADATA. btc_holdings is owned by the reconciler now — touching it
+                # here would clobber the trust-resolved value. The reconciler reads
+                # observations from btc_holdings_observations to compute the canonical
+                # btc_holdings; data_source on treasury_companies is kept as a legacy
+                # analytics field for the existing freshness UI.
                 if current.get('data_source') == 'aggregator' or current.get('data_source') is None:
                     supabase.table("treasury_companies").update({
-                        'btc_holdings': snap['btc_holdings'],
                         'data_source': snap['data_source'],
                         'source_updated_at': snap['source_updated_at'],
                     }).eq("id", entity_id).execute()
                     restored += 1
-                    logger.debug(f"  Restored: {snap['company']} — {snap['btc_holdings']:,} BTC [{snap['data_source']}]")
-
-                # If the sync somehow set it to aggregator but btc changed, still restore primary
-                elif current.get('btc_holdings') != snap['btc_holdings'] and current.get('data_source') == 'aggregator':
-                    supabase.table("treasury_companies").update({
-                        'btc_holdings': snap['btc_holdings'],
-                        'data_source': snap['data_source'],
-                        'source_updated_at': snap['source_updated_at'],
-                    }).eq("id", entity_id).execute()
-                    restored += 1
+                    logger.debug(f"  Restored data_source: {snap['company']} → {snap['data_source']}")
 
     except Exception as e:
         logger.debug(f"Sync protector restore error: {e}")

@@ -236,6 +236,23 @@ def fix_entity_names(supabase_client=None):
                 "btc_holdings": best_btc,
             }).eq("id", row["id"]).execute()
             logger.info(f"  Name fix: '{current_name[:20]}' → '{clean_name}' ({best_btc:,} BTC)")
+            # Record observation so the reconciler treats this value as a
+            # bitcointreasuries observation. Source page is the same as
+            # treasury_sync's BT layer, so this can override stale CG values.
+            try:
+                from treasury_signals.pipelines.btc_holdings_reconciler import record_observation
+                ticker = (row.get("ticker") or "").upper()
+                if ticker:
+                    record_observation(
+                        ticker=ticker,
+                        source='bitcointreasuries',
+                        btc_value=float(best_btc),
+                        source_url='https://bitcointreasuries.net/',
+                        excerpt=f"Name fix: {clean_name} = {best_btc} BTC",
+                        components={'origin': 'entity_name_fixer'},
+                    )
+            except Exception:
+                pass
             fixed += 1
 
         if fixed > 0:

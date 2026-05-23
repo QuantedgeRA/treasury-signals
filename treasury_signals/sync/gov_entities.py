@@ -64,6 +64,31 @@ COUNTRY_TICKERS = {
 }
 
 
+def _record_gov_observation(ticker, btc_value, company):
+    """Record a btc_holdings observation tagged as bitcointreasuries.
+
+    Government BTC data is sourced from bitcointreasuries.net/governments,
+    so it shares the 'bitcointreasuries' source tag (trust=60). Errors are
+    swallowed; gov-fix writes must not fail just because the observation
+    write hiccupped.
+    """
+    try:
+        from treasury_signals.pipelines.btc_holdings_reconciler import record_observation
+        if not ticker:
+            return
+        record_observation(
+            ticker=str(ticker).upper(),
+            source='bitcointreasuries',
+            btc_value=float(btc_value),
+            source_url='https://bitcointreasuries.net/governments',
+            excerpt=f"Gov entity fix: {company} = {btc_value} BTC",
+            components={'entity_type': 'government', 'source_page': 'governments'},
+        )
+    except Exception:
+        # Best-effort; never let observation failure block the gov-fix write.
+        pass
+
+
 def _extract_btc_from_ticker(ticker_str):
     """Extract BTC amount from garbled ticker like '₿328,372' or 'Â¿328,372'."""
     if not ticker_str:
@@ -289,6 +314,7 @@ def fix_government_entities(supabase_client=None):
                                 "btc_holdings": 0,
                             }).eq("id", row_id).execute()
                             logger.info(f"  Gov fix: '{current_name}' → '{clean_name}' (0 BTC)")
+                            _record_gov_observation(ticker, 0, clean_name)
                             fixed += 1
                         break
                 continue
@@ -331,6 +357,7 @@ def fix_government_entities(supabase_client=None):
                     "btc_holdings": best_btc,
                 }).eq("id", row_id).execute()
                 logger.info(f"  Gov fix: '{current_name}' → '{clean_name}' ({best_btc:,} BTC)")
+                _record_gov_observation(ticker, best_btc, clean_name)
                 fixed += 1
 
         # Step 5: Also fix any clean-named entries that have wrong BTC
@@ -376,6 +403,8 @@ def fix_government_entities(supabase_client=None):
                             update_data
                         ).eq("id", row["id"]).execute()
                         logger.info(f"  Gov fix: '{name}' → BTC: {match['btc']:,}, ticker: {ticker}")
+                        if "btc_holdings" in update_data:
+                            _record_gov_observation(ticker, match["btc"], match["name"])
                         fixed += 1
 
         if fixed > 0:

@@ -196,6 +196,20 @@ def update_etf_holdings():
                         updated += 1
                     else:
                         updated += 1  # Confirmed, no change
+                    # Record observation so reconciler treats the ETF-issuer
+                    # page as the authoritative source for this ticker.
+                    try:
+                        from treasury_signals.pipelines.btc_holdings_reconciler import record_observation
+                        record_observation(
+                            ticker=(etf.get('ticker') or etf['name']).upper(),
+                            source='company_irpage',
+                            btc_value=float(btc),
+                            source_url=etf.get('source_url'),
+                            excerpt=f"ETF holdings scraper: {etf['name']} = {btc} BTC",
+                            components={'entity_type': 'etf', 'ticker': etf.get('ticker')},
+                        )
+                    except Exception as e:
+                        logger.debug(f"  ETF → observation failed: {e}")
                 else:
                     logger.debug(f"  ETF: {etf['name']} not found in DB (ticker: {etf['ticker']})")
                     errors += 1

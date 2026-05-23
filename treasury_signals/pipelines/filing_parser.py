@@ -168,6 +168,19 @@ def _determine_data_source(filing_source):
     return 'press_release'
 
 
+# Translate legacy data_source labels to the reconciler's trust-hierarchy
+# source names. Anything not in this map falls through to 'press_release'.
+# See btc_holdings_reconciler.SOURCE_TRUST for the trust scores.
+_RECONCILER_SOURCE_MAP = {
+    'sec_filing':            'edgar_8k',           # trust 100 — highest
+    'regulatory_filing':     'edgar_8k',           # trust 100 — international SEC-equivalents
+    'etf_issuer':            'company_irpage',     # trust 80
+    'government_official':   'press_release',      # trust 85
+    'defi_onchain':          'defillama',          # trust 30
+    'press_release':         'press_release',      # trust 85
+}
+
+
 def _update_entity(extracted, data_source):
     """Update treasury_companies with extracted data if it's higher priority."""
     if not extracted or not extracted.get('company_name'):
@@ -234,6 +247,36 @@ def _update_entity(extracted, data_source):
             new_btc = update_data.get('btc_holdings', old_btc)
             logger.info(f"  Parser: {entity['company']} ({entity.get('ticker', '')}) — {old_btc:,} → {new_btc:,} BTC [{data_source}]")
 
+            # Write to btc_holdings_observations + immediately reconcile so
+            # high-trust EDGAR data is reflected in canonical btc_holdings
+            # without waiting for the next treasury_sync cycle. The reconciler
+            # will overwrite the direct update above with the trust-resolved
+            # value — usually the same number since edgar_8k (trust 100) is
+            # the highest non-manual source, but this ensures provenance
+            # columns are populated correctly and any divergence vs other
+            # sources is detected + alerted.
+            try:
+                from treasury_signals.pipelines.btc_holdings_reconciler import (
+                    record_observation, reconcile_ticker,
+                )
+                reconciler_src = _RECONCILER_SOURCE_MAP.get(data_source, 'press_release')
+                excerpt = extracted.get('summary') or extracted.get('event_type') or ''
+                record_observation(
+                    ticker=entity.get('ticker', ''),
+                    source=reconciler_src,
+                    btc_value=float(new_btc),
+                    source_url=extracted.get('filing_url'),
+                    excerpt=(f"{data_source}: {excerpt}")[:1000],
+                    components={
+                        'data_source': data_source,
+                        'event_type': extracted.get('event_type'),
+                        'confidence': confidence,
+                    },
+                )
+                reconcile_ticker(entity.get('ticker', ''))
+            except Exception as e:
+                logger.debug(f"  Parser → reconciler observation failed: {e}")
+
             # Route purchase events through reconciler for proper confirmed_purchases tracking
             if HAS_RECONCILER and btc_purchased and btc_purchased > 0 and extracted.get('event_type') in ('purchase', 'new_treasury'):
                 source_type_map = {
@@ -297,6 +340,31 @@ def _update_entity(extracted, data_source):
                     'source_updated_at': datetime.now().isoformat(),
                 }).execute()
                 logger.info(f"  Parser: NEW ENTITY — {company} ({ticker}) — {int(btc_holdings):,} BTC [{data_source}]")
+                # Same observation+reconcile dance as the update branch so
+                # NEW entities get proper provenance from the first write.
+                try:
+                    from treasury_signals.pipelines.btc_holdings_reconciler import (
+                        record_observation, reconcile_ticker,
+                    )
+                    reconciler_src = _RECONCILER_SOURCE_MAP.get(data_source, 'press_release')
+                    excerpt = extracted.get('summary') or extracted.get('event_type') or ''
+                    record_observation(
+                        ticker=ticker or '',
+                        source=reconciler_src,
+                        btc_value=float(btc_holdings),
+                        source_url=extracted.get('filing_url'),
+                        excerpt=(f"NEW ENTITY {data_source}: {excerpt}")[:1000],
+                        components={
+                            'data_source': data_source,
+                            'event_type': extracted.get('event_type'),
+                            'confidence': confidence,
+                            'is_new_entity': True,
+                        },
+                    )
+                    if ticker:
+                        reconcile_ticker(ticker)
+                except Exception as e:
+                    logger.debug(f"  Parser NEW-ENTITY → reconciler observation failed: {e}")
                 return True
             except Exception as e:
                 logger.debug(f"  Parser: insert error for {company}: {e}")

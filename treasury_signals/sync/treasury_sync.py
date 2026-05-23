@@ -369,20 +369,50 @@ class TreasurySync:
     def run(self):
         logger.info("Treasury Sync v5.2: starting full entity sync...")
         store = EntityStore()
+        # Track every ticker we observe so the reconciler at the end only
+        # re-resolves what we actually touched (vs every ticker ever seen).
+        observed_tickers: set[str] = set()
 
-        # ═══ LAYER 1: CoinGecko (PRIMARY) ═══
-        logger.info("--- Layer 1: CoinGecko (PRIMARY) ---")
+        # Per the divergence-proof architecture (migration 0016), each data
+        # source writes an attributed observation to btc_holdings_observations;
+        # the reconciler is the only writer of treasury_companies.btc_holdings.
+        # See pipelines/btc_holdings_reconciler.py module docstring.
+        from treasury_signals.pipelines.btc_holdings_reconciler import (
+            record_observation,
+        )
+
+        # ═══ LAYER 1: CoinGecko ═══
+        # Note: CoinGecko has been demoted from "PRIMARY" — that role is now
+        # data-driven via the reconciler's trust hierarchy (CG trust=40,
+        # BT trust=60). The is_primary=True flag below is kept for back-compat
+        # with EntityStore.merge() but no longer drives btc_holdings selection.
+        logger.info("--- Layer 1: CoinGecko ---")
         try:
             cg = self._fetch_coingecko()
             cg_new = sum(1 for e in cg if store.add(e, is_primary=True))
             self._staleness.record_success("coingecko", len(cg))
-            logger.info(f"  CoinGecko               -> {len(cg)} fetched, {cg_new} unique")
+            for e in cg:
+                t = (e.get("ticker") or "").strip().upper()
+                if t.endswith(".US") and len(t) > 3:
+                    t = t[:-3]
+                btc = e.get("btc_holdings")
+                if t and btc and btc > 0:
+                    record_observation(
+                        ticker=t,
+                        source="coingecko",
+                        btc_value=float(btc),
+                        source_url="https://api.coingecko.com/api/v3/companies/public_treasury/bitcoin",
+                        excerpt=f"{e.get('company', '')} — {btc} BTC, country={e.get('country', '')}",
+                        components={"data_source": e.get("data_source"), "category": e.get("entity_type")},
+                    )
+                    observed_tickers.add(t)
+            logger.info(f"  CoinGecko               -> {len(cg)} fetched, {cg_new} unique, observations written")
         except Exception as e:
             self._staleness.record_failure("coingecko", str(e))
             logger.warning(f"  CoinGecko FAILED: {e}")
 
-        # ═══ LAYER 2: BitcoinTreasuries.net (SUPPLEMENT) ═══
-        logger.info("--- Layer 2: BitcoinTreasuries.net (SUPPLEMENT) ---")
+        # ═══ LAYER 2: BitcoinTreasuries.net ═══
+        logger.info("--- Layer 2: BitcoinTreasuries.net ---")
         for page in BT_PAGES:
             try:
                 entities = self._scrape_page(page)
@@ -392,6 +422,20 @@ class TreasurySync:
                         new += 1
                     else:
                         merged += 1
+                    t = (e.get("ticker") or "").strip().upper()
+                    if t.endswith(".US") and len(t) > 3:
+                        t = t[:-3]
+                    btc = e.get("btc_holdings")
+                    if t and btc and btc > 0:
+                        record_observation(
+                            ticker=t,
+                            source="bitcointreasuries",
+                            btc_value=float(btc),
+                            source_url=page["url"],
+                            excerpt=f"{e.get('company', '')} — {btc} BTC ({page['category']})",
+                            components={"category": page["category"]},
+                        )
+                        observed_tickers.add(t)
                 self._staleness.record_success(f"bt_{page['category']}", len(entities))
                 logger.info(f"  {page['label']:25s} -> {len(entities):>4} scraped, {new:>4} new, {merged:>4} merged")
             except Exception as e:
@@ -429,6 +473,30 @@ class TreasurySync:
         self._prune_stale_entities(threshold_days=30)
         self._update_snapshot(all_entities)
         self._staleness.check_and_alert(count)
+
+        # ═══ RECONCILE btc_holdings (post-0016) ═══
+        # _upsert_entities still writes btc_holdings using the legacy
+        # EntityStore-merge value. The reconciler now overwrites that value
+        # with the resolved choice from btc_holdings_observations, applying
+        # the trust hierarchy + staleness rules. This is dual-write during
+        # the transition; once every writer is migrated to record_observation
+        # we can drop btc_holdings from the upsert payload (separate PR).
+        # Limited to observed_tickers so we don't re-resolve every ticker
+        # ever seen — saves DB load.
+        if observed_tickers:
+            try:
+                from treasury_signals.pipelines.btc_holdings_reconciler import reconcile_all
+                rstats = reconcile_all(
+                    only_tickers=sorted(observed_tickers),
+                    send_alerts=True,
+                )
+                logger.info(
+                    f"  Reconciler: {rstats.get('reconciled', 0)} reconciled, "
+                    f"{rstats.get('divergent', 0)} divergent, "
+                    f"{rstats.get('errors', 0)} errors"
+                )
+            except Exception as e:
+                logger.warning(f"  Reconciler post-sync FAILED: {e}")
 
         # ═══ SUMMARY ═══
         by_type = {}

@@ -136,6 +136,22 @@ def update_defi_holdings():
                     updated += 1
                 else:
                     updated += 1  # Confirmed
+                # Always record observation so reconciler doesn't revert this
+                # value on next sync. DeFi entities typically have only one
+                # source (DeFi Llama), so the reconciler resolves to this.
+                try:
+                    from treasury_signals.pipelines.btc_holdings_reconciler import record_observation
+                    ticker_for_obs = (entity.get('ticker') or entity['company']).upper()
+                    record_observation(
+                        ticker=ticker_for_obs,
+                        source='defillama',
+                        btc_value=float(new_btc),
+                        source_url='https://api.llama.fi/protocols',
+                        excerpt=f"DeFi tracker: {entity['company']} = {new_btc} BTC",
+                        components={'entity_type': 'defi', 'db_match': db_match},
+                    )
+                except Exception as e:
+                    logger.debug(f"  DeFi → observation failed: {e}")
             else:
                 logger.debug(f"  DeFi: {data['name']} not found in DB (match: {db_match})")
                 errors += 1
