@@ -246,6 +246,25 @@ def run_heavy_maintenance(state: ScanState):
         except Exception as e:
             logger.debug(f"Divergence digest weekly: {e}")
 
+    # Wallet movement monitor (Tier 3 of [[wallet_attribution_design]]).
+    # Scans every is_active entity_wallets row for new outgoing/incoming
+    # transactions, classifies counterparties, persists into
+    # wallet_movements, and dispatches alerts on customer-relevant
+    # flows (exchange_inflow / exchange_outflow / custody_change).
+    # Dormant when entity_wallets is empty — no-op cost.
+    try:
+        from treasury_signals.pipelines.wallet_monitor import scan_tracked_wallets
+        wm_stats = scan_tracked_wallets(send_alerts=True)
+        if wm_stats.get("new_movements", 0) > 0 or wm_stats.get("alerts", 0) > 0:
+            logger.info(
+                f"Wallet monitor: {wm_stats['wallets_scanned']} wallets, "
+                f"{wm_stats['new_movements']} new movements, "
+                f"{wm_stats.get('alerts', 0)} alerts. "
+                f"By class: {wm_stats.get('by_classification', {})}"
+            )
+    except Exception as e:
+        logger.debug(f"Wallet monitor: {e}")
+
     # Backtest reactions backfill — compute equity reactions on new
     # confirmed_purchases that don't have a backtest_reactions row yet.
     # Powers the public /backtest landing-page asset. yfinance is slow +
