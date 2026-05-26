@@ -247,7 +247,18 @@ def _store_filing(filing_data):
         })
 
 
-def _send_alert(company, ticker, event_type, btc_amount, usd_amount, filing_url):
+def _send_alert(company, ticker, event_type, btc_amount, usd_amount, filing_url, direction=None):
+    """Send the SEC-filing Telegram alert.
+
+    The optional `direction` arg activates the filing-impact predictor:
+    when a direction (pure_buy / raise_then_buy / convertible / sale /
+    unclear) is supplied, we look up historical reaction stats from
+    backtest_reactions and embed an "expected reaction" block in the
+    alert. Customers get a trade thesis alongside the raw event.
+
+    The predictor is fail-open: if stats lookup hiccups or sample size
+    is too small, the alert still fires without the block.
+    """
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_PAID_CHANNEL_ID:
         return
     emoji = '🟢' if event_type == 'purchase' else '🔴' if event_type == 'sale' else '📋'
@@ -258,6 +269,22 @@ def _send_alert(company, ticker, event_type, btc_amount, usd_amount, filing_url)
         msg += f"₿ {btc_amount:,.0f} BTC\n"
     if usd_amount > 0:
         msg += f"💵 ${usd_amount:,.0f}\n"
+
+    # Direction-aware impact predictor block. Surface ONLY for purchase
+    # events with a direction classification — sale events have their own
+    # reaction pattern but the n_events is tiny in current data (1) so
+    # the block would be misleading.
+    if direction and event_type == 'purchase':
+        try:
+            from treasury_signals.pipelines.filing_impact_predictor import (
+                get_historical_reactions, format_impact_context_telegram,
+            )
+            stats = get_historical_reactions(direction, ticker=ticker)
+            if stats:
+                msg += format_impact_context_telegram(stats, ticker or company)
+        except Exception as e:
+            logger.debug(f"  EDGAR impact predictor: {e}")
+
     msg += f"\n📄 [View Filing]({filing_url})\n"
     msg += f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}"
     try:
@@ -266,7 +293,7 @@ def _send_alert(company, ticker, event_type, btc_amount, usd_amount, filing_url)
             json={'chat_id': TELEGRAM_PAID_CHANNEL_ID, 'text': msg, 'parse_mode': 'Markdown', 'disable_web_page_preview': True},
             timeout=10,
         )
-        logger.info(f"  EDGAR alert sent: {company} {event_type} {btc_amount} BTC")
+        logger.info(f"  EDGAR alert sent: {company} {event_type} {btc_amount} BTC dir={direction}")
     except Exception as e:
         logger.debug(f"  EDGAR alert error: {e}")
 
@@ -409,9 +436,14 @@ def check_edgar_filings(days_back=1):
                 result = reconcile_sale(sale, source_type="edgar")
                 logger.info(f"  EDGAR → Sale Reconciler: {company_name} — {result['action']}")
 
-            # Send Telegram alert for purchases and sales
+            # Send Telegram alert for purchases and sales. Pass direction
+            # through so the filing-impact predictor can append historical
+            # reaction stats to the message body.
             if event_type in ('purchase', 'sale') and (btc_amount > 0 or usd_amount > 0):
-                _send_alert(company_name, ticker_cik, event_type, btc_amount, usd_amount, filing_url)
+                _send_alert(
+                    company_name, ticker_cik, event_type, btc_amount, usd_amount, filing_url,
+                    direction=direction,
+                )
                 alerts_sent += 1
 
             logger.info(f"  EDGAR: {company_name} — {event_type} — {btc_amount:,.0f} BTC — {filing_date}")
