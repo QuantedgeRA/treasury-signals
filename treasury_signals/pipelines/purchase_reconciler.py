@@ -101,7 +101,12 @@ DEDUP_BTC_TOLERANCE = 0.20  # 20%
 
 
 def _normalize_ticker_for_dedup(ticker):
-    """Normalize ticker for deduplication matching."""
+    """Normalize ticker for deduplication matching.
+
+    The suffix list below is mirrored in pipelines/purchase_keys.SUFFIXES and
+    in the SQL dedup_normalize_ticker() of migration 0022 (the DB unique
+    index). Change all three together.
+    """
     if not ticker:
         return ""
     t = ticker.upper().strip()

@@ -35,6 +35,7 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from supabase import create_client
 from treasury_signals.logger import get_logger
+from treasury_signals.pipelines.purchase_keys import is_duplicate_key_error
 
 logger = get_logger(__name__)
 load_dotenv()
@@ -385,6 +386,7 @@ def scrape_all(dry_run=True):
     total_scraped = 0
     total_entries = 0
     total_failed = 0
+    total_dupe = 0
     total_no_page = 0
 
     for c in uncovered:
@@ -458,7 +460,13 @@ def scrape_all(dry_run=True):
                         }, on_conflict="sale_id").execute()
                         total_entries += 1
                     except Exception as e:
-                        total_failed += 1
+                        # A natural-key collision (migration 0022's unique index)
+                        # means this sale is already recorded by another source —
+                        # benign skip, not a failure.
+                        if is_duplicate_key_error(e):
+                            total_dupe += 1
+                        else:
+                            total_failed += 1
             else:
                 purchase_id = f"scraped_{ticker}_{entry['date']}_{int(btc_amt)}"
                 if dry_run:
@@ -480,7 +488,13 @@ def scrape_all(dry_run=True):
                         }, on_conflict="purchase_id").execute()
                         total_entries += 1
                     except Exception as e:
-                        total_failed += 1
+                        # A natural-key collision (migration 0022's unique index)
+                        # means this purchase is already recorded by another
+                        # source — benign skip, not a failure.
+                        if is_duplicate_key_error(e):
+                            total_dupe += 1
+                        else:
+                            total_failed += 1
 
         time.sleep(0.5)  # Rate limit between companies
 
@@ -489,6 +503,7 @@ def scrape_all(dry_run=True):
     print(f"  Companies with scraped history: {total_scraped}")
     print(f"  Companies without bitbo page:   {total_no_page}")
     print(f"  Total entries created:          {total_entries}")
+    print(f"  Duplicates skipped (already in): {total_dupe}")
     print(f"  Errors:                         {total_failed}")
     print(f"{'=' * 70}")
 
@@ -496,6 +511,7 @@ def scrape_all(dry_run=True):
         "scraped": total_scraped,
         "no_page": total_no_page,
         "entries": total_entries,
+        "dupe_skipped": total_dupe,
         "failed": total_failed,
     }
 
