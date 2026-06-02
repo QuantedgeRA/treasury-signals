@@ -260,7 +260,13 @@ def _get_filings_needing_excerpts(lookback_hours: int, limit: int) -> list[dict]
     try:
         filings_res = (
             supabase.table("edgar_filings")
-            .select("id, accession_number, company_name, ticker_cik, filing_date, form_type, filing_url")
+            .select("id, accession_number, company_name, ticker_cik, filing_date, form_type, filing_url, source")
+            # SEC-only. edgar_filings is ~98% Google News rows (source 'Google
+            # News [lang]', accession 'gnews_*') whose filing_url points at news
+            # articles, not SEC documents. The moat pipeline must never try to
+            # excerpt those — every real SEC source string starts 'SEC EDGAR'
+            # ('SEC EDGAR (USA)', 'SEC EDGAR 8-K (real-time)', 'SEC EDGAR Atom (USA)').
+            .like("source", "SEC EDGAR%")
             .gte("processed_at", cutoff)
             .order("processed_at", desc=True)
             .limit(limit * 3)  # over-fetch — we'll skip already-extracted ones

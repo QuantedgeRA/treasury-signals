@@ -112,10 +112,26 @@ def _has_btc_keywords(text):
     text_lower = text.lower()
     return any(kw.lower() in text_lower for kw in ALL_BTC_KEYWORDS)
 
+_OPTIONAL_EDGAR_COLS = ('acceptance_datetime', 'alerted_at')
+
+
 def _store_filing(filing):
     try:
         supabase.table("edgar_filings").upsert(filing, on_conflict="accession_number").execute()
+        return
     except Exception as e:
+        # Forward-compat: if migration 0023 (acceptance_datetime) isn't applied
+        # yet, drop those keys and retry so the filing still lands.
+        s = str(e).lower()
+        if ('column' in s and ('does not exist' in s or 'could not find' in s or 'schema cache' in s)
+                and any(k in filing for k in _OPTIONAL_EDGAR_COLS)):
+            trimmed = {k: v for k, v in filing.items() if k not in _OPTIONAL_EDGAR_COLS}
+            try:
+                supabase.table("edgar_filings").upsert(trimmed, on_conflict="accession_number").execute()
+                logger.warning("  Filing store: acceptance_datetime column absent — stored without it (apply migration 0023)")
+                return
+            except Exception as e2:
+                e = e2
         # Promoted from logger.debug — this is the swallow that hid the missing
         # `source` column for 28+ days. Schema mismatches must be loud.
         logger.warning(f"  Filing store error: {e} (accession={filing.get('accession_number','')}, source={filing.get('source','')})")
@@ -251,9 +267,48 @@ def _route_to_reconciler(filing):
 # MECHANISM 1: COUNTRY-SPECIFIC REGULATORY FILING SYSTEMS
 # ═══════════════════════════════════════════════════════════
 
+_tracked_cik_cache = {}
+
+
+def _tracked_ciks():
+    """Map CIK(int) -> ticker for US-listed tracked BTC holders.
+
+    Built from treasury_companies tickers resolved through SEC's official
+    ticker->CIK file. We match the getcurrent feed by EXACT CIK rather than the
+    fuzzy company-name matcher, which produces false positives (e.g. 'Strategy
+    Inc' mis-resolving to an unrelated ticker). International holders that don't
+    file 8-Ks simply won't appear in SEC's file, which is fine. Cached per process.
+    """
+    if _tracked_cik_cache:
+        return _tracked_cik_cache
+    try:
+        tracked = supabase.table("treasury_companies").select("ticker").gt("btc_holdings", 0).execute().data or []
+        # strip exchange suffixes (HAMA.L -> HAMA) so US tickers line up
+        tickers = {(t.get("ticker") or "").upper().split(".")[0] for t in tracked if t.get("ticker")}
+        resp = requests.get("https://www.sec.gov/files/company_tickers.json", headers=HEADERS, timeout=30)
+        resp.raise_for_status()
+        for row in resp.json().values():
+            tk = (row.get("ticker") or "").upper()
+            if tk in tickers:
+                _tracked_cik_cache[int(row["cik_str"])] = tk
+        logger.debug(f"    tracked CIK map: {len(_tracked_cik_cache)} US holders resolved")
+    except Exception as e:
+        logger.warning(f"    tracked CIK map build failed: {e}")
+    return _tracked_cik_cache
+
+
 def scan_usa_edgar_atom(days_back=1):
-    """USA — SEC EDGAR latest-filings Atom feed (8-K). Catches filings before
-    they're indexed by the full-text search API, which has a delay."""
+    """USA — SEC EDGAR latest-filings Atom feed (8-K). Catches filings within
+    seconds of acceptance, before the full-text search API indexes them.
+
+    The getcurrent feed's title/summary carry only the company name, CIK, accession
+    and item numbers — never the document body — so the old BTC-keyword gate on
+    that metadata matched almost nothing and the feed logged empty. The real
+    early-warning signal is: a company WE ALREADY TRACK as a BTC holder just filed
+    an 8-K. So we trigger on (a) a tracked-company match (primary) OR (b) a BTC
+    keyword in the metadata (rare, but catches an obvious new entrant). The
+    excerpt extractor then fetches the document and confirms the actual content.
+    """
     filings = []
     try:
         resp = requests.get(
@@ -270,26 +325,45 @@ def scan_usa_edgar_atom(days_back=1):
             link_tag = entry.find('link')
             href = link_tag.get('href') if link_tag else ''
             summary = (entry.find('summary').get_text() if entry.find('summary') else '').strip()
-            combined = f"{title} {summary}".lower()
-            if not _has_btc_keywords(combined):
-                continue
+
+            ts = None
             try:
                 ts = datetime.fromisoformat(updated.replace('Z', '+00:00')).replace(tzinfo=None)
                 if ts < cutoff:
                     continue
             except Exception:
                 pass
-            company = title.split(' - ')[1].strip() if ' - ' in title else title[:200]
+
+            # Title shape: "8-K - Company Name Inc. (0001502557) (Filer)".
+            # Pull the CIK (exact trigger) and strip it for a clean display name.
+            cik_m = re.search(r'\((\d{4,10})\)\s*\((?:Filer|Subject)\)', title)
+            filer_cik = int(cik_m.group(1)) if cik_m else None
+            raw = title.split(' - ', 1)[1].strip() if ' - ' in title else title
+            company = re.sub(r'\s*\(\d{4,10}\)\s*\(Filer\)\s*$', '', raw)
+            company = re.sub(r'\s*\((?:Filer|Subject)\)\s*$', '', company).strip() or raw[:200]
+
+            # Primary trigger: exact CIK match against a tracked BTC holder.
+            # Secondary: a BTC keyword in the metadata (rare — catches a new entrant).
+            tracked_ticker = _tracked_ciks().get(filer_cik) if filer_cik else None
+            keyword_hit = _has_btc_keywords(f"{title} {summary}".lower())
+            if not tracked_ticker and not keyword_hit:
+                continue
+
+            accno_m = re.search(r'AccNo:\s*</b>\s*(\S+)', summary) or re.search(r'(\d{10}-\d{2}-\d{6})', summary)
+            accession = accno_m.group(1) if accno_m else (href or title)
             filings.append({
-                'accession_number': f"edgar_atom_{_hash_id(href or title)}",
+                'accession_number': accession if accno_m else f"edgar_atom_{_hash_id(href or title)}",
                 'company_name': company[:200],
-                'ticker_cik': '',
-                'filing_date': (ts.strftime('%Y-%m-%d') if 'ts' in dir() else datetime.now().strftime('%Y-%m-%d')),
+                'ticker_cik': tracked_ticker or '',
+                'filing_date': (ts.strftime('%Y-%m-%d') if ts else datetime.now().strftime('%Y-%m-%d')),
                 'form_type': '8-K',
                 'event_type': 'filing',
                 'source': 'SEC EDGAR Atom (USA)',
                 'filing_url': href,
+                # acceptance timestamp from the feed — used for file→alert latency.
+                'acceptance_datetime': (ts.isoformat() if ts else None),
             })
+        logger.info(f"    USA-Atom: {len(filings)} BTC-relevant 8-K(s) of recent EDGAR getcurrent feed")
     except Exception as e:
         logger.warning(f"    EDGAR atom error: {e}")
     return filings

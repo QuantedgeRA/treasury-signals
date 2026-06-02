@@ -100,7 +100,8 @@ def phase_4_edgar(state: ScanState):
                 # the engine instance stays a scheduler concern).
                 try:
                     from treasury_signals.storage.database import supabase as db
-                    recent_filings = db.table("edgar_filings").select("*").order("processed_at", desc=True).limit(5).execute()
+                    # SEC-only — exclude the Google-News rows that dominate edgar_filings.
+                    recent_filings = db.table("edgar_filings").select("*").like("source", "SEC EDGAR%").order("processed_at", desc=True).limit(5).execute()
                     if recent_filings.data:
                         for f in recent_filings.data:
                             if f.get("event_type") == "purchase" and f.get("btc_amount", 0) > 0:

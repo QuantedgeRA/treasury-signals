@@ -73,19 +73,37 @@ SALE_KEYWORDS = [
     'reduced its bitcoin', 'divested',
 ]
 
-BTC_PATTERNS = [
-    r'(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:BTC|bitcoin|bitcoins)',
-    r'approximately\s+(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:BTC|bitcoin)',
-    r'(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:BTC|bitcoin)\s*(?:for|at|worth)',
-    r'acquired\s+(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:BTC|bitcoin)',
-    r'purchased\s+(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:BTC|bitcoin)',
-    r'holds?\s+(?:approximately\s+)?(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:BTC|bitcoin)',
+# BTC amount extraction is split into TRANSACTION patterns (the bought/sold
+# *delta* we actually alert on) and HOLDINGS patterns (the running total).
+# The old single list + max() always returned the largest number in the doc,
+# which for a buyer like MSTR is the cumulative treasury (e.g. 843,738 BTC),
+# NOT the period purchase — so every alert overstated the transaction size.
+# We now prefer a transaction-context match and only fall back to a holdings/
+# bare number when no verb-anchored amount is present.
+# NOTE: extractors lowercase the text first, so all literals here are lowercase
+# (the old code carried an uppercase "BTC" alternative that could never match
+# the lowercased text — only the spelled-out "bitcoin" ever hit).
+_NUM = r'(\d{1,3}(?:,\d{3})*(?:\.\d+)?)'
+BTC_TXN_PATTERNS = [
+    rf'(?:acquired|purchased|bought|added|sold|disposed of|divested)\s+'
+    rf'(?:an?\s+additional\s+)?(?:approximately\s+)?{_NUM}\s*(?:btc|bitcoins?)',
+    rf'{_NUM}\s*(?:btc|bitcoins?)\s*(?:for|at)\s*(?:\$|approximately)',
+]
+BTC_HOLDINGS_PATTERNS = [
+    rf'(?:holds?|holding|total of|aggregate of|now owns?)\s+(?:approximately\s+)?{_NUM}\s*(?:btc|bitcoins?)',
+    rf'(?:approximately\s+)?{_NUM}\s*(?:btc|bitcoins?)',
 ]
 
+# USD patterns capture (number, unit) so we can scale PER MATCH. The old code
+# scaled by whether 'billion'/'B' appeared ANYWHERE in the document — and a
+# bare capital 'B' is in almost every filing — so e.g. "$871 million" was
+# inflated to $871 *billion*. Unit is now read from the adjacent token only.
 USD_PATTERNS = [
-    r'\$(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:million|billion|M|B)',
-    r'(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:million|billion)\s*(?:dollars|\$|USD)',
+    rf'\$\s*{_NUM}\s*(million|billion|bn|mm|m|b)\b',
+    rf'{_NUM}\s*(million|billion)\s*(?:dollars|usd|\$)',
 ]
+_USD_SCALE = {'billion': 1_000_000_000, 'bn': 1_000_000_000, 'b': 1_000_000_000,
+              'million': 1_000_000, 'mm': 1_000_000, 'm': 1_000_000}
 
 HEADERS = {
     'User-Agent': 'TreasurySignalIntelligence admin@quantedgeriskadvisory.com',
@@ -228,43 +246,48 @@ def _fetch_filing_text(filing_url):
         return ""
 
 
+def _parse_amounts(matches):
+    out = []
+    for m in matches:
+        try:
+            out.append(float(m.replace(',', '')))
+        except (ValueError, AttributeError):
+            pass
+    return out
+
+
 def _extract_btc_amount(text):
+    """Return the transacted BTC amount (the delta we alert on), preferring
+    purchase/sale-verb-anchored figures over the running holdings total."""
     text_lower = text.lower()
-    for pattern in BTC_PATTERNS:
-        matches = re.findall(pattern, text_lower)
-        if matches:
-            amounts = []
-            for m in matches:
-                clean = m.replace(',', '')
-                try:
-                    amounts.append(float(clean))
-                except:
-                    pass
-            if amounts:
-                return max(amounts)
+
+    # 1) Transaction-context wins — "acquired 5,000 bitcoin", "sold 1,200 BTC".
+    for pattern in BTC_TXN_PATTERNS:
+        amounts = _parse_amounts(re.findall(pattern, text_lower))
+        if amounts:
+            return max(amounts)
+
+    # 2) Fall back to holdings/bare numbers only if nothing transactional matched.
+    for pattern in BTC_HOLDINGS_PATTERNS:
+        amounts = _parse_amounts(re.findall(pattern, text_lower))
+        if amounts:
+            return max(amounts)
+
     return 0
 
 
 def _extract_usd_amount(text):
+    """Largest USD figure in the filing, scaled by the unit token adjacent to
+    each number (not a document-wide guess)."""
     text_lower = text.lower()
+    amounts = []
     for pattern in USD_PATTERNS:
-        matches = re.findall(pattern, text_lower)
-        if matches:
-            amounts = []
-            for m in matches:
-                clean = m.replace(',', '')
-                try:
-                    val = float(clean)
-                    if 'billion' in text_lower or 'B' in text:
-                        val *= 1_000_000_000
-                    elif 'million' in text_lower or 'M' in text:
-                        val *= 1_000_000
-                    amounts.append(val)
-                except:
-                    pass
-            if amounts:
-                return max(amounts)
-    return 0
+        for num, unit in re.findall(pattern, text_lower):
+            try:
+                amounts.append(float(num.replace(',', '')) * _USD_SCALE.get(unit, 1))
+            except (ValueError, AttributeError):
+                pass
+    return max(amounts) if amounts else 0
 
 
 def _classify_event(text):
@@ -286,10 +309,32 @@ def _get_processed_filings():
         return set()
 
 
+# Columns added by migration 0023; code is forward-compatible if it isn't
+# applied yet (the store retries without them rather than losing the filing).
+_OPTIONAL_EDGAR_COLS = ('acceptance_datetime', 'alerted_at')
+
+
+def _is_missing_column_error(exc):
+    s = str(exc).lower()
+    return 'column' in s and ('does not exist' in s or 'could not find' in s or 'schema cache' in s)
+
+
 def _store_filing(filing_data):
     try:
         supabase.table("edgar_filings").upsert(filing_data, on_conflict="accession_number").execute()
+        return
     except Exception as e:
+        # Forward-compat: if migration 0023 (acceptance_datetime/alerted_at)
+        # hasn't been applied yet, drop those keys and retry so the core write
+        # still lands. Any other error is real.
+        if _is_missing_column_error(e) and any(k in filing_data for k in _OPTIONAL_EDGAR_COLS):
+            trimmed = {k: v for k, v in filing_data.items() if k not in _OPTIONAL_EDGAR_COLS}
+            try:
+                supabase.table("edgar_filings").upsert(trimmed, on_conflict="accession_number").execute()
+                logger.warning("  EDGAR store: acceptance_datetime/alerted_at columns absent — stored without them (apply migration 0023)")
+                return
+            except Exception as e2:
+                e = e2
         logger.warning(f"  EDGAR store error: {e} (accession={filing_data.get('accession_number','')})")
         capture_exception(e, context={
             "where": "edgar_realtime._store_filing",
@@ -297,6 +342,43 @@ def _store_filing(filing_data):
             "company": filing_data.get("company_name", "")[:80],
             "event_type": filing_data.get("event_type", ""),
         })
+
+
+_acceptance_cache = {}
+
+
+def _fetch_acceptance_datetime(cik, accession):
+    """Return the SEC acceptanceDateTime (ISO-8601) for a filing, or None.
+
+    EFTS hits carry only file_date (a calendar day). The precise acceptance
+    timestamp — needed to measure true file->alert latency — lives in the
+    data.sec.gov submissions API, whose filings.recent arrays pair each
+    accessionNumber with its acceptanceDateTime. Cached per CIK per process.
+    """
+    if not cik or not accession:
+        return None
+    try:
+        cik_int = int(cik)
+    except (ValueError, TypeError):
+        return None
+
+    if cik_int not in _acceptance_cache:
+        mapping = {}
+        try:
+            url = f"https://data.sec.gov/submissions/CIK{cik_int:010d}.json"
+            resp = requests.get(url, headers=HEADERS, timeout=30)
+            resp.raise_for_status()
+            recent = resp.json().get('filings', {}).get('recent', {})
+            accs = recent.get('accessionNumber', []) or []
+            accepts = recent.get('acceptanceDateTime', []) or []
+            mapping = dict(zip(accs, accepts))
+        except Exception as e:
+            logger.debug(f"  EDGAR acceptance fetch error (cik={cik}): {e}")
+        finally:
+            time.sleep(0.2)
+        _acceptance_cache[cik_int] = mapping
+
+    return _acceptance_cache[cik_int].get(accession)
 
 
 def _send_alert(company, ticker, event_type, btc_amount, usd_amount, filing_url, direction=None):
@@ -437,19 +519,39 @@ def check_edgar_filings(days_back=1):
                 logger.debug(f"  Direction classifier error: {e}")
 
             # Store in edgar_filings table
+            # Acceptance timestamp (when the SEC actually accepted the filing) —
+            # lets us measure true file->alert latency instead of guessing.
+            now = datetime.now()
+            acceptance_iso = _fetch_acceptance_datetime(cik, accession)
+            latency_note = ""
+            if acceptance_iso:
+                try:
+                    acc_dt = datetime.fromisoformat(acceptance_iso.replace('Z', '+00:00')).replace(tzinfo=None)
+                    latency_s = (datetime.utcnow() - acc_dt).total_seconds()
+                    latency_note = f" | file->detect latency: {latency_s/60:.1f} min"
+                except Exception:
+                    pass
+
             filing_data = {
                 'accession_number': accession,
                 'company_name': company_name[:200],
                 'ticker_cik': ticker_cik[:50],
-                'filing_date': filing_date or datetime.now().strftime('%Y-%m-%d'),
+                'filing_date': filing_date or now.strftime('%Y-%m-%d'),
                 'form_type': form_type,
                 'event_type': event_type,
                 'btc_amount': btc_amount,
                 'usd_amount': usd_amount,
                 'filing_url': filing_url[:500],
-                'processed_at': datetime.now().isoformat(),
+                'processed_at': now.isoformat(),
                 'direction': direction,
                 'direction_confidence': direction_confidence,
+                # MUST start with "SEC EDGAR" — the excerpt extractor (the moat
+                # pipeline) filters edgar_filings to source LIKE 'SEC EDGAR%' to
+                # skip the Google-News rows. Without this, realtime filings would
+                # store source=NULL and be invisible to the moat.
+                'source': 'SEC EDGAR 8-K (real-time)',
+                'acceptance_datetime': acceptance_iso,
+                'alerted_at': now.isoformat(),
             }
             _store_filing(filing_data)
             processed.add(accession)
@@ -504,7 +606,7 @@ def check_edgar_filings(days_back=1):
                 )
                 alerts_sent += 1
 
-            logger.info(f"  EDGAR: {company_name} — {event_type} — {btc_amount:,.0f} BTC — {filing_date}")
+            logger.info(f"  EDGAR: {company_name} — {event_type} — {btc_amount:,.0f} BTC — {filing_date}{latency_note}")
 
         time.sleep(1)
 
