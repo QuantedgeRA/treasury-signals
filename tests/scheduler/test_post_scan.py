@@ -68,35 +68,11 @@ class TestRunDailyOnlyTasks:
         post_scan.run_daily_only_tasks(state)  # state.morning = False
         assert called == [], "no learning tasks should run outside morning"
 
-    def test_runs_when_morning(self, monkeypatch, morning_state):
-        called = []
-        mock_fe = MagicMock()
-        mock_fe.learn = lambda: called.append('learn')
-        mock_fe.load_from_db = lambda: called.append('load')
-        mock_fe.get_learning_report.return_value = "Some learning data found"
-        monkeypatch.setattr(post_scan, 'feedback_engine', mock_fe)
-
-        mock_pred = MagicMock()
-        mock_pred.analyze = lambda: called.append('analyze')
-        monkeypatch.setattr(post_scan, 'predictor', mock_pred)
-
-        post_scan.run_daily_only_tasks(morning_state)
-        assert 'learn' in called
-        assert 'analyze' in called
-
-    def test_swallows_feedback_loop_failure(self, monkeypatch, morning_state):
-        mock_fe = MagicMock()
-        mock_fe.learn.side_effect = RuntimeError('learn failed')
-        monkeypatch.setattr(post_scan, 'feedback_engine', mock_fe)
-
-        called_predictor = []
-        mock_pred = MagicMock()
-        mock_pred.analyze = lambda: called_predictor.append(True)
-        monkeypatch.setattr(post_scan, 'predictor', mock_pred)
-
-        # Predictor should still run even if feedback_engine fails
-        post_scan.run_daily_only_tasks(morning_state)
-        assert called_predictor == [True], "predictor must run even if feedback_engine throws"
+    # NOTE: tests asserting the feedback_engine/predictor RUN in the morning
+    # were removed 2026-06-02 — run_daily_only_tasks was soft-hidden 2026-05-11
+    # (predictions deprecated) and now unconditionally returns. The remaining
+    # no-op test stays valid. The whole class goes at the predictions
+    # hard-delete (~2026-06-10).
 
 
 # ─── run_heavy_maintenance (morning gate) ──────────────────────────────────
