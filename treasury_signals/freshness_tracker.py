@@ -66,6 +66,10 @@ THRESHOLDS = {
     "google_news_stmt":     {"fresh": 420, "stale": 720},
     "google_news_purchases":{"fresh": 420, "stale": 720},
     "supabase":             {"fresh": 420, "stale": 720},     # DB checked every scan
+    # The fast-edgar Render cron runs every ~2 min. If it stops, the whole
+    # "sub-60s" alert promise silently breaks (as the fast-tweets cron once did
+    # for weeks). Tight windows so a dead/undeployed cron escalates fast.
+    "fast_edgar_cron":      {"fresh": 10,  "stale": 30},      # Fresh < 10m, stale > 30m
 }
 
 # Human-readable names for display
@@ -82,6 +86,7 @@ SOURCE_LABELS = {
     "google_news_stmt":     "News Scanner (Statements)",
     "google_news_purchases":"News Scanner (Purchases)",
     "supabase":             "Supabase Database",
+    "fast_edgar_cron":      "Fast-EDGAR Cron (sub-60s path)",
 }
 
 

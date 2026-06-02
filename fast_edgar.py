@@ -91,6 +91,27 @@ def main():
     elapsed = time.time() - start
     logger.info(f"fast_edgar: {us_new} US + {intl_new} intl filings, {elapsed:.1f}s")
 
+    # Heartbeat. fast_edgar previously emitted NO signal of its own, so whether
+    # the Render */2 cron was actually deployed/running was unobservable from
+    # data — the same blind spot that left the fast-tweets cron silently dead
+    # for weeks. We upsert one row in cron_heartbeats; main.py's freshness phase
+    # reads it and folds 'fast_edgar_cron' into the normal freshness snapshot +
+    # admin-escalation path (stale > 30m). We deliberately do NOT write the
+    # freshness snapshot from here — that table is a write-all-sources-once model
+    # owned by post_scan, and a partial beat would blank every other source.
+    # Best-effort: a heartbeat failure must never fail the scan.
+    try:
+        from datetime import datetime, timezone
+        from treasury_signals.scanners.edgar_realtime import supabase as _sb
+        _sb.table("cron_heartbeats").upsert({
+            "cron_name": "fast_edgar",
+            "last_run_at": datetime.now(timezone.utc).isoformat(),
+            "last_status": "ok",
+            "detail": f"{us_new} US + {intl_new} intl filings, {elapsed:.1f}s",
+        }, on_conflict="cron_name").execute()
+    except Exception as e:
+        logger.warning(f"fast_edgar heartbeat failed: {e}")
+
 
 if __name__ == "__main__":
     main()

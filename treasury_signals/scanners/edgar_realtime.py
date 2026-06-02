@@ -73,25 +73,36 @@ SALE_KEYWORDS = [
     'reduced its bitcoin', 'divested',
 ]
 
-# BTC amount extraction is split into TRANSACTION patterns (the bought/sold
-# *delta* we actually alert on) and HOLDINGS patterns (the running total).
-# The old single list + max() always returned the largest number in the doc,
-# which for a buyer like MSTR is the cumulative treasury (e.g. 843,738 BTC),
-# NOT the period purchase — so every alert overstated the transaction size.
-# We now prefer a transaction-context match and only fall back to a holdings/
-# bare number when no verb-anchored amount is present.
+# btc_amount is the TRANSACTION delta (bought/sold) we alert on — phases.py
+# renders it verbatim as "acquired {btc_amount} BTC" and routes it to the
+# reconciler. It must therefore be the period transaction, NEVER the running
+# holdings total. Real filings verified 2026-06-02 phrase purchases as e.g.
+# MSTR "used these proceeds to purchase 24,869 bitcoin", ABTC "added more than
+# 1,600 Bitcoin" / "Acquired ~803 Bitcoin" — base-form verbs, filler words and
+# a "~" prefix the old patterns missed, so extraction fell through to the
+# holdings total (MSTR 843,738) and overstated every alert by ~30x.
+#
 # NOTE: extractors lowercase the text first, so all literals here are lowercase
-# (the old code carried an uppercase "BTC" alternative that could never match
-# the lowercased text — only the spelled-out "bitcoin" ever hit).
+# (the old code carried an uppercase "BTC" alternative that could never match).
 _NUM = r'(\d{1,3}(?:,\d{3})*(?:\.\d+)?)'
+# Filler tokens that commonly sit between the verb and the number.
+_FILL = (r'(?:approximately\s+|~\s*|about\s+|over\s+|more\s+than\s+|nearly\s+|'
+         r'an?\s+additional\s+|an?\s+aggregate\s+of\s+|a\s+total\s+of\s+|up\s+to\s+)*')
 BTC_TXN_PATTERNS = [
-    rf'(?:acquired|purchased|bought|added|sold|disposed of|divested)\s+'
-    rf'(?:an?\s+additional\s+)?(?:approximately\s+)?{_NUM}\s*(?:btc|bitcoins?)',
-    rf'{_NUM}\s*(?:btc|bitcoins?)\s*(?:for|at)\s*(?:\$|approximately)',
+    # verb (base OR past tense, incl. "to purchase") -> filler -> number -> btc.
+    # _FILL only admits specific filler tokens, so the number must sit right
+    # after the verb — this is what keeps "BTC Gain of 4,391 bitcoin" and
+    # "starting amount of 100,000 bitcoin" (no acquisition verb) from matching.
+    rf'\b(?:to\s+)?(?:acquir(?:e|ed)|purchas(?:e|ed)|bought|buy|add(?:ed)?|'
+    rf'sold|sell|dispos(?:e|ed)\s+of|divest(?:ed)?)\s+{_FILL}{_NUM}\s*(?:btc|bitcoins?)\b',
+    # number -> btc -> trailing/passive verb ("24,869 bitcoin were purchased").
+    rf'{_NUM}\s*(?:btc|bitcoins?)\s+(?:were\s+|was\s+)?(?:acquired|purchased|bought|added|sold)\b',
 ]
+# Holdings/total patterns — surfaced in logs for ops visibility ONLY. Never fed
+# to btc_amount (see _extract_btc_holdings).
 BTC_HOLDINGS_PATTERNS = [
-    rf'(?:holds?|holding|total of|aggregate of|now owns?)\s+(?:approximately\s+)?{_NUM}\s*(?:btc|bitcoins?)',
-    rf'(?:approximately\s+)?{_NUM}\s*(?:btc|bitcoins?)',
+    rf'(?:holds?|holding|total of|aggregate of|now owns?|reserve of)\s+(?:approximately\s+|~\s*)?{_NUM}\s*(?:btc|bitcoins?)',
+    rf'(?:approximately\s+|~\s*)?{_NUM}\s*(?:btc|bitcoins?)',
 ]
 
 # USD patterns capture (number, unit) so we can scale PER MATCH. The old code
@@ -257,22 +268,30 @@ def _parse_amounts(matches):
 
 
 def _extract_btc_amount(text):
-    """Return the transacted BTC amount (the delta we alert on), preferring
-    purchase/sale-verb-anchored figures over the running holdings total."""
-    text_lower = text.lower()
+    """Return the TRANSACTED BTC amount (the bought/sold delta we alert on).
 
-    # 1) Transaction-context wins — "acquired 5,000 bitcoin", "sold 1,200 BTC".
+    Returns 0 when the filing states no transaction amount. We deliberately do
+    NOT fall back to the holdings total: a holdings/earnings 8-K (e.g. RIOT
+    reporting it "maintained 15,679 bitcoin") is not a purchase, and routing the
+    cumulative total as the transaction amount would announce a ~15,000 BTC buy
+    that never happened. Use _extract_btc_holdings() for the running total.
+    """
+    text_lower = text.lower()
     for pattern in BTC_TXN_PATTERNS:
         amounts = _parse_amounts(re.findall(pattern, text_lower))
         if amounts:
             return max(amounts)
+    return 0
 
-    # 2) Fall back to holdings/bare numbers only if nothing transactional matched.
+
+def _extract_btc_holdings(text):
+    """Cumulative treasury total stated in the filing (NOT a transaction).
+    Surfaced in logs for ops/extraction visibility — never the alert amount."""
+    text_lower = text.lower()
     for pattern in BTC_HOLDINGS_PATTERNS:
         amounts = _parse_amounts(re.findall(pattern, text_lower))
         if amounts:
             return max(amounts)
-
     return 0
 
 
@@ -500,6 +519,7 @@ def check_edgar_filings(days_back=1):
                 continue
 
             btc_amount = _extract_btc_amount(text)
+            btc_holdings = _extract_btc_holdings(text)
             usd_amount = _extract_usd_amount(text)
             event_type = _classify_event(text)
 
@@ -606,7 +626,8 @@ def check_edgar_filings(days_back=1):
                 )
                 alerts_sent += 1
 
-            logger.info(f"  EDGAR: {company_name} — {event_type} — {btc_amount:,.0f} BTC — {filing_date}{latency_note}")
+            holdings_note = f" (holds ~{btc_holdings:,.0f})" if btc_holdings else ""
+            logger.info(f"  EDGAR: {company_name} — {event_type} — txn {btc_amount:,.0f} BTC{holdings_note} — {filing_date}{latency_note}")
 
         time.sleep(1)
 

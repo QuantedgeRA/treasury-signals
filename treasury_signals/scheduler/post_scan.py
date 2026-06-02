@@ -52,10 +52,41 @@ logger = get_logger(__name__)
 
 # ─── Freshness + system health ─────────────────────────────────────────────
 
+def _fold_cron_heartbeats(db_client):
+    """Translate short-interval cron heartbeats into freshness signals.
+
+    fast_edgar (the */2 'sub-60s' cron) can't write the freshness snapshot
+    itself (that table is write-all-at-once, owned here), so it just upserts a
+    cron_heartbeats row. We read it and record success/failure for
+    'fast_edgar_cron' so the cron's liveness rides the normal snapshot +
+    admin-escalation path: a missing/stale beat (>30m) escalates after the usual
+    3 strikes. Degrades silently if migration 0024 isn't applied yet.
+    """
+    from datetime import datetime, timezone
+    try:
+        rows = db_client.table("cron_heartbeats").select("*").eq("cron_name", "fast_edgar").execute().data or []
+    except Exception as e:
+        logger.debug(f"cron_heartbeats read skipped (apply migration 0024?): {e}")
+        return
+    if not rows:
+        freshness.record_failure("fast_edgar_cron", error="no heartbeat row — cron never ran / not deployed")
+        return
+    try:
+        last = datetime.fromisoformat(str(rows[0]["last_run_at"]).replace("Z", "+00:00"))
+        age_min = (datetime.now(timezone.utc) - last).total_seconds() / 60
+    except Exception:
+        age_min = None
+    if age_min is not None and age_min <= 30:
+        freshness.record_success("fast_edgar_cron", detail=f"beat {age_min:.0f}m ago: {rows[0].get('detail','')}")
+    else:
+        freshness.record_failure("fast_edgar_cron", error=f"stale heartbeat ({age_min:.0f}m ago)" if age_min is not None else "unparseable heartbeat")
+
+
 def save_freshness_snapshot():
     """Persist the in-memory freshness tracker to Supabase + log health."""
     try:
         from treasury_signals.storage.database import supabase as db_client
+        _fold_cron_heartbeats(db_client)
         freshness.save_to_supabase(db_client)
     except Exception as e:
         logger.debug(f"Freshness save: {e}")
