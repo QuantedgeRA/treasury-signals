@@ -300,26 +300,36 @@ def scan_usa_edgar(days_back=1):
     filings = []
     end_dt = datetime.now().strftime('%Y-%m-%d')
     start_dt = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
+    # One request per form: EFTS silently collapses any `forms` value containing
+    # a slashed amendment form ("8-K/A") to ~1 hit while still returning HTTP 200.
+    # See the EDGAR_FORMS note in scanners/edgar_realtime.py for the full diagnosis.
+    seen_ids = set()
     for keyword in ['"bitcoin"', '"btc" AND "treasury"', '"digital asset" AND "acquired"']:
-        try:
-            resp = requests.get("https://efts.sec.gov/LATEST/search-index", params={
-                'q': keyword, 'dateRange': 'custom', 'startdt': start_dt, 'enddt': end_dt,
-                'forms': '8-K,8-K/A,10-Q,10-K',
-            }, headers=HEADERS, timeout=30)
-            if resp.ok:
-                for hit in resp.json().get('hits', {}).get('hits', []):
-                    src = hit.get('_source', {})
-                    name = (src.get('display_names', [''])[0] if src.get('display_names') else src.get('entity_name', ''))
-                    filings.append({
-                        'accession_number': f"edgar_{_hash_id(str(src.get('file_num', '')))}",
-                        'company_name': name[:200], 'ticker_cik': src.get('entity_name', '')[:50],
-                        'filing_date': src.get('file_date', end_dt), 'form_type': src.get('form_type', '8-K'),
-                        'event_type': 'filing', 'source': 'SEC EDGAR (USA)',
-                        'filing_url': f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&filenum={src.get('file_num', '')}&type=8-K",
-                    })
-            time.sleep(0.5)
-        except Exception as e:
-            logger.warning(f"    EDGAR error: {e}")
+        for form in ['8-K', '8-K/A', '10-Q', '10-K']:
+            try:
+                resp = requests.get("https://efts.sec.gov/LATEST/search-index", params={
+                    'q': keyword, 'dateRange': 'custom', 'startdt': start_dt, 'enddt': end_dt,
+                    'forms': form,
+                }, headers=HEADERS, timeout=30)
+                if resp.ok:
+                    for hit in resp.json().get('hits', {}).get('hits', []):
+                        hit_id = hit.get('_id')
+                        if hit_id and hit_id in seen_ids:
+                            continue
+                        if hit_id:
+                            seen_ids.add(hit_id)
+                        src = hit.get('_source', {})
+                        name = (src.get('display_names', [''])[0] if src.get('display_names') else src.get('entity_name', ''))
+                        filings.append({
+                            'accession_number': f"edgar_{_hash_id(str(src.get('file_num', '')))}",
+                            'company_name': name[:200], 'ticker_cik': src.get('entity_name', '')[:50],
+                            'filing_date': src.get('file_date', end_dt), 'form_type': src.get('form_type', '8-K'),
+                            'event_type': 'filing', 'source': 'SEC EDGAR (USA)',
+                            'filing_url': f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&filenum={src.get('file_num', '')}&type=8-K",
+                        })
+                time.sleep(0.5)
+            except Exception as e:
+                logger.warning(f"    EDGAR error (keyword={keyword!r} form={form}): {e}")
     return filings
 
 def scan_canada_sedar(days_back=1):

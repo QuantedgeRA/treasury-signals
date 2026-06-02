@@ -20,6 +20,7 @@ from supabase import create_client
 from treasury_signals.logger import get_logger
 from treasury_signals.pipelines.purchase_reconciler import reconcile_and_save, reconcile_sale
 from treasury_signals.observability import capture_exception
+from treasury_signals.freshness_tracker import freshness
 
 logger = get_logger(__name__)
 load_dotenv()
@@ -33,6 +34,24 @@ TELEGRAM_PAID_CHANNEL_ID = os.getenv("TELEGRAM_PAID_CHANNEL_ID")
 
 EDGAR_SEARCH_URL = "https://efts.sec.gov/LATEST/search-index"
 EDGAR_FILING_URL = "https://www.sec.gov/Archives/edgar/data"
+
+# Forms we full-text search, in priority order:
+#   8-K, 8-K/A   — ad-hoc material event filings (the real-time focus)
+#   10-Q          — quarterly report
+#   10-K, 10-K/A  — annual report (treasury policy language + risk factors)
+#
+# CRITICAL: EFTS mis-parses any `forms` value that contains an amendment form
+# with a slash ("8-K/A", "10-K/A"). Passing such a value — alone OR inside a
+# comma list — silently collapses the *entire* result set to ~1 hit while still
+# returning HTTP 200, so the failure is invisible. This bricked the real-time
+# scanner for ~2 weeks (only 4 filings in DB, 2wk stale). Verified 2026-06-01:
+#   forms=8-K,10-Q,10-K            -> 345 hits   (comma list is fine)
+#   forms=8-K,8-K/A,10-Q,10-K,...  ->   1 hit    (any /A form poisons it)
+#   forms=8-K/A                    ->   1 hit    (even alone; %2F-encoding too)
+# Fix: issue ONE request per form (each single-form query is the documented
+# happy path) and merge the hits, deduping by EFTS `_id`.
+EDGAR_FORMS = ['8-K', '8-K/A', '10-Q', '10-K', '10-K/A']
+EDGAR_REQUEST_THROTTLE_SEC = 0.15  # ~7 req/sec, comfortably under EDGAR's 10/sec cap
 
 SEARCH_TERMS = [
     '"bitcoin"',
@@ -142,25 +161,58 @@ def _resolve_ticker(edgar_name, edgar_cik=""):
 
 
 def _search_edgar(query, days_back=1):
+    """
+    Full-text EDGAR search for `query` across every form in EDGAR_FORMS, one
+    HTTP request per form (see the EDGAR_FORMS note for why a single combined
+    request can't be used). 10-Q/10-K are bigger docs but carry the treasury
+    policy language + risk factors persona A's IR team wants; the excerpt
+    extractor dedups identical sentences so we don't re-alert on boilerplate.
+
+    Returns (hits, requests_made, request_errors):
+      hits           — merged, deduped list of EFTS hit dicts (by `_id`)
+      requests_made  — number of form requests attempted
+      request_errors — how many of those failed (network/HTTP/JSON)
+    The caller uses the error counts to drive the freshness alarm so a broken
+    source can no longer masquerade as a quiet news day.
+    """
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
-    try:
-        # Forms covered:
-        #   8-K, 8-K/A   — ad-hoc material event filings (current focus)
-        #   10-Q          — quarterly report
-        #   10-K, 10-K/A  — annual report
-        # 10-Q/10-K are bigger documents but contain the treasury policy
-        # language + risk factors that persona A's IR team actually wants.
-        # The excerpt extractor dedups identical sentences across filings
-        # so we don't re-alert on annual boilerplate.
-        params = {'q': query, 'dateRange': 'custom', 'startdt': start_date, 'enddt': end_date, 'forms': '8-K,8-K/A,10-Q,10-K,10-K/A'}
-        resp = requests.get(EDGAR_SEARCH_URL, params=params, headers=HEADERS, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get('hits', {}).get('hits', [])
-    except Exception as e:
-        logger.debug(f"  EDGAR search error for '{query}': {e}")
-        return []
+
+    merged = {}
+    requests_made = 0
+    request_errors = 0
+
+    for form in EDGAR_FORMS:
+        params = {
+            'q': query,
+            'dateRange': 'custom',
+            'startdt': start_date,
+            'enddt': end_date,
+            'forms': form,  # one form per request — see EDGAR_FORMS note above
+        }
+        requests_made += 1
+        try:
+            resp = requests.get(EDGAR_SEARCH_URL, params=params, headers=HEADERS, timeout=30)
+            resp.raise_for_status()
+            for hit in resp.json().get('hits', {}).get('hits', []):
+                hit_id = hit.get('_id')
+                if hit_id:
+                    merged[hit_id] = hit
+        except Exception as e:
+            request_errors += 1
+            # NOT debug. Swallowing this at debug level is exactly what kept the
+            # last 2-week outage invisible. Warn loudly + ship to Sentry; the
+            # caller escalates to Telegram if the whole scan goes dark.
+            logger.warning(f"EDGAR search request failed (q={query!r} form={form}): {e}")
+            capture_exception(e, context={
+                "where": "edgar_realtime._search_edgar",
+                "query": query, "form": form,
+                "startdt": start_date, "enddt": end_date,
+            })
+        finally:
+            time.sleep(EDGAR_REQUEST_THROTTLE_SEC)
+
+    return list(merged.values()), requests_made, request_errors
 
 
 def _fetch_filing_text(filing_url):
@@ -309,9 +361,15 @@ def check_edgar_filings(days_back=1):
     processed = _get_processed_filings()
     new_filings = 0
     alerts_sent = 0
+    total_requests = 0
+    total_request_errors = 0
+    total_hits_scanned = 0
 
     for query in SEARCH_TERMS:
-        hits = _search_edgar(query, days_back)
+        hits, requests_made, request_errors = _search_edgar(query, days_back)
+        total_requests += requests_made
+        total_request_errors += request_errors
+        total_hits_scanned += len(hits)
         if not hits:
             continue
 
@@ -451,7 +509,36 @@ def check_edgar_filings(days_back=1):
         time.sleep(1)
 
     logger.info(f"EDGAR realtime: {new_filings} new filings, {alerts_sent} alerts sent")
-    return {'new_filings': new_filings, 'alerts_sent': alerts_sent}
+
+    # Source-health report (#8). The old code swallowed request errors at debug
+    # level and returned [], so a broken EFTS query looked identical to a quiet
+    # news day — which is how the /A-forms bug stayed invisible for ~2 weeks.
+    # Now we report scan health to the freshness tracker (source_id "sec_edgar",
+    # which was registered but never reported to). A total wipeout — every form
+    # request across every search term failed — is a real outage and records a
+    # failure; the tracker escalates to admin Telegram after 3 consecutive ones,
+    # so a single quiet/weekend scan never false-alarms. Any successful request
+    # (even one returning zero hits) means EDGAR is reachable and answering, so
+    # the source is healthy and we reset the failure streak.
+    if total_requests > 0 and total_request_errors >= total_requests:
+        freshness.record_failure(
+            "sec_edgar",
+            error=f"all {total_request_errors}/{total_requests} EFTS requests failed over last {days_back}d",
+        )
+    else:
+        freshness.record_success(
+            "sec_edgar",
+            detail=f"{new_filings} new filing(s), {total_hits_scanned} hits scanned, "
+                   f"{total_request_errors}/{total_requests} req errors",
+        )
+
+    return {
+        'new_filings': new_filings,
+        'alerts_sent': alerts_sent,
+        'requests': total_requests,
+        'request_errors': total_request_errors,
+        'hits_scanned': total_hits_scanned,
+    }
 
 
 if __name__ == "__main__":
