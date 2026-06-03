@@ -340,6 +340,16 @@ def resolve_ticker(ticker: str) -> Optional[ResolveResult]:
     chosen_obs, chosen_trust = scored[0]
 
     spread_btc, spread_pct, diverging = _compute_divergence(observations)
+
+    # A human manual_override is adjudicated truth. The aggregators disagreeing
+    # with it is the EXPECTED state — they're the very reason the override was
+    # needed (e.g. COIN: bitcointreasuries scraped 182 vs the real 16,492). So
+    # we don't keep raising divergence alerts for an overridden ticker; that
+    # would re-open a "resolved" alert on every cycle forever. (Trade-off: a
+    # stale override won't self-alert if real holdings later move — overrides
+    # should be reviewed periodically, which is a separate concern from the
+    # aggregator-disagreement noise this suppresses.)
+    is_override = chosen_obs.source == "manual_override"
     return ResolveResult(
         ticker=ticker,
         resolved_value=chosen_obs.btc_value,
@@ -348,7 +358,7 @@ def resolve_ticker(ticker: str) -> Optional[ResolveResult]:
         observations=observations,
         spread_btc=spread_btc,
         spread_pct=spread_pct,
-        is_divergent=_is_divergent(spread_btc, spread_pct),
+        is_divergent=(not is_override) and _is_divergent(spread_btc, spread_pct),
         diverging_sources=diverging,
     )
 
