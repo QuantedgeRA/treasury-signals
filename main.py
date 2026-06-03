@@ -126,10 +126,9 @@ def main():
 
         logger.info(f"Scan #{scan_number} complete")
 
-        # ─── Post-scan: freshness, daily learning, sync, fixers, maintenance,
-        # primary source collection, watchlist, scan summary ───
+        # ─── Post-scan: freshness, sync, fixers, maintenance, primary source
+        # collection, watchlist, scan summary ───
         post_scan.save_freshness_snapshot()
-        post_scan.run_daily_only_tasks(state)
         post_scan.run_entity_sync()
         post_scan.run_name_type_fixers()
         post_scan.run_heavy_maintenance(state)

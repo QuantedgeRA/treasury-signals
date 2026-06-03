@@ -27,8 +27,6 @@ from treasury_signals.scheduler.state import ScanState
 
 # Imports per section — kept inline rather than top-of-file to mirror the
 # original inline-block structure. Could be hoisted later.
-from treasury_signals.pipelines.feedback_loop import feedback_engine
-from treasury_signals.pipelines.price_predictor import predictor
 from treasury_signals.pipelines.filing_parser import parse_and_update
 from treasury_signals.sync.treasury_sync import sync as treasury_sync
 from treasury_signals.sync.gov_entities import fix_government_entities
@@ -95,30 +93,10 @@ def save_freshness_snapshot():
     logger.info(f"System Health: {health['emoji']} {health['health'].upper()} — {health['message']}")
 
 
-# ─── Daily-only learning tasks (morning gate) ──────────────────────────────
-
-def run_daily_only_tasks(state: ScanState):
-    """Morning-only learning loop: classifier feedback + price predictor.
-
-    SOFT-HIDDEN 2026-05-11 — predictions feature deprecated pending strategic
-    pivot to filings-based signals (see memory/product_strategy_2026_05.md).
-    Code preserved for 30-day reversibility; uncomment block below to restore.
-    """
-    return
-
-    # try:
-    #     feedback_engine.learn()
-    #     feedback_engine.load_from_db()
-    #     report = feedback_engine.get_learning_report()
-    #     if "No learning data" not in report:
-    #         logger.info("Feedback loop: learning cycle complete")
-    # except Exception as e:
-    #     logger.debug(f"Feedback loop: {e}")
-    #
-    # try:
-    #     predictor.analyze()
-    # except Exception as e:
-    #     logger.debug(f"Price predictor: {e}")
+# ─── Daily-only learning tasks ─────────────────────────────────────────────
+# Removed 2026-06-02 with the predictions feature. This was the morning-only
+# learning loop (feedback_engine.learn + price predictor.analyze); soft-hidden
+# 2026-05-11 and now hard-deleted along with feedback_loop.py / price_predictor.py.
 
 
 # ─── Entity sync (every scan): snapshot → CoinGecko/BT pull → protect ──────

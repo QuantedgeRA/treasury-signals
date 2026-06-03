@@ -326,33 +326,14 @@ def classify_tweet(tweet_text, author_username, created_at, is_reply=False):
     dimensions["structure"] = struct_score
     score += struct_score
 
-    # --- DIMENSION 7: LEARNED ADJUSTMENTS (Phase 15) ---
+    # --- DIMENSION 7: LEARNED ADJUSTMENTS (removed 2026-06-02) ---
+    # Was the accuracy-feedback learning loop (part of the predictions feature).
+    # Removed with predictions; it had been inert since the 2026-05-11 soft-hide
+    # (learned_weights empty → every adjustment 0), so scores are unchanged.
+    # Kept as a fixed-0 dimension so the score-dimension shape stays stable.
     learned_score = 0
-    try:
-        from treasury_signals.pipelines.feedback_loop import feedback_engine
-        # Apply keyword adjustments
-        for category_keywords in [SAYLOR_CODED, PURCHASE_DIRECT, ACCUMULATION_INTENT, CONVICTION, TRACKER_PATTERNS]:
-            for keyword in category_keywords:
-                if keyword in text_lower:
-                    adj = feedback_engine.get_keyword_adjustment(keyword)
-                    if adj != 0:
-                        learned_score += adj
-
-        # Apply author adjustment
-        author_adj = feedback_engine.get_author_adjustment(author_lower)
-        if author_adj != 0:
-            learned_score += author_adj
-
-        if learned_score != 0:
-            learned_score = max(-15, min(learned_score, 15))  # Cap adjustment range
-            reasons.append(f"Learned adjustment: {learned_score:+.1f} (from accuracy feedback)")
-    except ImportError:
-        pass
-    except Exception:
-        pass
-
-    dimensions["learned"] = round(learned_score)
-    score += round(learned_score)
+    dimensions["learned"] = 0
+    score += learned_score
 
     # --- FINAL ---
     score = max(0, min(score, 100))

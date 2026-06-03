@@ -2,8 +2,8 @@
 
 Each function corresponds to one section of the previous post-scan inline
 block in main.py. Tests focus on:
-  1. Morning gating — functions like run_daily_only_tasks and
-     run_heavy_maintenance must no-op when state.morning is False.
+  1. Morning gating — functions like run_heavy_maintenance must no-op when
+     state.morning is False.
   2. State usage — run_watchlist_alerts must read from state.signals/
      detected; send_scan_summary_log must extract from state.correlation
      safely (no KeyError on missing fields).
@@ -53,26 +53,8 @@ class TestSaveFreshnessSnapshot:
         post_scan.save_freshness_snapshot()
 
 
-# ─── run_daily_only_tasks (morning gate) ───────────────────────────────────
-
-class TestRunDailyOnlyTasks:
-    def test_no_op_when_not_morning(self, monkeypatch, state):
-        called = []
-        mock_fe = MagicMock()
-        mock_fe.learn = lambda: called.append('learn')
-        monkeypatch.setattr(post_scan, 'feedback_engine', mock_fe)
-        mock_pred = MagicMock()
-        mock_pred.analyze = lambda: called.append('analyze')
-        monkeypatch.setattr(post_scan, 'predictor', mock_pred)
-
-        post_scan.run_daily_only_tasks(state)  # state.morning = False
-        assert called == [], "no learning tasks should run outside morning"
-
-    # NOTE: tests asserting the feedback_engine/predictor RUN in the morning
-    # were removed 2026-06-02 — run_daily_only_tasks was soft-hidden 2026-05-11
-    # (predictions deprecated) and now unconditionally returns. The remaining
-    # no-op test stays valid. The whole class goes at the predictions
-    # hard-delete (~2026-06-10).
+# run_daily_only_tasks (the morning learning loop) was removed 2026-06-02 with
+# the predictions feature — no tests remain for it.
 
 
 # ─── run_heavy_maintenance (morning gate) ──────────────────────────────────

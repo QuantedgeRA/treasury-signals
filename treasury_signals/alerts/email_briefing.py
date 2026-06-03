@@ -217,12 +217,10 @@ def get_accuracy_data():
 
 
 def _get_feedback_email_html():
-    """Get feedback loop insights HTML for the email."""
-    try:
-        from treasury_signals.pipelines.feedback_loop import feedback_engine
-        return feedback_engine.format_for_email_html()
-    except Exception:
-        return ""
+    """Removed 2026-06-02 with the predictions/accuracy-feedback feature. The
+    learning loop had been inert since the 2026-05-11 soft-hide, so this section
+    already rendered empty; kept as a no-op so the briefing template is unchanged."""
+    return ""
 
 
 def build_briefing_html(market, signals, all_signals, leaderboard, lb_summary, reg_stats, reg_items, accuracy, statements, purchases, purchase_stats, correlation, action=None, risk=None, changes=None, peers=None, week_ahead=None, subscriber=None, personalization=None, pattern_match=None, llm_narratives=None):
