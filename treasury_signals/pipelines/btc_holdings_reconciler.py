@@ -494,20 +494,32 @@ def _send_telegram_divergence_alert(result: ResolveResult, alert_id: Optional[in
         logger.debug(f"reconciler: telegram divergence alert send failed: {e}")
 
 
-def _persist_resolved(result: ResolveResult, alert_id: Optional[int]) -> bool:
-    """Write the chosen value + provenance back to treasury_companies."""
+def _persist_resolved(result: ResolveResult, alert_id: Optional[int], run_started: Optional[str] = None) -> bool:
+    """Write the chosen value + provenance back to treasury_companies.
+
+    Lost-update guard: btc_resolved_at is stamped with `run_started` (the time
+    this reconcile read its observations), and the UPDATE only lands where the
+    stored btc_resolved_at IS NULL or <= run_started. So two concurrent
+    reconciles of the same ticker can't clobber each other out of order — the
+    one that read fresher data wins regardless of which writes last. Falls back
+    to an unguarded write when run_started isn't supplied (legacy callers).
+    """
     if not supabase:
         return False
+    version = run_started or _now_utc().isoformat()
     payload = {
         "btc_holdings": int(round(result.resolved_value)),
         "btc_resolved_source": result.resolved_source,
-        "btc_resolved_at": _now_utc().isoformat(),
+        "btc_resolved_at": version,
         "btc_divergence_spread_pct": round(result.spread_pct, 2),
         "btc_divergence_alert_id": alert_id,
         "last_updated": _now_utc().isoformat(),
     }
     try:
-        supabase.table("treasury_companies").update(payload).eq("ticker", result.ticker).execute()
+        q = supabase.table("treasury_companies").update(payload).eq("ticker", result.ticker)
+        if run_started:
+            q = q.or_(f"btc_resolved_at.is.null,btc_resolved_at.lte.{run_started}")
+        q.execute()
         return True
     except Exception as e:
         logger.warning(f"reconciler: treasury_companies update failed for {result.ticker}: {e}")
@@ -530,6 +542,11 @@ def reconcile_ticker(ticker: str, *, send_alerts: bool = True) -> Optional[Resol
     ticker = (ticker or "").strip().upper()
     if not ticker:
         return None
+    # Version stamp captured BEFORE reading observations. _persist_resolved only
+    # overwrites treasury_companies if the stored btc_resolved_at <= this — so a
+    # reconcile that read STALE observations (started earlier) can't clobber a
+    # concurrent reconcile that read fresher data, regardless of write order.
+    run_started = _now_utc().isoformat()
     result = resolve_ticker(ticker)
     if not result:
         return None
@@ -546,7 +563,7 @@ def reconcile_ticker(ticker: str, *, send_alerts: bool = True) -> Optional[Resol
         # the audit log distinguish human-triaged from auto-cleared events.
         _maybe_resolve_open_alert(ticker)
 
-    _persist_resolved(result, alert_id)
+    _persist_resolved(result, alert_id, run_started)
 
     if result.is_divergent:
         logger.warning(
