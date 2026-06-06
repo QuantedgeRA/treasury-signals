@@ -100,14 +100,55 @@ def main():
     # freshness snapshot from here — that table is a write-all-sources-once model
     # owned by post_scan, and a partial beat would blank every other source.
     # Best-effort: a heartbeat failure must never fail the scan.
+    #
+    # The heartbeat ALSO drives a cross-process EDGAR-down alarm. The freshness
+    # tracker's 3-consecutive-failure escalator can't fire from a cron — each run
+    # is a fresh process, so the in-memory streak resets every time, leaving the
+    # latency-critical EDGAR path effectively unmonitored (the exact silent-outage
+    # class that hid the original 2-week EDGAR breakage). So we run a tiny state
+    # machine off the PERSISTED cron_heartbeats.last_status: a run where every
+    # EFTS request errored arms 'edgar_down'; the 2nd consecutive such run
+    # (~4 min) pages admin once and latches 'edgar_down_notified'; recovery pages
+    # once. Transient single-run blips never page.
     try:
         from datetime import datetime, timezone
         from treasury_signals.scanners.edgar_realtime import supabase as _sb
+        from treasury_signals.observability import notify_admin
+
+        reqs = (us_result or {}).get("requests", 0)
+        errs = (us_result or {}).get("request_errors", 0)
+        edgar_down = reqs > 0 and errs >= reqs  # every EFTS request this run errored
+
+        prior = ""
+        try:
+            _row = _sb.table("cron_heartbeats").select("last_status").eq(
+                "cron_name", "fast_edgar"
+            ).limit(1).execute().data
+            prior = (_row[0]["last_status"] if _row else "") or ""
+        except Exception:
+            pass
+
+        if edgar_down:
+            if prior in ("edgar_down", "edgar_down_notified"):
+                status = "edgar_down_notified"
+                if prior == "edgar_down":  # 2nd consecutive failure — page once
+                    notify_admin(
+                        f"❌ fast_edgar: SEC EDGAR FTS errored on every request for 2+ "
+                        f"consecutive runs (~4 min+). The real-time 8-K alert path is "
+                        f"down ({errs}/{reqs} requests failed)."
+                    )
+            else:
+                status = "edgar_down"  # 1st failure — arm, don't page yet
+        else:
+            status = "ok"
+            if prior == "edgar_down_notified":
+                notify_admin("✅ RECOVERED: fast_edgar SEC EDGAR FTS is returning results again.")
+
         _sb.table("cron_heartbeats").upsert({
             "cron_name": "fast_edgar",
             "last_run_at": datetime.now(timezone.utc).isoformat(),
-            "last_status": "ok",
-            "detail": f"{us_new} US + {intl_new} intl filings, {elapsed:.1f}s",
+            "last_status": status,
+            "detail": f"{us_new} US + {intl_new} intl filings, {elapsed:.1f}s, edgar {errs}/{reqs} req errors",
         }, on_conflict="cron_name").execute()
     except Exception as e:
         logger.warning(f"fast_edgar heartbeat failed: {e}")
