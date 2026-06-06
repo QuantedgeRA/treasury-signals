@@ -84,6 +84,15 @@ SALE_KEYWORDS = [
 #
 # NOTE: extractors lowercase the text first, so all literals here are lowercase
 # (the old code carried an uppercase "BTC" alternative that could never match).
+#
+# KNOWN LIMITATION (US-format assumption): _NUM treats ',' as the thousands
+# separator and '.' as the decimal point, which is correct for SEC filings (US
+# format) — this scanner's domain. It does NOT handle European notation, where
+# "12.500" means 12,500 and "1.234,56" means 1234.56. A naive fix is unsafe:
+# bare "12.500" is genuinely ambiguous (EU 12,500 vs US 12.5) and guessing wrong
+# is a 1000x error either way, so it's left as US. International filings that use
+# EU notation should be parsed with locale context in their own adapters
+# (global_filing_scanner / purchase_tracker), NOT by widening this US regex.
 _NUM = r'(\d{1,3}(?:,\d{3})*(?:\.\d+)?)'
 # Filler tokens that commonly sit between the verb and the number.
 _FILL = (r'(?:approximately\s+|~\s*|about\s+|over\s+|more\s+than\s+|nearly\s+|'
