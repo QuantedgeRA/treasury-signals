@@ -87,8 +87,33 @@ def get_new_tweets():
         return []
 
 
+def claim_tweet(tweet_id):
+    """Atomically claim a tweet for processing.
+
+    Returns True ONLY for the process that transitions processed False->True via
+    this conditional UPDATE. Postgres serializes the row update, so when the
+    worker's phase_2_classify and a fast_tweets */2 cron (or two cron ticks)
+    both pull the same unprocessed tweet, exactly one claims it and alerts; the
+    other gets 0 rows and skips. Prevents duplicate Saylor-tracker / exec
+    signal alerts. Fail-OPEN: on error, process it (never silently drop a signal).
+    """
+    try:
+        res = (
+            supabase.table("tweets")
+            .update({"processed": True})
+            .eq("tweet_id", tweet_id)
+            .eq("processed", False)
+            .execute()
+        )
+        return bool(res.data)
+    except Exception as e:
+        logger.error(f"Failed to claim tweet {tweet_id} (processing anyway): {e}")
+        return True
+
+
 def mark_processed(tweet_id, is_signal=False, confidence_score=0):
-    """Mark a tweet as processed and optionally flag it as a signal."""
+    """Persist classification result on an already-claimed tweet (processed is
+    set by claim_tweet; this fills in is_signal/confidence_score)."""
     try:
         supabase.table("tweets").update({
             "processed": True,

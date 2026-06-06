@@ -18,7 +18,7 @@ from treasury_signals.logger import get_logger
 from treasury_signals.config import FALLBACK_EMAIL_RECIPIENTS
 from treasury_signals.scheduler import engine
 from treasury_signals.scanners.twitter_client import get_user_tweets, extract_tweet_info
-from treasury_signals.storage.database import save_tweet, get_new_tweets, mark_processed
+from treasury_signals.storage.database import save_tweet, get_new_tweets, mark_processed, claim_tweet
 from treasury_signals.pipelines.classifier import classify_tweet, get_signal_label, get_dimension_breakdown
 from treasury_signals.alerts.telegram_bot import send_alert, send_strc_alert, send_to_paid, send_to_free
 from treasury_signals.scanners.strc_tracker import get_strc_volume_data, analyze_strc_signal, format_strc_alert
@@ -95,6 +95,13 @@ def process_and_alert():
     from treasury_signals.pipelines.exec_signal_detector import detect_exec_signal
 
     for tweet in unprocessed:
+        # Atomic claim before doing any work: only the process that flips this
+        # tweet's processed False->True classifies + alerts it. Stops duplicate
+        # signal alerts when the worker and a fast_tweets cron (or two cron
+        # ticks) pull the same unprocessed tweet concurrently.
+        if not claim_tweet(tweet['tweet_id']):
+            continue
+
         result = classify_tweet(
             tweet_text=tweet['tweet_text'],
             author_username=tweet['author_username'],

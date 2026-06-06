@@ -381,6 +381,31 @@ def _store_filing(filing_data):
         })
 
 
+def _claim_alert(accession, now_iso):
+    """Atomically claim the right to alert on a filing.
+
+    Returns True ONLY for the process that transitions alerted_at NULL->now via
+    a conditional UPDATE. Postgres serializes the row update, so when a worker
+    full-scan and a fast_edgar cron both reach the same accession, exactly one
+    sees a matching row (alerted_at IS NULL) and alerts; the other gets 0 rows
+    and stays quiet. Fail-OPEN: if the claim query errors (e.g. the alerted_at
+    column is absent pre-migration-0023), allow the alert rather than silently
+    dropping a real signal — duplicate-suppression must never cause a miss.
+    """
+    try:
+        res = (
+            supabase.table("edgar_filings")
+            .update({"alerted_at": now_iso})
+            .eq("accession_number", accession)
+            .is_("alerted_at", "null")
+            .execute()
+        )
+        return bool(res.data)
+    except Exception as e:
+        logger.debug(f"  EDGAR alert-claim error for {accession} (alerting anyway): {e}")
+        return True
+
+
 _acceptance_cache = {}
 
 
@@ -598,7 +623,9 @@ def check_edgar_filings(days_back=1):
                 # store source=NULL and be invisible to the moat.
                 'source': 'SEC EDGAR 8-K (real-time)',
                 'acceptance_datetime': acceptance_iso,
-                'alerted_at': now.isoformat(),
+                # alerted_at is intentionally NOT set here — it's the atomic
+                # alert-claim flag (set only by the process that wins the right
+                # to alert, just before _send_alert). See _claim_alert().
             }
             _store_filing(filing_data)
             processed.add(accession)
@@ -643,15 +670,18 @@ def check_edgar_filings(days_back=1):
                 result = reconcile_sale(sale, source_type="edgar")
                 logger.info(f"  EDGAR → Sale Reconciler: {company_name} — {result['action']}")
 
-            # Send Telegram alert for purchases and sales. Pass direction
-            # through so the filing-impact predictor can append historical
-            # reaction stats to the message body.
+            # Send Telegram alert for purchases and sales. Atomic alert-claim:
+            # only the process that flips alerted_at NULL->now sends it, so a
+            # worker full-scan (6/12/18 UTC) and a fast_edgar */2 cron hitting
+            # the same accession in the same window can't BOTH fire. Direction
+            # is passed through for the filing-impact predictor.
             if event_type in ('purchase', 'sale') and (btc_amount > 0 or usd_amount > 0):
-                _send_alert(
-                    company_name, ticker_cik, event_type, btc_amount, usd_amount, filing_url,
-                    direction=direction,
-                )
-                alerts_sent += 1
+                if _claim_alert(accession, now.isoformat()):
+                    _send_alert(
+                        company_name, ticker_cik, event_type, btc_amount, usd_amount, filing_url,
+                        direction=direction,
+                    )
+                    alerts_sent += 1
 
             holdings_note = f" (holds ~{btc_holdings:,.0f})" if btc_holdings else ""
             logger.info(f"  EDGAR: {company_name} — {event_type} — txn {btc_amount:,.0f} BTC{holdings_note} — {filing_date}{latency_note}")
