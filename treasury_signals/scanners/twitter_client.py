@@ -63,7 +63,11 @@ def get_user_tweets(username):
     params = {"userName": username}
 
     try:
-        response = requests.get(url, headers=headers, params=params)
+        # (connect, read) timeout — without this a half-open socket hangs the
+        # whole scan: scan_all_accounts loops ~64 accounts serially and
+        # phase_1_tweets has no guard, so one stalled call freezes every
+        # downstream phase (worker) or hangs the */2 fast_tweets cron.
+        response = requests.get(url, headers=headers, params=params, timeout=(5, 15))
 
         if response.status_code == 200:
             data = response.json()
