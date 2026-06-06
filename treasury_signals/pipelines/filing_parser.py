@@ -231,30 +231,16 @@ def _update_entity(extracted, data_source):
             logger.debug(f"  Parser: {company} — {data_source} cannot override {current_source}")
             return False
 
-        update_data = {
-            'data_source': data_source,
-            'source_updated_at': datetime.now().isoformat(),
-        }
-
-        if btc_holdings and btc_holdings > 0:
-            update_data['btc_holdings'] = int(btc_holdings)
-        elif btc_purchased and btc_purchased > 0:
-            update_data['btc_holdings'] = current_btc + int(btc_purchased)
-
-        if update_data.get('btc_holdings'):
-            supabase.table("treasury_companies").update(update_data).eq("id", entity["id"]).execute()
-            old_btc = current_btc
-            new_btc = update_data.get('btc_holdings', old_btc)
-            logger.info(f"  Parser: {entity['company']} ({entity.get('ticker', '')}) — {old_btc:,} → {new_btc:,} BTC [{data_source}]")
-
-            # Write to btc_holdings_observations + immediately reconcile so
-            # high-trust EDGAR data is reflected in canonical btc_holdings
-            # without waiting for the next treasury_sync cycle. The reconciler
-            # will overwrite the direct update above with the trust-resolved
-            # value — usually the same number since edgar_8k (trust 100) is
-            # the highest non-manual source, but this ensures provenance
-            # columns are populated correctly and any divergence vs other
-            # sources is detected + alerted.
+        # ── HOLDINGS TOTAL → reconciler observation ONLY ──
+        # treasury_companies.btc_holdings has a single writer: the reconciler.
+        # We record an observation and reconcile; we do NOT direct-write the
+        # column. CRITICAL: `btc_holdings` here must be a genuine cumulative
+        # TOTAL. A transaction delta must never reach this branch — the old code
+        # mapped a purchase's btc_amount into btc_holdings (and even added it to
+        # current holdings), so a 4,871-BTC buy overwrote a 600k holding as an
+        # edgar_8k (trust-100) observation. Transactions now route through the
+        # purchase/sale pipelines below instead.
+        if btc_holdings and btc_holdings > 0 and _should_update(current_source, data_source):
             try:
                 from treasury_signals.pipelines.btc_holdings_reconciler import (
                     record_observation, reconcile_ticker,
@@ -264,7 +250,7 @@ def _update_entity(extracted, data_source):
                 record_observation(
                     ticker=entity.get('ticker', ''),
                     source=reconciler_src,
-                    btc_value=float(new_btc),
+                    btc_value=float(int(btc_holdings)),
                     source_url=extracted.get('filing_url'),
                     excerpt=(f"{data_source}: {excerpt}")[:1000],
                     components={
@@ -273,59 +259,62 @@ def _update_entity(extracted, data_source):
                         'confidence': confidence,
                     },
                 )
-                reconcile_ticker(entity.get('ticker', ''))
+                if entity.get('ticker'):
+                    reconcile_ticker(entity.get('ticker', ''))
+                logger.info(f"  Parser: {entity['company']} ({entity.get('ticker', '')}) holdings observation {int(btc_holdings):,} BTC [{data_source}]")
             except Exception as e:
-                logger.debug(f"  Parser → reconciler observation failed: {e}")
+                logger.debug(f"  Parser → reconciler holdings observation failed: {e}")
 
-            # Route purchase events through reconciler for proper confirmed_purchases tracking
-            if HAS_RECONCILER and btc_purchased and btc_purchased > 0 and extracted.get('event_type') in ('purchase', 'new_treasury'):
-                source_type_map = {
-                    'sec_filing': 'edgar', 'regulatory_filing': 'global_filing',
-                    'etf_issuer': 'global_filing', 'government_official': 'global_filing',
-                    'press_release': 'news',
-                }
-                reconciler_source = source_type_map.get(data_source, 'news')
-                try:
-                    reconcile_and_save({
-                        "company": entity.get('company', company),
-                        "ticker": entity.get('ticker', ticker),
-                        "btc_amount": int(btc_purchased),
-                        "usd_amount": int(extracted.get('purchase_price_usd', 0) or 0),
-                        "price_per_btc": int(extracted.get('avg_price_per_btc', 0) or 0),
-                        "filing_date": extracted.get('date', datetime.now().strftime('%Y-%m-%d')),
-                        "filing_url": "",
-                        "source": f"AI Filing Parser [{data_source}]",
-                        "notes": f"Extracted by Claude from {data_source} filing. Confidence: {confidence}",
-                    }, source_type=reconciler_source, is_new_entrant=False)
-                    logger.info(f"  Parser → Reconciler: {entity['company']} — {int(btc_purchased):,} BTC purchase [{reconciler_source}]")
-                except Exception as e:
-                    logger.debug(f"  Parser → Reconciler error: {e}")
+        # ── PURCHASE / SALE routing — independent of the holdings write above ──
+        # Route purchase events through reconciler for proper confirmed_purchases tracking
+        if HAS_RECONCILER and btc_purchased and btc_purchased > 0 and extracted.get('event_type') in ('purchase', 'new_treasury', 'acquisition'):
+            source_type_map = {
+                'sec_filing': 'edgar', 'regulatory_filing': 'global_filing',
+                'etf_issuer': 'global_filing', 'government_official': 'global_filing',
+                'press_release': 'news',
+            }
+            reconciler_source = source_type_map.get(data_source, 'news')
+            try:
+                reconcile_and_save({
+                    "company": entity.get('company', company),
+                    "ticker": entity.get('ticker', ticker),
+                    "btc_amount": int(btc_purchased),
+                    "usd_amount": int(extracted.get('purchase_price_usd', 0) or 0),
+                    "price_per_btc": int(extracted.get('avg_price_per_btc', 0) or 0),
+                    "filing_date": extracted.get('date', datetime.now().strftime('%Y-%m-%d')),
+                    "filing_url": "",
+                    "source": f"AI Filing Parser [{data_source}]",
+                    "notes": f"Extracted by Claude from {data_source} filing. Confidence: {confidence}",
+                }, source_type=reconciler_source, is_new_entrant=False)
+                logger.info(f"  Parser → Reconciler: {entity['company']} — {int(btc_purchased):,} BTC purchase [{reconciler_source}]")
+            except Exception as e:
+                logger.debug(f"  Parser → Reconciler error: {e}")
 
-            # Route sale events through sale reconciler
-            if HAS_RECONCILER and btc_sold and btc_sold > 0 and extracted.get('event_type') == 'sale':
-                source_type_map = {
-                    'sec_filing': 'edgar', 'regulatory_filing': 'global_filing',
-                    'etf_issuer': 'global_filing', 'government_official': 'global_filing',
-                    'press_release': 'news',
-                }
-                reconciler_source = source_type_map.get(data_source, 'news')
-                try:
-                    reconcile_sale({
-                        "company": entity.get('company', company),
-                        "ticker": entity.get('ticker', ticker),
-                        "btc_amount": int(btc_sold),
-                        "usd_amount": int(extracted.get('sale_price_usd', 0) or 0),
-                        "price_per_btc": int(extracted.get('avg_price_per_btc', 0) or 0),
-                        "filing_date": extracted.get('date', datetime.now().strftime('%Y-%m-%d')),
-                        "filing_url": "",
-                        "source": f"AI Filing Parser [{data_source}]",
-                        "notes": f"Sale extracted by Claude from {data_source} filing. Confidence: {confidence}",
-                    }, source_type=reconciler_source)
-                    logger.info(f"  Parser → Reconciler: {entity['company']} — {int(btc_sold):,} BTC sale [{reconciler_source}]")
-                except Exception as e:
-                    logger.debug(f"  Parser → Sale Reconciler error: {e}")
+        # Route sale events through sale reconciler
+        if HAS_RECONCILER and btc_sold and btc_sold > 0 and extracted.get('event_type') == 'sale':
+            source_type_map = {
+                'sec_filing': 'edgar', 'regulatory_filing': 'global_filing',
+                'etf_issuer': 'global_filing', 'government_official': 'global_filing',
+                'press_release': 'news',
+            }
+            reconciler_source = source_type_map.get(data_source, 'news')
+            try:
+                reconcile_sale({
+                    "company": entity.get('company', company),
+                    "ticker": entity.get('ticker', ticker),
+                    "btc_amount": int(btc_sold),
+                    "usd_amount": int(extracted.get('sale_price_usd', 0) or 0),
+                    "price_per_btc": int(extracted.get('avg_price_per_btc', 0) or 0),
+                    "filing_date": extracted.get('date', datetime.now().strftime('%Y-%m-%d')),
+                    "filing_url": "",
+                    "source": f"AI Filing Parser [{data_source}]",
+                    "notes": f"Sale extracted by Claude from {data_source} filing. Confidence: {confidence}",
+                }, source_type=reconciler_source)
+                logger.info(f"  Parser → Reconciler: {entity['company']} — {int(btc_sold):,} BTC sale [{reconciler_source}]")
+            except Exception as e:
+                logger.debug(f"  Parser → Sale Reconciler error: {e}")
 
-            return True
+        return True
     else:
         # New entity — insert if we have BTC holdings data
         if btc_holdings and btc_holdings > 0:
@@ -413,15 +402,22 @@ def parse_and_update(max_filings=20):
         source = filing.get('source', '')
         data_source = _determine_data_source(source)
 
-        # If filing already has a BTC amount from regex extraction, use it directly
+        # Filing already has a regex-extracted BTC amount. That amount is a
+        # TRANSACTION delta (a buy/sell), NOT a holdings total — route it as the
+        # transaction it is. Mapping it into btc_holdings (the old bug) made the
+        # trade size overwrite the company's cumulative holdings as a trust-100
+        # observation. edgar_realtime already reconciled this at detection, so
+        # re-routing here is idempotent via the purchase/sale dedup.
         if filing.get('btc_amount', 0) > 0 and filing.get('company_name'):
+            is_sale = filing.get('event_type') == 'sale'
             extracted = {
                 'company_name': filing['company_name'],
                 'ticker': filing.get('ticker_cik', ''),
-                'btc_holdings': filing['btc_amount'],
-                'event_type': filing.get('event_type', 'holding_update'),
+                'event_type': 'sale' if is_sale else 'purchase',
                 'confidence': 0.7,
                 'entity_type': 'public_company',
+                'filing_url': filing.get('filing_url', ''),
+                ('btc_sold' if is_sale else 'btc_purchased'): filing['btc_amount'],
             }
             if _update_entity(extracted, data_source):
                 updated += 1
