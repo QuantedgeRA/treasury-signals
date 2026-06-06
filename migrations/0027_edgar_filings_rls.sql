@@ -1,0 +1,33 @@
+-- 0027_edgar_filings_rls.sql
+--
+-- Deny anonymous (public anon-key) access to edgar_filings.
+--
+-- The resilience review found edgar_filings is anon-readable. Unlike
+-- leaderboard_snapshots (public landing page / embed / public-data page) and
+-- regulatory_items (read by 4 authenticated pages via the browser anon client),
+-- edgar_filings has ZERO client readers — verified: no `.from('edgar_filings')`
+-- anywhere in the dashboard (client or server route). It's written/read only by
+-- the backend, which uses the service_role key (confirmed) and therefore
+-- bypasses RLS. So enabling RLS with no anon policy is a safe defense-in-depth
+-- hardening: the backend keeps working, no dashboard surface breaks, and a
+-- direct anon REST hit to /rest/v1/edgar_filings now returns 0 rows.
+--
+-- NOT enabling RLS on leaderboard_snapshots (intentionally public — landing/
+-- embed/public-data read it via anon) or regulatory_items (4 authenticated
+-- pages read it via the anon client; deny-anon would break them without first
+-- moving those reads to authenticated server routes — a separate refactor; the
+-- data is public regulatory-filing info, low severity).
+--
+-- The genuinely-sensitive tables (subscribers, filing_excerpts, mnav_history,
+-- pre_announcement_signals, entity_wallets, teams) were verified already
+-- RLS-protected (anon -> 0 rows) — no change needed.
+--
+-- Apply manually in the Supabase SQL editor (DATABASE_URL unset, same as 0022-0026).
+-- Reversible: ALTER TABLE edgar_filings DISABLE ROW LEVEL SECURITY;
+
+ALTER TABLE edgar_filings ENABLE ROW LEVEL SECURITY;
+
+-- No policy granting anon/authenticated = deny-all to non-service-role roles.
+-- (service_role bypasses RLS entirely, so the backend is unaffected.) An
+-- explicit no-op comment policy isn't needed; absence of a permissive policy
+-- means the anon role sees zero rows.
