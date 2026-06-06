@@ -142,6 +142,27 @@ def _store_filing(filing):
             "company": filing.get("company_name", "")[:80],
         })
 
+def _claim_alert(accession):
+    """Atomically claim the right to alert on a filing (flip alerted_at
+    NULL->now). Returns True only for the process that wins — so scan_all_filings
+    (worker) and scan_intl_filings (fast_edgar cron) can't both alert the same
+    international filing. Fail-OPEN on error / blank accession (never drop a
+    real alert)."""
+    if not accession:
+        return True
+    try:
+        res = (
+            supabase.table("edgar_filings")
+            .update({"alerted_at": datetime.now().isoformat()})
+            .eq("accession_number", accession)
+            .is_("alerted_at", "null")
+            .execute()
+        )
+        return bool(res.data)
+    except Exception:
+        return True
+
+
 def _get_processed():
     """All processed accession_numbers, paginated past the PostgREST 1000-row
     cap. An unbounded single select silently truncated at 1000 rows; with
@@ -936,7 +957,7 @@ def scan_all_filings(days_back=1):
                 _route_to_reconciler(filing)
                 processed.add(acc)
                 new_count += 1
-                if filing.get('company_name') and filing.get('event_type') != 'holding':
+                if filing.get('company_name') and filing.get('event_type') != 'holding' and _claim_alert(acc):
                     _send_alert(filing.get('source', country), filing['company_name'], filing.get('event_type', 'filing'), filing.get('btc_amount', 0), filing.get('filing_url', ''))
                     total_alerts += 1
             source_stats[country] = new_count
@@ -1038,7 +1059,7 @@ def scan_intl_filings(days_back=1):
                 _route_to_reconciler(filing)
                 processed.add(acc)
                 new_count += 1
-                if filing.get('company_name') and filing.get('event_type') != 'holding':
+                if filing.get('company_name') and filing.get('event_type') != 'holding' and _claim_alert(acc):
                     _send_alert(
                         filing.get('source', country),
                         filing['company_name'],

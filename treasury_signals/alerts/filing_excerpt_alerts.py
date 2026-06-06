@@ -130,6 +130,25 @@ def _mark_alerted(excerpt_id: int) -> None:
         capture_exception(e, context={"where": "filing_excerpt_alerts._mark_alerted", "excerpt_id": excerpt_id})
 
 
+def _claim_excerpt(excerpt_id: int) -> bool:
+    """Atomically claim an excerpt for Slack dispatch — flip alerted_at NULL->now
+    only if still unclaimed. Returns True for the winning process. Stops the
+    worker (phase_4) and the fast_edgar cron from double-posting the same excerpt
+    to a paying team's Slack. Fail-OPEN: post anyway on query error."""
+    try:
+        res = (
+            supabase.table("filing_excerpts")
+            .update({"alerted_at": datetime.utcnow().isoformat()})
+            .eq("id", excerpt_id)
+            .is_("alerted_at", "null")
+            .execute()
+        )
+        return bool(res.data)
+    except Exception as e:
+        logger.warning(f"  Filing alert dispatcher: claim error for excerpt={excerpt_id} (posting anyway): {e}")
+        return True
+
+
 def dispatch_pending_excerpts(min_impact: int = DEFAULT_MIN_IMPACT) -> dict:
     """Main entry. Walk pending excerpts × teams, post to Slack, mark alerted.
 
@@ -163,6 +182,12 @@ def dispatch_pending_excerpts(min_impact: int = DEFAULT_MIN_IMPACT) -> dict:
     errors = 0
 
     for excerpt in excerpts:
+        # Atomic claim BEFORE posting — only the process that flips this
+        # excerpt's alerted_at NULL->now delivers it, so two concurrent dispatch
+        # runs (worker + fast_edgar cron) can't double-post to a team's Slack.
+        if not _claim_excerpt(excerpt["id"]):
+            continue
+
         excerpt_ticker = _normalize_ticker(excerpt.get("ticker"))
 
         for team in teams:
@@ -186,10 +211,9 @@ def dispatch_pending_excerpts(min_impact: int = DEFAULT_MIN_IMPACT) -> dict:
                     f"err={result.get('error', '?')}"
                 )
 
-        # Mark this excerpt as alerted (one global flag, not per-team).
-        # Even if every team's filter rejected it, we mark it processed so
-        # the dispatcher doesn't re-evaluate the same row every cycle.
-        _mark_alerted(excerpt["id"])
+        # alerted_at was already set by _claim_excerpt() above (one global flag,
+        # not per-team) — so even if every team's filter rejected it, the row is
+        # marked processed and the dispatcher won't re-evaluate it next cycle.
 
     logger.info(
         f"Filing alert dispatcher: {len(excerpts)} excerpts considered, "
