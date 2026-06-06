@@ -143,11 +143,26 @@ def _store_filing(filing):
         })
 
 def _get_processed():
+    """All processed accession_numbers, paginated past the PostgREST 1000-row
+    cap. An unbounded single select silently truncated at 1000 rows; with
+    edgar_filings now ~6k, dedup was blind to everything beyond the newest 1000
+    → re-stored / re-routed / re-alerted older filings every scan."""
+    seen = set()
     try:
-        r = supabase.table("edgar_filings").select("accession_number").execute()
-        return set(d['accession_number'] for d in (r.data or []))
-    except:
-        return set()
+        step = 1000
+        offset = 0
+        while True:
+            r = supabase.table("edgar_filings").select("accession_number").range(
+                offset, offset + step - 1
+            ).execute()
+            rows = r.data or []
+            seen.update(d['accession_number'] for d in rows)
+            if len(rows) < step:
+                break
+            offset += step
+    except Exception:
+        pass
+    return seen
 
 def _send_alert(source, company, event_type, btc_amount, url):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_PAID_CHANNEL_ID:

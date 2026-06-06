@@ -320,12 +320,30 @@ def _classify_event(text):
     return 'holding'
 
 
-def _get_processed_filings():
-    try:
-        result = supabase.table("edgar_filings").select("accession_number").execute()
-        return set(r['accession_number'] for r in (result.data or []))
-    except:
+def _get_processed_filings(accessions):
+    """Return the subset of `accessions` already in edgar_filings.
+
+    Bounded by the candidate list (this scan's hits), NOT the whole table —
+    the old `select(accession_number)` with no filter loaded every row and
+    PostgREST silently capped it at 1000, so once edgar_filings passed 1000
+    (it's now ~6k) the dedup set was missing ~5k accessions and recently-seen
+    filings were re-fetched / re-Claude-scored / re-routed every run. Querying
+    only the candidates is exact and scales with hits, not table size.
+    """
+    accessions = [a for a in dict.fromkeys(accessions) if a]  # de-dupe, drop blanks
+    if not accessions:
         return set()
+    found = set()
+    for i in range(0, len(accessions), 100):  # chunk to keep the IN() URL bounded
+        chunk = accessions[i:i + 100]
+        try:
+            result = supabase.table("edgar_filings").select("accession_number").in_(
+                "accession_number", chunk
+            ).execute()
+            found.update(r['accession_number'] for r in (result.data or []))
+        except Exception as e:
+            logger.debug(f"  EDGAR processed-filings lookup failed for a chunk: {e}")
+    return found
 
 
 # Columns added by migration 0023; code is forward-compatible if it isn't
@@ -459,7 +477,6 @@ def check_edgar_filings(days_back=1):
     """
     logger.info("EDGAR realtime: checking for new filings...")
 
-    processed = _get_processed_filings()
     new_filings = 0
     alerts_sent = 0
     total_requests = 0
@@ -473,6 +490,16 @@ def check_edgar_filings(days_back=1):
         total_hits_scanned += len(hits)
         if not hits:
             continue
+
+        # Dedup against ONLY this term's candidate accessions (bounded query —
+        # see _get_processed_filings). Cross-term duplicates are still caught:
+        # each filing is stored immediately on processing, so it shows up in the
+        # next term's lookup; within a term, processed.add() guards repeats.
+        candidates = [
+            (h.get('_source', {}).get('adsh', '') or h.get('_id', '').split(':')[0])
+            for h in hits
+        ]
+        processed = _get_processed_filings(candidates)
 
         for hit in hits:
             source = hit.get('_source', {})
