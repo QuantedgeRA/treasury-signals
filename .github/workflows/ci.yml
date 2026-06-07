@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: backend unit tests
+    runs-on: ubuntu-latest
+    env:
+      # Modules construct a Supabase client at import but only connect on a real
+      # query. The CI set (`not integration and not slow`) is fully mocked/pure,
+      # so these dummy creds are never used for a network call. Real-DB tests are
+      # marked `integration` (e.g. test_post_scan) and run locally/nightly.
+      SUPABASE_URL: https://dummy.supabase.co
+      SUPABASE_KEY: dummy
+      ANTHROPIC_API_KEY: dummy
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests (no network)
+        run: python -m pytest -m "not integration and not slow"

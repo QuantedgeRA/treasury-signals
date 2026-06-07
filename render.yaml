@@ -1,0 +1,96 @@
+# render.yaml — Infrastructure-as-code for the treasury-signals backend.
+#
+# Version-controls the THREE Render services that were previously dashboard-only
+# and hid half the topology (memory/render_topology): the fast_tweets cron was
+# silently missing for weeks, and the fast_edgar cron's deploy status was
+# unknowable until a heartbeat was added. Keeping config in git makes drift
+# reviewable.
+#
+# ⚠️ THESE SERVICES ALREADY EXIST in Render (created by hand). This file is the
+# intended source of truth to sync TOWARD — do NOT blindly "New Blueprint" on a
+# project that already has them, or you'll get DUPLICATES. To adopt: import the
+# existing services into a blueprint, or recreate deliberately. Two known drifts
+# this file corrects vs. the hand-made setup:
+#   - the crons ran on a mislabeled "Ruby" runtime needing
+#     `pip install --break-system-packages` (a PEP-668 workaround). Here they use
+#     `runtime: python`, so the flag is gone.
+#   - everything is pinned to Python 3.12 to match the worker's Dockerfile.
+#
+# Secrets are sync:false (set in the Render dashboard / env group, never git).
+# All three services share the `treasury-signals-env` group.
+
+services:
+  # Long-lived worker: the 3x/day scan loop (SCAN_HOURS 6/12/18 UTC) + heavy
+  # maintenance (treasury_sync, reconciler, mNAV/ATM, leaderboard, briefing).
+  - type: worker
+    name: treasury-signals
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - fromGroup: treasury-signals-env
+
+  # Fast-EDGAR cron — the sub-60s 8-K alert path. Every 2 minutes.
+  - type: cron
+    name: treasury-signals-fast-edgar
+    runtime: python
+    schedule: "*/2 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python fast_edgar.py
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - fromGroup: treasury-signals-env
+
+  # Fast-tweets cron — Saylor / executive tweet signals. Every 2 minutes.
+  - type: cron
+    name: treasury-signals-fast-tweets
+    runtime: python
+    schedule: "*/2 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python fast_tweets.py
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - fromGroup: treasury-signals-env
+
+envVarGroups:
+  - name: treasury-signals-env
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      # --- Core data plane (required) ---
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY            # service_role key
+        sync: false
+      - key: DATABASE_URL            # direct Postgres conn string — enables
+        sync: false                  # `python migration_runner.py apply` auto-apply
+      # --- AI + alerts ---
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_PAID_CHANNEL_ID
+        sync: false
+      - key: TELEGRAM_FREE_CHANNEL_ID
+        sync: false
+      - key: TELEGRAM_ADMIN_CHANNEL_ID
+        sync: false
+      - key: TWITTER_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      # --- Observability ---
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
+      # --- International filing adapters (optional; adapters no-op if unset) ---
+      - key: DART_API_KEY
+        sync: false
+      - key: EDINET_API_KEY
+        sync: false
+      - key: COINGECKO_API_KEY
+        sync: false

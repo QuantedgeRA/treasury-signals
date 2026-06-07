@@ -16,6 +16,11 @@ from unittest.mock import MagicMock
 from treasury_signals.scheduler.state import ScanState
 from treasury_signals.scheduler import post_scan
 
+# save_freshness_snapshot() folds cron_heartbeats via the real supabase client,
+# so these tests touch the live DB — exclude them from the no-network CI run
+# (`pytest -m "not integration"`). Run locally / nightly with real creds.
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def state():
