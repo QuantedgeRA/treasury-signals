@@ -5,12 +5,17 @@
 -- The resilience review found edgar_filings is anon-readable. Unlike
 -- leaderboard_snapshots (public landing page / embed / public-data page) and
 -- regulatory_items (read by 4 authenticated pages via the browser anon client),
--- edgar_filings has ZERO client readers — verified: no `.from('edgar_filings')`
--- anywhere in the dashboard (client or server route). It's written/read only by
--- the backend, which uses the service_role key (confirmed) and therefore
--- bypasses RLS. So enabling RLS with no anon policy is a safe defense-in-depth
--- hardening: the backend keeps working, no dashboard surface breaks, and a
--- direct anon REST hit to /rest/v1/edgar_filings now returns 0 rows.
+-- edgar_filings's only dashboard reader was the /status health page, which
+-- probed it via the anon client. That read was MOVED to the service-role route
+-- /api/status/freshness (commit on the dashboard) BEFORE this migration, so the
+-- status page keeps working under RLS. The backend uses the service_role key
+-- (confirmed) and bypasses RLS. So enabling RLS with no anon policy is safe
+-- defense-in-depth: backend + status page keep working, and a direct anon REST
+-- hit to /rest/v1/edgar_filings now returns 0 rows.
+--
+-- ORDER OF OPERATIONS: deploy the dashboard /api/status/freshness change first
+-- (already pushed), THEN apply this migration. Doing it the other way around
+-- briefly shows edgar_filings as "never" on /status until the deploy lands.
 --
 -- NOT enabling RLS on leaderboard_snapshots (intentionally public — landing/
 -- embed/public-data read it via anon) or regulatory_items (4 authenticated
