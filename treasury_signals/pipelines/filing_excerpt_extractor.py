@@ -230,6 +230,13 @@ def _call_claude_for_excerpts(
             return []
 
         body = resp.json()
+        # Record Anthropic spend (best-effort, never raises).
+        try:
+            from treasury_signals.pipelines.anthropic_usage import record_usage, usage_from_response
+            in_tok, out_tok = usage_from_response(body)
+            record_usage(CLAUDE_MODEL, in_tok, out_tok, where='filing_excerpt_extractor')
+        except Exception:
+            pass
         content = body.get("content", [{}])[0].get("text", "").strip()
         # Strip code fences if Claude wraps the JSON despite being told not to
         if content.startswith("```"):

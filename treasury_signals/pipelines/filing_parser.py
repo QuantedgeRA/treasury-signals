@@ -129,6 +129,13 @@ def _call_claude(text):
         )
         if resp.ok:
             data = resp.json()
+            # Record Anthropic spend (best-effort, never raises).
+            try:
+                from treasury_signals.pipelines.anthropic_usage import record_usage, usage_from_response
+                in_tok, out_tok = usage_from_response(data)
+                record_usage('claude-sonnet-4-20250514', in_tok, out_tok, where='filing_parser')
+            except Exception:
+                pass
             content = data.get('content', [{}])[0].get('text', '')
             # Parse JSON from response
             content = content.strip()
