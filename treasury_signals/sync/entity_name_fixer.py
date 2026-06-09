@@ -231,28 +231,43 @@ def fix_entity_names(supabase_client=None):
             if not clean_name:
                 clean_name = best_match["name"][:200]
 
-            supabase_client.table("treasury_companies").update({
-                "company": clean_name[:200],
-                "btc_holdings": best_btc,
-            }).eq("id", row["id"]).execute()
-            logger.info(f"  Name fix: '{current_name[:20]}' → '{clean_name}' ({best_btc:,} BTC)")
-            # Record observation so the reconciler treats this value as a
-            # bitcointreasuries observation. Source page is the same as
-            # treasury_sync's BT layer, so this can override stale CG values.
-            try:
-                from treasury_signals.pipelines.btc_holdings_reconciler import record_observation
-                ticker = (row.get("ticker") or "").upper()
-                if ticker:
-                    record_observation(
+            ticker = (row.get("ticker") or "").upper()
+
+            # Single-writer rule: treasury_companies.btc_holdings has ONE writer,
+            # the reconciler. We record this as a bitcointreasuries observation
+            # and reconcile, so the value is set respecting the trust hierarchy
+            # (a higher-trust EDGAR/press observation must not be clobbered by a
+            # BT scrape — the old direct write did exactly that). The name repair
+            # itself is NOT a btc write and is always applied directly.
+            name_update = {"company": clean_name[:200]}
+            recorded = False
+            if ticker:
+                try:
+                    from treasury_signals.pipelines.btc_holdings_reconciler import (
+                        record_observation, reconcile_ticker,
+                    )
+                    if record_observation(
                         ticker=ticker,
                         source='bitcointreasuries',
                         btc_value=float(best_btc),
                         source_url='https://bitcointreasuries.net/',
                         excerpt=f"Name fix: {clean_name} = {best_btc} BTC",
                         components={'origin': 'entity_name_fixer'},
-                    )
-            except Exception:
-                pass
+                    ):
+                        reconcile_ticker(ticker)
+                        recorded = True
+                except Exception as e:
+                    logger.debug(f"  Name fix → reconciler failed for {ticker}: {e}")
+
+            # Fallback ONLY for ticker-less rows the ticker-keyed reconciler can't
+            # reach (or if the observation write failed): keep the value correct.
+            if not recorded:
+                name_update["btc_holdings"] = best_btc
+
+            supabase_client.table("treasury_companies").update(
+                name_update
+            ).eq("id", row["id"]).execute()
+            logger.info(f"  Name fix: '{current_name[:20]}' → '{clean_name}' ({best_btc:,} BTC)")
             fixed += 1
 
         if fixed > 0:

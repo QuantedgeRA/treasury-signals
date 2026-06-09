@@ -65,28 +65,40 @@ COUNTRY_TICKERS = {
 
 
 def _record_gov_observation(ticker, btc_value, company):
-    """Record a btc_holdings observation tagged as bitcointreasuries.
+    """Record a btc_holdings observation (bitcointreasuries) AND reconcile.
 
-    Government BTC data is sourced from bitcointreasuries.net/governments,
-    so it shares the 'bitcointreasuries' source tag (trust=60). Errors are
-    swallowed; gov-fix writes must not fail just because the observation
-    write hiccupped.
+    Single-writer rule: treasury_companies.btc_holdings has ONE writer, the
+    reconciler. Government BTC data is sourced from bitcointreasuries.net/
+    governments, so it shares the 'bitcointreasuries' source tag (trust=60). We
+    record the observation and reconcile here; the reconciler — not the gov-fix
+    code — writes btc_holdings, respecting the trust hierarchy.
+
+    Returns True if the value was recorded AND reconciled (so the caller can omit
+    the legacy direct btc_holdings write); False otherwise (caller keeps the
+    direct write as a fallback so the value is never left stale — e.g. a country
+    with no ticker, which the ticker-keyed reconciler cannot reach). Errors are
+    swallowed: a gov-fix name/ticker write must not fail on an observation hiccup.
     """
     try:
-        from treasury_signals.pipelines.btc_holdings_reconciler import record_observation
+        from treasury_signals.pipelines.btc_holdings_reconciler import (
+            record_observation, reconcile_ticker,
+        )
         if not ticker:
-            return
-        record_observation(
+            return False
+        if record_observation(
             ticker=str(ticker).upper(),
             source='bitcointreasuries',
             btc_value=float(btc_value),
             source_url='https://bitcointreasuries.net/governments',
             excerpt=f"Gov entity fix: {company} = {btc_value} BTC",
             components={'entity_type': 'government', 'source_page': 'governments'},
-        )
+        ):
+            reconcile_ticker(str(ticker).upper())
+            return True
     except Exception:
-        # Best-effort; never let observation failure block the gov-fix write.
+        # Best-effort; never let observation/reconcile failure block the gov-fix.
         pass
+    return False
 
 
 def _extract_btc_from_ticker(ticker_str):
@@ -306,15 +318,20 @@ def fix_government_entities(supabase_client=None):
                         clean_name = candidate["name"]
                         ticker = _get_ticker_for_country(clean_name)
                         if _needs_update(row, clean_name, 0, ticker):
-                            supabase_client.table("treasury_companies").update({
+                            # btc via reconciler (single-writer); name/ticker direct.
+                            recorded = _record_gov_observation(ticker, 0, clean_name)
+                            gov_update = {
                                 "company": clean_name[:200],
                                 "ticker": ticker,
                                 "entity_type": "government",
                                 "is_government": True,
-                                "btc_holdings": 0,
-                            }).eq("id", row_id).execute()
+                            }
+                            if not recorded:
+                                gov_update["btc_holdings"] = 0
+                            supabase_client.table("treasury_companies").update(
+                                gov_update
+                            ).eq("id", row_id).execute()
                             logger.info(f"  Gov fix: '{current_name}' → '{clean_name}' (0 BTC)")
-                            _record_gov_observation(ticker, 0, clean_name)
                             fixed += 1
                         break
                 continue
@@ -349,15 +366,20 @@ def fix_government_entities(supabase_client=None):
             ticker = _get_ticker_for_country(clean_name)
 
             if _needs_update(row, clean_name, best_btc, ticker):
-                supabase_client.table("treasury_companies").update({
+                # btc via reconciler (single-writer); name/ticker direct.
+                recorded = _record_gov_observation(ticker, best_btc, clean_name)
+                gov_update = {
                     "company": clean_name[:200],
                     "ticker": ticker,
                     "entity_type": "government",
                     "is_government": True,
-                    "btc_holdings": best_btc,
-                }).eq("id", row_id).execute()
+                }
+                if not recorded:
+                    gov_update["btc_holdings"] = best_btc
+                supabase_client.table("treasury_companies").update(
+                    gov_update
+                ).eq("id", row_id).execute()
                 logger.info(f"  Gov fix: '{current_name}' → '{clean_name}' ({best_btc:,} BTC)")
-                _record_gov_observation(ticker, best_btc, clean_name)
                 fixed += 1
 
         # Step 5: Also fix any clean-named entries that have wrong BTC
@@ -386,25 +408,33 @@ def fix_government_entities(supabase_client=None):
                 if match:
                     needs_update = False
                     update_data = {}
+                    ticker = _get_ticker_for_country(match["name"])
 
-                    # Fix BTC if wrong
+                    # Fix BTC if wrong — via reconciler (single-writer rule).
+                    # Record+reconcile the bitcointreasuries value; only fall back
+                    # to a direct write if reconcile couldn't run (no ticker).
                     if row.get("btc_holdings", 0) != match["btc"]:
-                        update_data["btc_holdings"] = match["btc"]
-                        needs_update = True
+                        if _record_gov_observation(ticker, match["btc"], match["name"]):
+                            needs_update = True  # ticker may still need fixing below
+                        else:
+                            update_data["btc_holdings"] = match["btc"]
+                            needs_update = True
 
                     # Fix ticker if missing or generic
-                    ticker = _get_ticker_for_country(match["name"])
                     if row.get("ticker", "") != ticker:
                         update_data["ticker"] = ticker
                         needs_update = True
 
-                    if needs_update:
+                    if needs_update and update_data:
                         supabase_client.table("treasury_companies").update(
                             update_data
                         ).eq("id", row["id"]).execute()
                         logger.info(f"  Gov fix: '{name}' → BTC: {match['btc']:,}, ticker: {ticker}")
-                        if "btc_holdings" in update_data:
-                            _record_gov_observation(ticker, match["btc"], match["name"])
+                        fixed += 1
+                    elif needs_update:
+                        # Only the btc changed and it went through the reconciler;
+                        # nothing left to direct-write, but it was still a fix.
+                        logger.info(f"  Gov fix: '{name}' → BTC: {match['btc']:,} (via reconciler)")
                         fixed += 1
 
         if fixed > 0:

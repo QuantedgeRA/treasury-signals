@@ -19,7 +19,8 @@ from dotenv import load_dotenv
 from supabase import create_client
 from treasury_signals.logger import get_logger
 from treasury_signals.pipelines.purchase_reconciler import reconcile_and_save, reconcile_sale
-from treasury_signals.observability import capture_exception
+from treasury_signals.pipelines.extraction_guard import validate_transaction
+from treasury_signals.observability import capture_exception, capture_message
 from treasury_signals.freshness_tracker import freshness
 
 logger = get_logger(__name__)
@@ -196,6 +197,32 @@ def _resolve_ticker(edgar_name, edgar_cik=""):
         logger.debug(f"  EDGAR ticker resolution error: {e}")
     
     return edgar_name, ""
+
+
+def _lookup_holdings(ticker):
+    """Best-known current holdings for a ticker, or 0 if unknown.
+
+    Used by the extraction guard to sanity-check a transaction amount against
+    what the entity actually holds (a sale can't exceed holdings; a single buy
+    rarely triples them). Fail-soft: any lookup error returns 0, which makes the
+    guard fall back to absolute bounds only rather than crashing the scan.
+    """
+    if not ticker:
+        return 0.0
+    try:
+        res = (
+            supabase.table("treasury_companies")
+            .select("btc_holdings")
+            .ilike("ticker", ticker)
+            .gt("btc_holdings", 0)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            return float(res.data[0].get("btc_holdings") or 0)
+    except Exception as e:
+        logger.debug(f"  EDGAR holdings lookup failed for {ticker}: {e}")
+    return 0.0
 
 
 def _search_edgar(query, days_back=1):
@@ -583,6 +610,48 @@ def check_edgar_filings(days_back=1):
             btc_holdings = _extract_btc_holdings(text)
             usd_amount = _extract_usd_amount(text)
             event_type = _classify_event(text)
+
+            # ── SANITY GUARD — last gate before a number reaches a customer ──
+            # The regex extraction above is fast but fallible: a holdings total
+            # parsed as a trade, a "100k BTC target" parsed as a purchase, a
+            # locale/decimal misread. On this sub-60s path the number flows
+            # straight to the paid Telegram channel AND the confirmed
+            # purchases/sales ledger, so one bad parse = a wrong alert to every
+            # subscriber. We check the extracted delta against the entity's
+            # known holdings (a sale can't exceed holdings; a lone buy rarely
+            # triples them) plus absolute supply bounds. On failure we neutralize
+            # the record to a holdings update (zero transaction) so every
+            # downstream branch — reconcile + alert + log — naturally no-ops, and
+            # we surface the suppressed number to admin via Sentry for review.
+            if event_type in ('purchase', 'sale') and btc_amount > 0:
+                guard_name, guard_ticker = _resolve_ticker(company_name, ticker_cik)
+                guard_holdings = _lookup_holdings(guard_ticker or ticker_cik)
+                guard = validate_transaction(event_type, btc_amount, guard_holdings)
+                if not guard.ok:
+                    logger.warning(
+                        f"  EDGAR GUARD 🚫 suppressed {company_name} "
+                        f"({guard_ticker or ticker_cik}) {event_type} "
+                        f"{btc_amount:,.0f} BTC [{guard.code}]: {guard.reason}"
+                    )
+                    capture_message(
+                        f"Extraction guard suppressed a {event_type} alert: "
+                        f"{company_name} {btc_amount:,.0f} BTC ({guard.code})",
+                        level="warning",
+                        context={
+                            "where": "edgar_realtime.check_edgar_filings",
+                            "accession": accession,
+                            "company": company_name[:80],
+                            "ticker": guard_ticker or ticker_cik,
+                            "event_type": event_type,
+                            "btc_amount": btc_amount,
+                            "current_holdings": guard_holdings,
+                            "guard_code": guard.code,
+                        },
+                    )
+                    # Neutralize so the bad number can't reach the ledger or an
+                    # alert; keep the filing as a holdings record for forensics.
+                    event_type = 'holding'
+                    btc_amount = 0
 
             # Direction classifier — tags the filing as pure_buy / raise_then_buy /
             # convertible / sale / unclear so traders know which way the stock

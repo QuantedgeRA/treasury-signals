@@ -112,6 +112,17 @@ DIVERGENCE_MIN_PCT = 5.0
 # when computing spread. Low-trust signals shouldn't drive alerts.
 DIVERGENCE_MIN_TRUST = 30
 
+# Scraped third-party trackers that are known to LAG primary disclosures (they
+# re-scrape on their own cadence, often days behind an 8-K). When one of these
+# is the lone disagreer against a primary source, the resolved value is already
+# correct (the trust hierarchy picks the primary) and the "divergence" is pure
+# aggregator lag — an alert nobody can action. We therefore exclude these from
+# divergence DETECTION whenever a primary source is present (they still feed
+# resolution via their trust score). This cleared the 37-name CoinGecko-lag
+# noise backlog (2026-06). They drive an alert ONLY when no primary source
+# exists — then a wild aggregator-vs-aggregator gap is all we have to flag.
+LAGGY_AGGREGATOR_SOURCES = {"coingecko", "defillama", "bt_self_reported"}
+
 
 # ─── Data classes ─────────────────────────────────────────────────────────
 
@@ -305,12 +316,23 @@ def _compute_divergence(observations: list[Observation]) -> tuple[float, float, 
     qualifying = [(o, t) for (o, t) in weighted if t >= DIVERGENCE_MIN_TRUST]
     if len(qualifying) < 2:
         return 0.0, 0.0, []
-    values = [o.btc_value for (o, _) in qualifying]
+
+    # Down-weight laggy aggregators: if any primary (non-laggy) source is
+    # present, judge divergence on the primary cluster ONLY. A single primary
+    # vs a lagging CoinGecko then yields <2 sources to compare → no alert
+    # (resolution already used the primary value, so there's nothing to fix). Two
+    # genuinely-disagreeing primaries still alert. With no primary at all we fall
+    # back to the full set so aggregator-only disagreements remain visible.
+    primary = [(o, t) for (o, t) in qualifying if o.source not in LAGGY_AGGREGATOR_SOURCES]
+    consider = primary if primary else qualifying
+    if len(consider) < 2:
+        return 0.0, 0.0, []
+    values = [o.btc_value for (o, _) in consider]
     vmin = min(values)
     vmax = max(values)
     spread_btc = vmax - vmin
     spread_pct = (spread_btc / vmax * 100) if vmax > 0 else 0.0
-    diverging = [o.source for (o, _) in qualifying] if spread_btc > 0 else []
+    diverging = [o.source for (o, _) in consider] if spread_btc > 0 else []
     return spread_btc, spread_pct, diverging
 
 

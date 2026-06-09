@@ -40,10 +40,22 @@ class TestResolution:
         assert res.resolved_value == 200
         assert res.resolved_source == "bitcointreasuries"
 
-    def test_two_diverging_sources_flag_divergent(self, patch_obs):
-        patch_obs([_obs("coingecko", 100), _obs("bitcointreasuries", 200)])
+    def test_two_diverging_primary_sources_flag_divergent(self, patch_obs):
+        # Two genuinely-disagreeing PRIMARY sources (edgar_8k 100, press_release
+        # 200) is a real conflict an operator must investigate → divergent.
+        patch_obs([_obs("edgar_8k", 100), _obs("press_release", 200)])
         res = r.resolve_ticker("TEST")
         assert res.is_divergent is True
+
+    def test_primary_vs_lagging_aggregator_not_divergent(self, patch_obs):
+        # bitcointreasuries (primary) 200 vs CoinGecko (laggy aggregator) 100.
+        # Resolution still picks BT (200); the CoinGecko lag is unactionable
+        # noise, so NO divergence alert fires (2026-06 down-weight). This is the
+        # case that drove the 37-name CoinGecko-lag backlog.
+        patch_obs([_obs("coingecko", 100), _obs("bitcointreasuries", 200)])
+        res = r.resolve_ticker("TEST")
+        assert res.resolved_value == 200
+        assert res.is_divergent is False
 
     def test_single_source_not_divergent(self, patch_obs):
         # Only one qualifying source → nothing to diverge against.
