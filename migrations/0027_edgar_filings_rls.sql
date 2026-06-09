@@ -29,10 +29,27 @@
 --
 -- Apply manually in the Supabase SQL editor (DATABASE_URL unset, same as 0022-0026).
 -- Reversible: ALTER TABLE edgar_filings DISABLE ROW LEVEL SECURITY;
+--
+-- NOTE (2026-06-07): the first attempt at this migration was just
+-- `ENABLE ROW LEVEL SECURITY`, but a live anon probe afterwards still returned
+-- rows. The table already had RLS on *with a permissive "allow all" SELECT
+-- policy* (created with the table). Enabling RLS was therefore a no-op. The
+-- correct fix is to ALSO drop every pre-existing policy: with RLS on and zero
+-- policies, anon/authenticated see no rows; service_role bypasses RLS, so the
+-- backend and /api/status/freshness keep working.
 
 ALTER TABLE edgar_filings ENABLE ROW LEVEL SECURITY;
 
--- No policy granting anon/authenticated = deny-all to non-service-role roles.
--- (service_role bypasses RLS entirely, so the backend is unaffected.) An
--- explicit no-op comment policy isn't needed; absence of a permissive policy
--- means the anon role sees zero rows.
+-- Drop ALL existing policies on edgar_filings. Any permissive read policy here
+-- is what was leaking rows to the anon key. After this, no policy grants
+-- anon/authenticated access -> deny-all to non-service-role roles.
+DO $$
+DECLARE pol record;
+BEGIN
+  FOR pol IN
+    SELECT policyname FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'edgar_filings'
+  LOOP
+    EXECUTE format('DROP POLICY %I ON public.edgar_filings', pol.policyname);
+  END LOOP;
+END $$;
