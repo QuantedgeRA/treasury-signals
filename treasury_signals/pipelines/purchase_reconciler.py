@@ -29,6 +29,7 @@ from dotenv import load_dotenv
 from supabase import create_client
 from treasury_signals.logger import get_logger
 from treasury_signals.observability import capture_exception
+from treasury_signals.pipelines.extraction_guard import validate_transaction
 
 logger = get_logger(__name__)
 
@@ -262,6 +263,23 @@ def reconcile_and_save(purchase, source_type="snapshot", is_new_entrant=False):
     if _is_suspicious_target(btc_amount, filing_url, source_type):
         logger.warning(f"Reconciler: 🚫 REJECTED — {company} ({ticker}): {btc_amount:,.0f} BTC looks like a target/goal, not a real purchase (no filing URL)")
         return {"action": "rejected_target", "purchase_id": None, "details": f"{btc_amount:,.0f} BTC is a known target amount with no filing proof"}
+
+    # ─── STEP 0.5: Extraction sanity bound (absolute + relative) ───
+    # The same guard the real-time EDGAR alert path uses (extraction_guard), now
+    # enforced CENTRALLY so EVERY scanner that funnels through the reconciler is
+    # protected — not just edgar_realtime. This is what stops a holdings TOTAL
+    # (e.g. "Strategy 1,076,589 BTC") or a target being persisted as a single
+    # purchase. The 200k absolute ceiling catches the impossible mega-rows even
+    # when we don't have a holdings figure to compare against.
+    guard = validate_transaction("purchase", btc_amount)
+    if not guard:
+        logger.warning(f"Reconciler: 🚫 REJECTED — {company} ({ticker}): {guard.reason} [{guard.code}]")
+        capture_exception(
+            ValueError(f"purchase guard tripped: {guard.reason}"),
+            context={"where": "reconcile_and_save.guard", "ticker": ticker, "company": company,
+                     "btc": btc_amount, "code": guard.code, "source_type": source_type},
+        )
+        return {"action": "rejected_implausible", "purchase_id": None, "details": guard.reason}
 
     # ─── STEP 1: ALL snapshot detections → pending (never auto-confirm) ───
     # Snapshot comparisons (BitcoinTreasuries.net deltas) are the least reliable
