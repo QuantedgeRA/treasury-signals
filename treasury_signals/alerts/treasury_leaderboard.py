@@ -183,11 +183,33 @@ def _save_dynamic_fallback(companies):
                 if all_suspicious > 0:
                     logger.debug(f"Dynamic fallback: {all_suspicious} entity drop(s) detected but within normal thresholds — saving")
 
+        # Carry forward the last known-good BTC price instead of writing 0.
+        # This row's snapshot_date is a sentinel STRING that text-sorts ABOVE
+        # real dates ("last_known_good_leaderboard" > "2026-..."), so a naive
+        # `order(snapshot_date desc).limit(1)` reader picks up THIS row — and a
+        # hardcoded btc_price=0 then values every holding at $0. Backend readers
+        # already exclude the sentinel via .neq(); the frontend now guards with
+        # btc_price > 0; this carry-forward is the final belt-and-suspenders so
+        # the row never emits a misleading $0 to any present or future reader.
+        last_price = 0
+        try:
+            _p = (supabase.table("leaderboard_snapshots")
+                  .select("btc_price")
+                  .neq("snapshot_date", DYNAMIC_FALLBACK_KEY)
+                  .gt("btc_price", 0)
+                  .order("snapshot_date", desc=True)
+                  .limit(1).execute())
+            if _p.data:
+                last_price = float(_p.data[0].get("btc_price") or 0)
+        except Exception:
+            last_price = 0
+
+        total_btc = sum(c["btc_holdings"] for c in fallback_data)
         supabase.table("leaderboard_snapshots").upsert({
             "snapshot_date": DYNAMIC_FALLBACK_KEY,
-            "btc_price": 0,
-            "total_btc": sum(c["btc_holdings"] for c in fallback_data),
-            "total_value_b": 0,
+            "btc_price": last_price,
+            "total_btc": total_btc,
+            "total_value_b": round(total_btc * last_price / 1_000_000_000, 2) if last_price else 0,
             "companies_json": json.dumps(fallback_data),
         }, on_conflict="snapshot_date").execute()
 
@@ -725,9 +747,20 @@ def format_leaderboard_telegram(companies, summary, top_n=10):
 def save_leaderboard_to_db(companies, summary):
     """Save leaderboard snapshot to Supabase."""
     try:
+        btc_price = summary.get("btc_price_used", 0) or 0
+        # NEVER persist a zero/garbage BTC price. A failed upstream price fetch
+        # would otherwise write a $0 snapshot for TODAY — the newest dated row —
+        # and every reader that values holdings at the latest price would show
+        # $0 across the product. Skip the write and keep the last good snapshot.
+        if btc_price <= 0:
+            logger.warning(
+                f"Leaderboard snapshot SKIPPED — btc_price_used is {btc_price} "
+                f"(price fetch failed upstream). Keeping last good snapshot."
+            )
+            return False
         row = {
             "snapshot_date": datetime.now().strftime("%Y-%m-%d"),
-            "btc_price": summary["btc_price_used"],
+            "btc_price": btc_price,
             "total_btc": summary["total_btc"],
             "total_value_b": summary["total_value_b"],
             "companies_json": json.dumps([{
