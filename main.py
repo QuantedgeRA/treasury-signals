@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 
 # Initialize Sentry BEFORE any other imports so module-level exceptions are captured
 load_dotenv()
-from treasury_signals.observability import init_sentry
+from treasury_signals.observability import init_sentry, capture_exception
 init_sentry()
 
 from treasury_signals.logger import get_logger
@@ -36,6 +36,26 @@ from treasury_signals.scheduler.phases import (
 from treasury_signals.scheduler import post_scan
 
 logger = get_logger(__name__)
+
+
+def _safe(step, fn, *args):
+    """Run one scan step in isolation.
+
+    A single step's unhandled exception must NEVER kill the long-lived worker or
+    abort the rest of the cycle. Without this, one failing phase (e.g. an EDGAR
+    500, a bad row, or an error introduced by a deploy) propagated out of the
+    `while True` loop, killed the process, and froze EVERY downstream table at
+    once (leaderboard, purchases, mNAV, signals). Log + report to Sentry and
+    keep going so the remaining phases and post-scan maintenance still run.
+    """
+    try:
+        fn(*args)
+    except Exception as e:
+        logger.error(f"Scan step '{step}' failed: {e}", exc_info=True)
+        try:
+            capture_exception(e, context={"where": f"main.scan.{step}"})
+        except Exception:
+            pass
 
 
 def load_accounts():
@@ -107,34 +127,45 @@ def main():
     scan_number = 0
     while True:
         scan_number += 1
-        morning = is_morning_scan()
-        scan_type = "FULL (maintenance + detection)" if morning else "DETECTION"
-        logger.info(f"{'='*50} SCAN #{scan_number} [{scan_type}] {'='*50}")
+        # Outer backstop: even if something OUTSIDE a _safe step throws (e.g.
+        # ScanState construction), the loop must survive to the next scan rather
+        # than killing the worker. Each step below is ALSO individually isolated
+        # so one failure never aborts the rest of the cycle.
+        try:
+            morning = is_morning_scan()
+            scan_type = "FULL (maintenance + detection)" if morning else "DETECTION"
+            logger.info(f"{'='*50} SCAN #{scan_number} [{scan_type}] {'='*50}")
 
-        state = ScanState(scan_number=scan_number, morning=morning, accounts=accounts)
+            state = ScanState(scan_number=scan_number, morning=morning, accounts=accounts)
 
-        # ─── 10-step scan cycle ───
-        phase_1_tweets(state)
-        phase_2_classify(state)
-        phase_3_strc(state)
-        phase_4_edgar(state)
-        phase_5_correlation(state)
-        phase_6_email(state)
-        phase_7_leaderboard(state)
-        phase_8_purchase_detection(state)
-        phase_9_regulatory(state)
+            # ─── 10-step scan cycle (each step isolated) ───
+            _safe("phase_1_tweets", phase_1_tweets, state)
+            _safe("phase_2_classify", phase_2_classify, state)
+            _safe("phase_3_strc", phase_3_strc, state)
+            _safe("phase_4_edgar", phase_4_edgar, state)
+            _safe("phase_5_correlation", phase_5_correlation, state)
+            _safe("phase_6_email", phase_6_email, state)
+            _safe("phase_7_leaderboard", phase_7_leaderboard, state)
+            _safe("phase_8_purchase_detection", phase_8_purchase_detection, state)
+            _safe("phase_9_regulatory", phase_9_regulatory, state)
 
-        logger.info(f"Scan #{scan_number} complete")
+            logger.info(f"Scan #{scan_number} complete")
 
-        # ─── Post-scan: freshness, sync, fixers, maintenance, primary source
-        # collection, watchlist, scan summary ───
-        post_scan.save_freshness_snapshot()
-        post_scan.run_entity_sync()
-        post_scan.run_name_type_fixers()
-        post_scan.run_heavy_maintenance(state)
-        post_scan.run_primary_source_collection(state)
-        post_scan.run_watchlist_alerts(state)
-        post_scan.send_scan_summary_log(state, accounts)
+            # ─── Post-scan: freshness, sync, fixers, maintenance, primary source
+            # collection, watchlist, scan summary (each isolated) ───
+            _safe("save_freshness_snapshot", post_scan.save_freshness_snapshot)
+            _safe("run_entity_sync", post_scan.run_entity_sync)
+            _safe("run_name_type_fixers", post_scan.run_name_type_fixers)
+            _safe("run_heavy_maintenance", post_scan.run_heavy_maintenance, state)
+            _safe("run_primary_source_collection", post_scan.run_primary_source_collection, state)
+            _safe("run_watchlist_alerts", post_scan.run_watchlist_alerts, state)
+            _safe("send_scan_summary_log", post_scan.send_scan_summary_log, state, accounts)
+        except Exception as e:
+            logger.error(f"Scan #{scan_number} aborted by unexpected error: {e}", exc_info=True)
+            try:
+                capture_exception(e, context={"where": "main.scan_cycle", "scan_number": scan_number})
+            except Exception:
+                pass
 
         if not _sleep_until_next_scan():
             break
