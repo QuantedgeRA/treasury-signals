@@ -344,11 +344,17 @@ def scan_news_for_purchases():
                         matched_ticker = ticker
                         break
                 if not matched_company:
-                    if "bitcoin" in title_lower and any(k in title_lower for k in ["buys", "bought", "purchase", "acquired"]):
-                        matched_company = "Unknown Entity"
-                        matched_ticker = "UNKNOWN"
-                    else:
-                        continue
+                    # No tracked entity matched the headline. We deliberately do
+                    # NOT manufacture an "Unknown Entity"/"UNKNOWN" purchase here:
+                    # such rows are unattributable (dead /research link), carry no
+                    # filing_url, and pollute every aggregate — they ranked as the
+                    # #1 "buyer" on the purchases page and inflated total-BTC and
+                    # the public API. A headline aggregate ("$7.2B in Bitcoin
+                    # bought") is not a single corporate treasury purchase. Any
+                    # real purchase by a tracked company matches ENTITY_MAP above;
+                    # everything else is caught with proper attribution by the
+                    # EDGAR / snapshot paths. So skip.
+                    continue
                 # Reject ETF/DeFi entities — their BTC changes are fund flows or
                 # protocol mechanics, not corporate treasury purchase decisions
                 if matched_ticker in ETF_DEFI_EXCLUDE_TICKERS:
